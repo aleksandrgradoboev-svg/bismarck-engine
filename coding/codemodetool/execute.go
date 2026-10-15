@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -77,9 +78,87 @@ type Details struct {
 	FullOutputPath string `json:"fullOutputPath,omitempty"`
 }
 
-// Store keeps the values scripts write with store() and read with load(),
-// across calls. pi persists the writes as session custom entries, so each
-// branch sees its own; this one lives in memory for the session.
+// StoreEntryType is the custom entry type holding one script's store()
+// writes (pi CODEMODE_STORE_ENTRY_TYPE): {set, delete}.
+const StoreEntryType = "codemode-store"
+
+// storeEntryData is a codemode-store entry's data (pi CodemodeStoreEntryData).
+type storeEntryData struct {
+	Set    map[string]json.RawMessage `json:"set"`
+	Delete []string                   `json:"delete"`
+}
+
+// EntryLog is the part of a recorded session that keeps store() values
+// (*coding.Session has it): the codemode-store entries on its branch and a
+// way to append one. ok false means the session is not recorded.
+type EntryLog interface {
+	CustomEntries(customType string) (data []json.RawMessage, ok bool)
+	AppendCustomEntry(customType string, data any) (id string, ok bool)
+}
+
+// readStore folds the codemode-store entries on a branch from the root,
+// deletions before values in each, skipping malformed data (pi
+// readCodemodeStore with isStoreEntryData).
+func readStore(entries []json.RawMessage) map[string]any {
+	values := map[string]any{}
+	for _, raw := range entries {
+		set, deleted, ok := parseStoreEntry(raw)
+		if !ok {
+			continue
+		}
+		for _, key := range deleted {
+			delete(values, key)
+		}
+		for key, value := range set {
+			values[key] = value
+		}
+	}
+	return values
+}
+
+// parseStoreEntry is pi isStoreEntryData: an object whose set is a non-null
+// object and whose delete is an array of strings. set may be an array, which
+// is an object to typeof: Object.entries gives its indices as keys.
+func parseStoreEntry(raw json.RawMessage) (set map[string]json.RawMessage, deleted []string, ok bool) {
+	var data struct {
+		Set    json.RawMessage   `json:"set"`
+		Delete []json.RawMessage `json:"delete"`
+	}
+	if len(raw) == 0 || raw[0] != '{' || json.Unmarshal(raw, &data) != nil || data.Delete == nil {
+		return nil, nil, false
+	}
+	for _, key := range data.Delete {
+		var s string
+		if len(key) == 0 || key[0] != '"' || json.Unmarshal(key, &s) != nil {
+			return nil, nil, false
+		}
+		deleted = append(deleted, s)
+	}
+	switch {
+	case len(data.Set) > 0 && data.Set[0] == '{':
+		if json.Unmarshal(data.Set, &set) != nil {
+			return nil, nil, false
+		}
+	case len(data.Set) > 0 && data.Set[0] == '[':
+		var items []json.RawMessage
+		if json.Unmarshal(data.Set, &items) != nil {
+			return nil, nil, false
+		}
+		set = make(map[string]json.RawMessage, len(items))
+		for i, item := range items {
+			set[strconv.Itoa(i)] = item
+		}
+	default:
+		return nil, nil, false
+	}
+	return set, deleted, true
+}
+
+// Store keeps store() values in memory, across calls, for a session that is
+// not recorded. pi has no such case — its in-memory session manager keeps
+// custom entries all the same — so this stands in for it: one set of values
+// for the whole session, without branches. A recorded session keeps the
+// values as codemode-store entries instead, and Store is not used.
 type Store struct {
 	mu     sync.Mutex
 	values map[string]json.RawMessage
@@ -663,9 +742,23 @@ func execute(ctx context.Context, toolCallID string, params map[string]any, onUp
 	if err != nil {
 		return agent.AgentToolResult{}, err
 	}
+	// A recorded session keeps the values on its branch (pi reads them from
+	// ctx.sessionManager.getBranch()); any other falls back to store.
+	entryLog, _ := session.(EntryLog)
+	var values map[string]any
+	logged := false
+	if entryLog != nil {
+		var entries []json.RawMessage
+		if entries, logged = entryLog.CustomEntries(StoreEntryType); logged {
+			values = readStore(entries)
+		}
+	}
+	if !logged {
+		values = store.snapshot()
+	}
 	result, err := func() (codemode.Result, error) {
 		defer sandbox.Close()
-		return sandbox.Execute(ctx, parsed.Code, codemode.ExecuteOptions{Store: store.snapshot()})
+		return sandbox.Execute(ctx, parsed.Code, codemode.ExecuteOptions{Store: values})
 	}()
 	if err != nil {
 		return agent.AgentToolResult{}, err
@@ -683,7 +776,22 @@ func execute(ctx context.Context, toolCallID string, params map[string]any, onUp
 
 	output := append([]codemode.OutputItem(nil), result.Output...)
 	if result.OK {
-		store.apply(result.StoreWrites)
+		// Only a successful script's writes are kept, and only when there are
+		// any: no entry for a script that changed nothing.
+		if writes := result.StoreWrites; logged {
+			if len(writes.Set) > 0 || len(writes.Delete) > 0 {
+				data := storeEntryData{Set: writes.Set, Delete: writes.Delete}
+				if data.Set == nil {
+					data.Set = map[string]json.RawMessage{}
+				}
+				if data.Delete == nil {
+					data.Delete = []string{}
+				}
+				entryLog.AppendCustomEntry(StoreEntryType, data)
+			}
+		} else {
+			store.apply(writes)
+		}
 		// pi extension: a returned value is appended like text().
 		if result.Value != nil {
 			output = append(output, codemode.OutputItem{Type: "text", Text: valueText(result.Value)})
@@ -739,7 +847,9 @@ func ScriptReach(code string) (all bool, words []string) {
 type Options struct {
 	// Session is where nested calls run; nil means scripts cannot call tools.
 	Session Session
-	// Store keeps store() values across calls; nil keeps none.
+	// Store keeps store() values across calls when Session is not a recorded
+	// session (EntryLog); nil keeps none. A recorded session keeps them as
+	// codemode-store entries on its branch, and Store is not used.
 	Store *Store
 	// Loadout configures how the tool presents the loadout.
 	Loadout LoadoutOptions
