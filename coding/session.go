@@ -2,6 +2,7 @@ package coding
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -481,6 +482,28 @@ func (s *Session) recorder() *SessionRecorder {
 	s.recMu.RLock()
 	defer s.recMu.RUnlock()
 	return s.Recorder
+}
+
+// CustomEntries returns the data of the customType entries on the recorded
+// session's current branch, root first (SessionRecorder.CustomEntries); ok is
+// false when no recorder is attached, so a caller can tell an unrecorded
+// session from a branch without such entries.
+func (s *Session) CustomEntries(customType string) (data []json.RawMessage, ok bool) {
+	r := s.recorder()
+	if r == nil {
+		return nil, false
+	}
+	return r.CustomEntries(customType), true
+}
+
+// AppendCustomEntry appends a custom entry to the recorded session (pi
+// ExtensionAPI.appendEntry); ok is false when no recorder is attached.
+func (s *Session) AppendCustomEntry(customType string, data any) (id string, ok bool) {
+	r := s.recorder()
+	if r == nil {
+		return "", false
+	}
+	return r.AppendCustomEntry(customType, data), true
 }
 
 // Record attaches a SessionRecorder; finalized messages are appended to it.

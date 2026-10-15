@@ -423,8 +423,8 @@ type SessionRecorder struct {
 	id              string
 	lastID          string
 	file            *os.File
-	byID            map[string]bool
-	pending         []map[string]any // entries held back until the file exists
+	byID            map[string]*recordedEntry // every entry, for ids and the branch
+	pending         []map[string]any          // entries held back until the file exists
 	flushed         bool
 	hasConversation bool
 	createFn        func() (*os.File, error)
@@ -458,7 +458,7 @@ func StartSession(cwd string, model *ai.Model, thinkingLevel ...string) (*Sessio
 	r := &SessionRecorder{
 		path: path,
 		id:   id,
-		byID: map[string]bool{},
+		byID: map[string]*recordedEntry{},
 		createFn: func() (*os.File, error) {
 			// pi opens the first flush with "wx" (O_EXCL): never clobber an
 			// existing file (session-manager.ts _persist).
@@ -493,10 +493,15 @@ func ResumeSession(path string) (*SessionRecorder, error) {
 	if err != nil {
 		return nil, err
 	}
-	entries, migrated := readSessionEntries(data)
+	lines := readSessionLines(data)
+	entries := make([]map[string]any, len(lines))
+	for i, line := range lines {
+		entries[i] = line.entry
+	}
+	migrated := migrateSessionEntries(entries)
 	var id, lastID string
-	byID := map[string]bool{}
-	for _, e := range entries {
+	byID := map[string]*recordedEntry{}
+	for i, e := range entries {
 		entryID, _ := e["id"].(string)
 		if e["type"] == "session" {
 			if id == "" { // pi: entries.find(e => e.type === "session")
@@ -505,7 +510,11 @@ func ResumeSession(path string) (*SessionRecorder, error) {
 			continue
 		}
 		if entryID != "" {
-			byID[entryID] = true
+			raw := ""
+			if !migrated {
+				raw = lines[i].raw
+			}
+			byID[entryID] = recordEntry(e, raw)
 			lastID = entryID
 		}
 	}
@@ -591,8 +600,7 @@ func (r *SessionRecorder) persist(entry map[string]any) {
 }
 
 func (r *SessionRecorder) appendEntry(entry map[string]any) string {
-	id := genEntryID(func(id string) bool { return r.byID[id] })
-	r.byID[id] = true
+	id := genEntryID(func(id string) bool { return r.byID[id] != nil })
 	entry["id"] = id
 	if r.lastID == "" {
 		entry["parentId"] = nil
@@ -600,9 +608,98 @@ func (r *SessionRecorder) appendEntry(entry map[string]any) string {
 		entry["parentId"] = r.lastID
 	}
 	entry["timestamp"] = isoNow()
+	r.byID[id] = recordEntry(entry, "")
 	r.lastID = id
 	r.persist(entry)
 	return id
+}
+
+// recordedEntry is what the recorder keeps of an entry: its place in the tree
+// and, for a custom entry, its data (pi's SessionManager keeps every entry;
+// the recorder needs no more than Branch and CustomEntries read).
+type recordedEntry struct {
+	parentID   string
+	typ        string
+	customType string
+	data       json.RawMessage // custom entries only; nil when absent
+}
+
+// recordEntry reads entry's tree fields. raw, when not empty, is the entry's
+// line as written: a custom entry's data is taken from it, keeping its key
+// order, which re-encoding the decoded map would sort.
+func recordEntry(entry map[string]any, raw string) *recordedEntry {
+	e := &recordedEntry{}
+	e.parentID, _ = entry["parentId"].(string)
+	e.typ, _ = entry["type"].(string)
+	if e.typ != "custom" {
+		return e
+	}
+	e.customType, _ = entry["customType"].(string)
+	if raw != "" {
+		var line struct {
+			Data json.RawMessage `json:"data"`
+		}
+		if json.Unmarshal([]byte(raw), &line) == nil {
+			e.data = line.Data
+		}
+		return e
+	}
+	switch data := entry["data"].(type) {
+	case nil:
+	case json.RawMessage:
+		e.data = data
+	default:
+		if encoded, err := json.Marshal(data); err == nil {
+			e.data = encoded
+		}
+	}
+	return e
+}
+
+// AppendCustomEntry appends a custom entry — an extension's own data, which
+// stays out of the model's context — as a child of the current leaf and
+// returns its id (pi SessionManager.appendCustomEntry). A nil data writes no
+// data field, as JSON.stringify drops an undefined one. Like every other entry
+// it waits for the session's first user or assistant message before the file
+// is created.
+func (r *SessionRecorder) AppendCustomEntry(customType string, data any) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	entry := map[string]any{"type": "custom", "customType": customType}
+	if data != nil {
+		encoded, err := json.Marshal(data)
+		if err != nil {
+			return ""
+		}
+		entry["data"] = json.RawMessage(encoded)
+	}
+	return r.appendEntry(entry)
+}
+
+// CustomEntries returns the data of the customType entries on the current
+// branch — the path from the leaf up to the root — in root→leaf order (pi
+// getBranch filtered by customType). An entry without data contributes nil.
+// After ForkFrom the branch is the one the fork point lies on.
+func (r *SessionRecorder) CustomEntries(customType string) []json.RawMessage {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []json.RawMessage
+	// pi walks byId from the leaf; an unknown leaf is an empty branch. The
+	// step bound stops a parent cycle in a damaged file, where pi would loop.
+	for id, steps := r.lastID, 0; id != "" && steps <= len(r.byID); steps++ {
+		e := r.byID[id]
+		if e == nil {
+			break
+		}
+		if e.typ == "custom" && e.customType == customType {
+			out = append(out, e.data)
+		}
+		id = e.parentID
+	}
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
 }
 
 // LastEntryID returns the id of the most recently written entry (a branch point).

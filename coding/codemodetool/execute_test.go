@@ -591,6 +591,169 @@ func TestStoreKeepsNothingFromFailedScripts(t *testing.T) {
 	}
 }
 
+// setupRecorded is setup with the session recorded to a file, as pi's
+// harness records through its session manager. The session directory lives
+// under a temporary home.
+func setupRecorded(t *testing.T) (*harness, *coding.SessionRecorder) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	h := setup(t, coding.SessionOptions{})
+	rec, err := coding.StartSession(h.sess.Cwd, h.sess.Model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { rec.Close() })
+	h.sess.Record(rec)
+	return h, rec
+}
+
+// storeEntries is pi's storeEntries(): the codemode-store data on the branch.
+func storeEntries(t *testing.T, rec *coding.SessionRecorder) []string {
+	t.Helper()
+	var out []string
+	for _, raw := range rec.CustomEntries(StoreEntryType) {
+		out = append(out, string(raw))
+	}
+	return out
+}
+
+// fileStoreEntries is the codemode-store data as the session file holds it.
+func fileStoreEntries(t *testing.T, path string) []string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		var entry struct {
+			Type       string          `json:"type"`
+			CustomType string          `json:"customType"`
+			Data       json.RawMessage `json:"data"`
+		}
+		if json.Unmarshal([]byte(line), &entry) == nil && entry.Type == "custom" && entry.CustomType == StoreEntryType {
+			out = append(out, string(entry.Data))
+		}
+	}
+	return out
+}
+
+// pi "persists store() writes as custom entries for later calls"; the file
+// check is Go-only (pi's test reads the session manager, which is the file).
+// pi also counts entry_appended events; the port has no such event.
+func TestStorePersistsAsCustomEntries(t *testing.T) {
+	h, rec := setupRecorded(t)
+	for _, want := range []string{"1", "2"} {
+		if got := resultText(t, h.run(increment)); got != want {
+			t.Fatalf("got %s, want %s", got, want)
+		}
+	}
+	want := []string{`{"set":{"count":1},"delete":[]}`, `{"set":{"count":2},"delete":[]}`}
+	if got := storeEntries(t, rec); !slices.Equal(got, want) {
+		t.Fatalf("entries %q, want %q", got, want)
+	}
+	if got := resultText(t, h.run("store(\"count\", undefined);\nreturn load(\"count\") === undefined;")); got != "true" {
+		t.Fatalf("delete: %s", got)
+	}
+	want = append(want, `{"set":{},"delete":["count"]}`)
+	if got := storeEntries(t, rec); !slices.Equal(got, want) {
+		t.Fatalf("entries after delete %q, want %q", got, want)
+	}
+	if got := fileStoreEntries(t, rec.Path()); !slices.Equal(got, want) {
+		t.Fatalf("file holds %q, want %q", got, want)
+	}
+}
+
+// pi "appends nothing for failed scripts or scripts without writes".
+func TestStoreAppendsNothingForFailedOrReadOnlyScripts(t *testing.T) {
+	h, rec := setupRecorded(t)
+	if !h.run("store(\"count\", 5);\nthrow new Error(\"boom\");").IsError {
+		t.Fatal("not an error")
+	}
+	if result := h.run("return load(\"count\") ?? \"missing\";"); result.IsError || resultText(t, result) != "missing" {
+		t.Fatalf("read-only script: %#v", result)
+	}
+	if got := storeEntries(t, rec); len(got) != 0 {
+		t.Fatalf("entries %q, want none", got)
+	}
+}
+
+// pi "loads the values written on the current branch".
+func TestStoreLoadsTheCurrentBranch(t *testing.T) {
+	h, rec := setupRecorded(t)
+	h.run(increment)
+	tree, err := coding.LoadSessionTree(rec.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var firstPrompt string
+	for _, e := range tree.Entries {
+		if e.Type == "message" {
+			firstPrompt = e.ID
+			break
+		}
+	}
+	if firstPrompt == "" {
+		t.Fatal("no first prompt entry")
+	}
+	if got := resultText(t, h.run(increment)); got != "2" {
+		t.Fatalf("got %s, want 2", got)
+	}
+	// Branch from the first prompt: the store entries written after it are
+	// on another path.
+	rec.ForkFrom(firstPrompt)
+	if got := resultText(t, h.run(increment)); got != "1" {
+		t.Fatalf("after the fork got %s, want 1", got)
+	}
+}
+
+// pi "folds store entries from the root, ignoring malformed data"; the
+// other-extension entry is left out by CustomEntries, which filters by type,
+// and is checked in the recorder's tests. The array set and the non-string
+// delete are Go-only cases of isStoreEntryData.
+func TestReadStoreFolds(t *testing.T) {
+	raw := func(s string) json.RawMessage { return json.RawMessage(s) }
+	got := readStore([]json.RawMessage{
+		raw(`{"set":{"a":1,"b":{"c":2}},"delete":[]}`),
+		raw(`{"set":{"a":3},"delete":["b"]}`),
+		raw(`{"set":{"z":1}}`),
+		raw(`{"set":null,"delete":[]}`),
+		raw(`{"set":{"y":1},"delete":[1]}`),
+		raw(`[{"set":{"x":1},"delete":[]}]`),
+		nil,
+	})
+	if len(got) != 1 || string(got["a"].(json.RawMessage)) != "3" {
+		t.Fatalf("store %v, want {a: 3}", got)
+	}
+	got = readStore([]json.RawMessage{raw(`{"set":["p","q"],"delete":[]}`)})
+	if len(got) != 2 || string(got["0"].(json.RawMessage)) != `"p"` || string(got["1"].(json.RawMessage)) != `"q"` {
+		t.Fatalf("array set %v, want its indices as keys", got)
+	}
+}
+
+// Go-only: the values survive reopening the session file, as pi's do when it
+// loads a session.
+func TestStoreSurvivesResume(t *testing.T) {
+	h, rec := setupRecorded(t)
+	h.run(increment)
+	h.run(increment)
+	path := rec.Path()
+	rec.Close()
+
+	resumed := setup(t, coding.SessionOptions{})
+	rec2, err := coding.ResumeSession(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { rec2.Close() })
+	resumed.sess.Record(rec2)
+	if got := resultText(t, resumed.run(increment)); got != "3" {
+		t.Fatalf("after resume got %s, want 3", got)
+	}
+}
+
 func TestRunsWithoutSession(t *testing.T) {
 	def := Definition(Options{})
 	result, err := def.Tool.Execute(context.Background(), "direct", map[string]any{"code": increment}, nil)

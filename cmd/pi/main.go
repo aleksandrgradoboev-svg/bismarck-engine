@@ -13,6 +13,7 @@
 //	    --system  override the system prompt
 //	-C, --cwd     working directory (default: current directory)
 //	    --think   reasoning level: off|minimal|low|medium|high|xhigh
+//	-v, --version print the version and exit
 package main
 
 import (
@@ -23,6 +24,7 @@ import (
 	"os/signal"
 	"strings"
 
+	engine "github.com/aleksandrgradoboev-svg/bismarck-engine"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/coding"
@@ -88,6 +90,10 @@ func main() {
 			resumePath = next()
 		case a == "-h" || a == "--help":
 			usage()
+			return
+		case a == "-v" || a == "--version":
+			// pi prints the bare version and exits (main.ts parsed.version).
+			fmt.Println(engine.Version())
 			return
 		default:
 			promptParts = append(promptParts, a)
@@ -370,6 +376,7 @@ Flags:
   -C, --cwd DIR      working directory (default: current)
       --think LEVEL  reasoning: off|minimal|low|medium|high|xhigh
   -h, --help         show this help
+  -v, --version      show version number
 `)
 }
 
