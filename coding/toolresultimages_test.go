@@ -14,9 +14,9 @@ import (
 
 	"golang.org/x/image/bmp"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/ai/providers"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
 )
 
 // grayPNGBase64 builds an 8-bit grayscale PNG of the given size, base64-encoded

@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // --- pi 87af49dec: pi's runtime user agent is a DEFAULT, not an override ---

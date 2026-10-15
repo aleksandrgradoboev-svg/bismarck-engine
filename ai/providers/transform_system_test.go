@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // transformMessages at upstream 9e05370b2: system messages pass the first pass

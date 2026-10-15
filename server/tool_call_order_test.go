@@ -7,9 +7,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/protocol"
-	"github.com/sky-valley/pi/server"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/server"
 )
 
 // The model authored these keys in this order, and no key is in sorted position

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // maxUint32 is the largest frame length the wire's 32-bit prefix can express.

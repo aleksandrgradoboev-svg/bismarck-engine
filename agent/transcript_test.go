@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // The transcript-owned system prompt and tool loadout (upstream 9e05370b2).

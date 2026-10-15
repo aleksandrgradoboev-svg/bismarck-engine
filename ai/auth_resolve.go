@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // ModelsErrorCode classifies a ModelsError (pi utils/models-error.ts, which

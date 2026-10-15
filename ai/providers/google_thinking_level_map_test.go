@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // Ported from pi packages/ai/test/google-thinking-level-map.test.ts (upstream

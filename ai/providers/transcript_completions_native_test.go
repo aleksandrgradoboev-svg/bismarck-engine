@@ -12,7 +12,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // openai-completions models with compat.supportsMidConvoSystemMessages take

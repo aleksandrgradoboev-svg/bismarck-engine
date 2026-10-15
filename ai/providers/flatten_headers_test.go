@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // responseHeadersCaptureFile is written by

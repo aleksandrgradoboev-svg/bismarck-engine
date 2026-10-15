@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // I12: model resolution ports pi's resolveCliModel (model-resolver.ts).

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/protocol/cbor"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol/cbor"
 )
 
 // testdata/upstream_protocol_v8.json is produced by testdata/gen-protocol-v8.ts

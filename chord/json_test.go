@@ -6,7 +6,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/sky-valley/pi/chord/delta"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
 )
 
 // Port of packages/chord/test/json.test.ts at 19a0361be.

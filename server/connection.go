@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // ByteConn is an established, authorized ordered byte connection handed to the

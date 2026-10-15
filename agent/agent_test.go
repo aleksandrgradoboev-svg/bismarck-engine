@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 var testModel = &ai.Model{ID: "faux", Name: "faux", Api: "faux", Provider: "faux"}

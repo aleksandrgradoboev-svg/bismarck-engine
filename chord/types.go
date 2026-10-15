@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/sky-valley/pi/chord/delta"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
 )
 
 // This file mirrors the value types of upstream's src/types.ts: the shapes

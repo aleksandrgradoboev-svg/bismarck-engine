@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // jsonParseOracle is node's JSON.parse over texts chosen to reach every error

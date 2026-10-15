@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // liveSession is one acquired runtime plus the connections attached to it.

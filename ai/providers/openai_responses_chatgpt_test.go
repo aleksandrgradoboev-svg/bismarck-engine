@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // Sign in with ChatGPT (upstream 02eed88fd). These transliterate

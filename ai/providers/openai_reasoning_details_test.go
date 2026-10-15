@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // openai-completions reasoning_details (upstream 4ca636c5e + b7bb00b93).

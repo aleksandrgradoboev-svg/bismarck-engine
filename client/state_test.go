@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 func serverSnapshot(revision int64, sessions ...protocol.SessionMetadata) *protocol.ServerSnapshot {

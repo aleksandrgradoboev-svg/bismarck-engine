@@ -18,8 +18,8 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // Anthropic workload identity federation (upstream a9424cd43). pi hands the

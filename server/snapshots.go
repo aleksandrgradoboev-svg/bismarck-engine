@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // snapshotPublisher owns the server-wide snapshot and its revision counter.

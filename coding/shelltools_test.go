@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
 )
 
 // bashDescription and powershellDescription are the composed tool descriptions

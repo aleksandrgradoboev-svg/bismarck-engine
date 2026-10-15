@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // Port of upstream test/experimental.test.ts (66335d3a): only the exact value

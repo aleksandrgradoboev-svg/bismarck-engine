@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sky-valley/pi/protocol/cbor"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol/cbor"
 )
 
 // testdata/upstream_messages.json is produced by testdata/gen-messages.ts run

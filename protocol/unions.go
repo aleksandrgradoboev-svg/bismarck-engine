@@ -1,6 +1,6 @@
 package protocol
 
-import "github.com/sky-valley/pi/internal/jsonstrict"
+import "github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jsonstrict"
 
 // Union decoding. pi discriminates each union with a literal property and lets
 // TypeBox's Check walk every arm; Go dispatches on the same property and

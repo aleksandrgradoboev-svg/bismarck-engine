@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // hasExplicitAPIKey is compat.ts hasExplicitApiKey: a key that is blank as

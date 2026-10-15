@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // TestNewUnixTransportFactoryRejectsInvalidOptions locks the validation that

@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // defaultAuthContext is the default AuthContext: env vars from the OS

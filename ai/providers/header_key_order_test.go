@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // A JS object enumerates an array-index key — the canonical decimal form of

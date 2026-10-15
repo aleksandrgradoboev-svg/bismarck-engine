@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // TranscriptState is a client-side projection of one session's transcript: the

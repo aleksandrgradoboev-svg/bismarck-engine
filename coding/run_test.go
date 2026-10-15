@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/ai/providers"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
 )
 
 func TestSessionRunAggregatesUsageAcrossToolLoop(t *testing.T) {

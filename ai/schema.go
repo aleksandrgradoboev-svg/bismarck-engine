@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // Schema is a JSON Schema node used for tool parameters. It is the Go analogue

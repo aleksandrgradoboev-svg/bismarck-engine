@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/client"
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/client"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // lifecycleLabel renders a lifecycle the way pi's tests do, so the recorded

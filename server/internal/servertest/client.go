@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // Timeout bounds every wait a test makes on a client.

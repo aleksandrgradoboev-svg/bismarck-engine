@@ -15,7 +15,7 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // piMessagesEventsCaptureFile is written by

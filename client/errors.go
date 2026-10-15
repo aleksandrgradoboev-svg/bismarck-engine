@@ -6,7 +6,7 @@ package client
 import (
 	"errors"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // defaultDisconnectedMessage is pi's PiDisconnectedError default.

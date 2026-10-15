@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // The vendor SDK clients read headers of their own from the process

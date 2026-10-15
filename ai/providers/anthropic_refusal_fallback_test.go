@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // Server-side refusal fallback (upstream eb1f87fa9, 4809c2abc, ed867e909).

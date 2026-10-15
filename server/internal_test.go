@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // Jobs run one at a time and in the order they were submitted; that ordering is

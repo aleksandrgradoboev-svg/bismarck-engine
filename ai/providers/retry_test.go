@@ -16,7 +16,7 @@ import (
 	"testing/iotest"
 	"time"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // TestRetryDefaultIsZeroRetries locks pi's `maxRetries ?? 0`: with MaxRetries

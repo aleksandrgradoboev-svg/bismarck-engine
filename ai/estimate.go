@@ -4,7 +4,7 @@ import (
 	"math"
 	"unicode/utf16"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // Context-token estimation, ported from pi packages/ai/src/utils/estimate.ts

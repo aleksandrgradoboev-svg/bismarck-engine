@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // TestConnectHelperBuildsAConnectedClient locks the one-call entry point.

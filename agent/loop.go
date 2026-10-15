@@ -7,7 +7,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // StreamFn streams an assistant response. Defaults to ai.StreamSimple. Per the

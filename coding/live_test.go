@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/ai/providers"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
 )
 
 // These tests hit real provider endpoints. They are skipped unless the relevant

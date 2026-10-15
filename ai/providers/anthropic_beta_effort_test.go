@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // anthropicCaptureRequest is anthropicCapture plus the request URI, which is

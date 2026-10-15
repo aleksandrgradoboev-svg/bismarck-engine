@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // piUserAgent returns the pi runtime user agent, ported from pi

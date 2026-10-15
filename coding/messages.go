@@ -1,6 +1,6 @@
 package coding
 
-import "github.com/sky-valley/pi/ai"
+import "github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 
 // Exact summary-wrapper text from pi (core/messages.ts). These must match
 // byte-for-byte so reconstructed context is identical to pi's.

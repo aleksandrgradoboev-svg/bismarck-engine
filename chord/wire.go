@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/sky-valley/pi/chord/delta"
-	"github.com/sky-valley/pi/internal/jsonstrict"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jsonstrict"
 )
 
 // This file mirrors upstream's src/services/wire.ts: the $chord.service

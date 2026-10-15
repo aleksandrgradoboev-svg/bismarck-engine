@@ -7,7 +7,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // autoRespond answers attach and detach requests immediately, which is what

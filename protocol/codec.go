@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"github.com/sky-valley/pi/protocol/cbor"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol/cbor"
 )
 
 // IsSupportedVersion reports whether a peer's advertised version is one this

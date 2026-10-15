@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // D7d: a trailing comma INSIDE an open string is content, not a dangling

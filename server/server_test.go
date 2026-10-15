@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/protocol"
-	"github.com/sky-valley/pi/server"
-	"github.com/sky-valley/pi/server/internal/servertest"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/server"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/server/internal/servertest"
 )
 
 // fakeListener records what the server asked of it without binding anything.

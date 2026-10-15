@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // These tests reach inside the session manager on purpose. What they pin —

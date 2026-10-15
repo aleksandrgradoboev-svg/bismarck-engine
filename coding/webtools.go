@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // NOTE: web_fetch is an addition beyond pi's core coding-agent tool set (pi

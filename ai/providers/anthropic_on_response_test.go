@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // anthropicOnResponseCaptureFile is written by

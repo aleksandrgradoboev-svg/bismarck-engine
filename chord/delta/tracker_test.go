@@ -11,7 +11,7 @@ import (
 	"time"
 	"weak"
 
-	"github.com/sky-valley/pi/chord/internal/jsonvalue"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/internal/jsonvalue"
 )
 
 // The upstream assertions ops goldens cannot carry: object identity (what is

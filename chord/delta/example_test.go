@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/sky-valley/pi/chord/delta"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
 )
 
 // The package doc's "Producing changes" flow, compiled and run, with a

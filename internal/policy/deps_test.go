@@ -25,7 +25,7 @@ var allowedModules = map[string]string{
 
 // ownModule is skipped by the allowlist check; its own packages are still
 // checked for cgo, so a stray `import "C"` in port code fails too.
-const ownModule = "github.com/sky-valley/pi"
+const ownModule = "github.com/aleksandrgradoboev-svg/bismarck-engine"
 
 // depPackage is one package in the transitive build graph. Module is empty for
 // the standard library.

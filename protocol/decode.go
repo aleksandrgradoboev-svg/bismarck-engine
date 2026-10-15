@@ -1,6 +1,6 @@
 package protocol
 
-import "github.com/sky-valley/pi/internal/jsonstrict"
+import "github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jsonstrict"
 
 // The strict tree decoder itself lives in internal/jsonstrict; this file binds
 // it to the protocol's CBOR field tags and to its union types. Strict means

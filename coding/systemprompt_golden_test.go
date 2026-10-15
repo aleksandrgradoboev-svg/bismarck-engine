@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // The system prompt goldens are pi's: testdata/systemprompt/capture.mts feeds

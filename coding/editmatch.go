@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // editEntry is a single oldText→newText replacement.

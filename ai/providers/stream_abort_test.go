@@ -18,7 +18,7 @@ import (
 	"testing/iotest"
 	"time"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // streamAbortCaptureFile is written by testdata/stream-abort/capture.mts,

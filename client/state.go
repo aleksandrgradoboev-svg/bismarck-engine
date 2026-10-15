@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // State is the client's view of the server: the latest server snapshot, the

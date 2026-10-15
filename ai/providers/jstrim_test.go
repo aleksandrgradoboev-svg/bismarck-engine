@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // Where pi trims, it trims with String.prototype.trim, which strips U+FEFF and

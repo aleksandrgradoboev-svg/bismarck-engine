@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/client"
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/client"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // remoteTestTimeout bounds every blocking wait in these tests so a regression

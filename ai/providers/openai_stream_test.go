@@ -19,8 +19,8 @@ import (
 	"testing/iotest"
 	"time"
 
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // openaiStreamCaptureFile is what testdata/openai-stream/capture.mts recorded

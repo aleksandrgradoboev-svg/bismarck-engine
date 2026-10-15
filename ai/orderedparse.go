@@ -9,7 +9,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // maxOrderedDepth is how deeply parseOrdered lets arrays and objects nest,

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // TestImportingCodingRegistersBuiltinProviders pins the SDK contract from the

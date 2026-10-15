@@ -248,8 +248,8 @@ func funcName(fn *ast.FuncDecl) string {
 func importNames(t *testing.T, file *ast.File, filename string) (protocolName, aiName string) {
 	t.Helper()
 	const (
-		protocolPath = "github.com/sky-valley/pi/protocol"
-		aiPath       = "github.com/sky-valley/pi/ai"
+		protocolPath = "github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
+		aiPath       = "github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	)
 	for _, spec := range file.Imports {
 		value, err := strconv.Unquote(spec.Path.Value)

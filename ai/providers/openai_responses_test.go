@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 const responsesSSE = `data: {"type":"response.created","response":{"id":"resp_1"}}

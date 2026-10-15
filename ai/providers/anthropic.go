@@ -14,8 +14,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 const (

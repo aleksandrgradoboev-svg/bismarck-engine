@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // Header deletion markers (upstream a24fb9e96). pi distinguishes three states

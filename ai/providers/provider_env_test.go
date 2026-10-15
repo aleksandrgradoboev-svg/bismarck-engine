@@ -3,7 +3,7 @@ package providers
 import (
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // pi 7f29e7a3: getProviderEnvValue prefers a non-empty scoped override, else the

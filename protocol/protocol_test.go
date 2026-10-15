@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/protocol/cbor"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol/cbor"
 )
 
 // Port of packages/protocol/test/protocol.test.ts at 64eeb82a4, case for case

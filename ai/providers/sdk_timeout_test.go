@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // The SDK adapters send through undici's fetch, whose headersTimeout (300s by

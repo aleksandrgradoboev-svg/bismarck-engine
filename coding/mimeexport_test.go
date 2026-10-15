@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sky-valley/pi/coding"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/coding"
 )
 
 // TestPublishedMimeSurface locks the "and no more" half of upstream de82e5367:

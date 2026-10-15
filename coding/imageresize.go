@@ -18,8 +18,8 @@ import (
 	_ "golang.org/x/image/bmp"  // register BMP decoder for BMP→PNG conversion
 	_ "golang.org/x/image/webp" // decode-only, to match photon's webp support
 
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // Image post-processing for the read tool (port of pi's resizeImageInProcess in

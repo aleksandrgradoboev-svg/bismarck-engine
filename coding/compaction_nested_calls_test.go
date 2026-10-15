@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // Upstream 8562bcf66 (compaction-nested-calls.test.ts): files touched by the

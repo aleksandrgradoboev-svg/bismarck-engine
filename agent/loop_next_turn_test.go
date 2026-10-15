@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // noopToolFor builds a tool that records nothing and always succeeds.

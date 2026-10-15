@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 func captureOpenAIBody(t *testing.T, model *ai.Model, req ai.Context, opts *ai.SimpleStreamOptions) map[string]any {

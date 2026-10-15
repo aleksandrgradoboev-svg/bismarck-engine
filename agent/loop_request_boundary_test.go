@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // The request and turn boundaries of upstream 466db0fec: FinishTurn decides

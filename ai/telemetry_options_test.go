@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sky-valley/pi/telemetry"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // Ported from pi packages/ai/test/telemetry-options.test.ts (upstream

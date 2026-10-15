@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // Options configures a Client. TransportFactory is required.

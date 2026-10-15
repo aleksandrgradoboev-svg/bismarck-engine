@@ -11,8 +11,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/sky-valley/pi/chord/internal/jsonvalue"
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/internal/jsonvalue"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // ─── Drafts ──────────────────────────────────────────────────────────────────

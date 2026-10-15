@@ -3,7 +3,7 @@ package server
 import (
 	"slices"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // Default messages for the three named failures pi exports as Error subclasses.

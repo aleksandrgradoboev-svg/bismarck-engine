@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sky-valley/pi/protocol/cbor"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol/cbor"
 )
 
 // The wire forms below are hand-built structs rather than the protocol's own

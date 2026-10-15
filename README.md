@@ -1,4 +1,32 @@
-# pi (Go)
+# bismarck-engine
+
+Agent engine for **Bismarck**: a Go implementation of [pi](https://github.com/earendil-works/pi)
+(Mario Zechner, MIT) with pi's extensions for agents and MCP, embedded as a library.
+
+## Origin and upstream policy
+
+- Started 2026-10-15 from [sky-valley/pi](https://github.com/sky-valley/pi) (MIT), a Go port of pi,
+  at commit `1067024e` (pi 0.99.2, pi source `5806068c2`), tag `fork-base`.
+- This is an independent project, not a fork: **the source of changes is pi itself**
+  ([earendil-works/pi](https://github.com/earendil-works/pi)). New pi commits are ported here
+  directly; the sky-valley port is used as a reference while it is maintained, never as a dependency.
+- Scope tracked from pi: `agent` (pi-agent-core), `ai` (core + OpenAI-compatible provider),
+  `coding` (sessions, tools, compaction), and pi's MCP and agent extensions.
+- pi removed its `server`, `client` and `protocol` packages on 2026-10-12 (`7472cda0`); the Go
+  versions here no longer have an upstream.
+- The last pi commit ported is recorded in [docs/UPSTREAM.md](docs/UPSTREAM.md).
+
+## Differences from the starting point
+
+- Provider attribution headers (`pi.dev`, `x-opencode-*`) are sent only when `PI_TELEMETRY` is truthy.
+- Tests do not read the developer's home directory; the suite is green on Windows and Linux (CI).
+- The grep tool reports model-facing paths with forward slashes on every OS.
+
+---
+
+The original README of the starting point follows.
+
+# pi (Go) — original README
 
 > **A pure-Go (golang) port of [pi](https://github.com/earendil-works/pi)** — the `@earendil-works/pi-ai`
 > unified multi-provider LLM API, the `pi-agent-core` agent loop, and the `pi-coding-agent` CLI —

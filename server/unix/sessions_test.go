@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/protocol"
-	"github.com/sky-valley/pi/server/internal/servertest"
-	"github.com/sky-valley/pi/server/unix"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/server/internal/servertest"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/server/unix"
 )
 
 func TestServerSnapshotRevisionsAreSerialized(t *testing.T) {

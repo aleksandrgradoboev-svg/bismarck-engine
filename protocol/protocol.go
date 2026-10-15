@@ -3,9 +3,9 @@ package protocol
 import (
 	"fmt"
 
-	"github.com/sky-valley/pi/chord"
-	"github.com/sky-valley/pi/internal/jsonstrict"
-	"github.com/sky-valley/pi/protocol/cbor"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jsonstrict"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol/cbor"
 )
 
 // The v8 envelope set: pi's packages/protocol/src/protocol.ts at 64eeb82a4,

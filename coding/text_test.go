@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sky-valley/pi/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
 )
 
 // splitBOM/stripBOM mirror pi's splitBom/stripBom (utils/text.ts): exactly one

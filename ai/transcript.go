@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // Transcript replay, ported from pi packages/ai/src/utils/transcript.ts

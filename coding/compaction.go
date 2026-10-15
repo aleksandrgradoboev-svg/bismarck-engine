@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // CompactionSettings configures automatic context-window compaction (port of

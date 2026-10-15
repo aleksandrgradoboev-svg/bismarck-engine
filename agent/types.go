@@ -6,7 +6,7 @@ package agent
 import (
 	"context"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // AgentMessage is a message in the agent transcript. The four ai message types

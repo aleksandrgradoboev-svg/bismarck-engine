@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"slices"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // ─── JSON values in Go ───────────────────────────────────────────────────────

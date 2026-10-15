@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/protocol"
-	"github.com/sky-valley/pi/protocol/cbor"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol/cbor"
 )
 
 // This file is the bridge between pi's execution types (the ai package) and the

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/protocol"
-	"github.com/sky-valley/pi/protocol/cbor"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol/cbor"
 )
 
 // TestConnectSendsHelloAndAcceptsFragmentedServerHello locks the handshake: the

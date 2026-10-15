@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // faux.ts at upstream 9e05370b2 serializes the normalized transcript alone —

@@ -1,4 +1,4 @@
-module github.com/sky-valley/pi
+module github.com/aleksandrgradoboev-svg/bismarck-engine
 
 go 1.26
 

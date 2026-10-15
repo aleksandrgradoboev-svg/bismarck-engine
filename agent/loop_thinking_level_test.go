@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // Upstream 540e174c7 (agent-loop.ts streamAssistantResponse): the loop records

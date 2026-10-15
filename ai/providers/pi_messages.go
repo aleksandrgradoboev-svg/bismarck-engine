@@ -25,8 +25,8 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // PiMessagesOptions are provider-native options for the pi-messages stream.

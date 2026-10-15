@@ -15,7 +15,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // baseURLRun is one row of testdata/base-url/base-url-*.json: what pi's

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 func userText(m interface{ MessageRole() ai.Role }) string {

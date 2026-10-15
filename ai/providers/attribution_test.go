@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // Provider attribution header tests. Faithful to pi

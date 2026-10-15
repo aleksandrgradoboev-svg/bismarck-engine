@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/chord/delta"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
 )
 
 // Port of packages/chord/test/service-wire.test.ts at 64eeb82a4, "service

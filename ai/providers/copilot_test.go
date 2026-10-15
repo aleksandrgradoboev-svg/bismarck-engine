@@ -3,7 +3,7 @@ package providers
 import (
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 func userImageMsg() ai.UserMessage {

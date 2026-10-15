@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/ai/providers"
-	"github.com/sky-valley/pi/coding"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/coding"
 )
 
 // Resuming a session file resumes its compaction: the next compaction extends

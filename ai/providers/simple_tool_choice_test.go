@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // Ported from pi's simple tool-choice option (upstream e5dde9a76): a

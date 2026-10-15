@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 const googleSSE = `data: {"candidates":[{"content":{"parts":[{"text":"Think","thought":true}]}}],"responseId":"resp_1"}

@@ -1,6 +1,6 @@
 package providers
 
-import "github.com/sky-valley/pi/ai"
+import "github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 
 // inferCopilotInitiator reports whether the request is user-initiated or
 // agent-initiated (e.g. follow-up after assistant/tool messages). Ported from

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/ai/providers"
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // testdata/compaction/capture-resume.mts writes session files with pi's own

@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // SessionLeaseMode is how strongly a lease claims its session.

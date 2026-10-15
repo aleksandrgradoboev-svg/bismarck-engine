@@ -3,8 +3,8 @@ package chord
 import (
 	"fmt"
 
-	"github.com/sky-valley/pi/chord/delta"
-	"github.com/sky-valley/pi/chord/internal/jsonvalue"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/internal/jsonvalue"
 )
 
 // Value is a strict JSON value: nil, bool, a finite number, a string, an

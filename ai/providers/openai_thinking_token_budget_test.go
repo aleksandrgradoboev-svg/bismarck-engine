@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // budgetModel is the upstream test's vLLM-served reasoning model: reasoning and

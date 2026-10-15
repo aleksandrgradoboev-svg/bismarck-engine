@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 const gatewayBindingBaseURL = "https://gateway.ai.cloudflare.com/v1/account-id/my-gateway"

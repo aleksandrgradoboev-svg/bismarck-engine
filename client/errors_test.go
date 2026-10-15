@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 func TestServerErrorCarriesProtocolError(t *testing.T) {

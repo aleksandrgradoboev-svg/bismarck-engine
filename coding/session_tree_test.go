@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 func assistantMsg(text string) ai.AssistantMessage {

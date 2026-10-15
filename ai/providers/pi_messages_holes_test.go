@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // piMessagesHoleStream is a stream that starts text blocks at each of starts,

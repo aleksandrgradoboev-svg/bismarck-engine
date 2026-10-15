@@ -23,9 +23,9 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/coding"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/coding"
 )
 
 // providerAPIKey returns the provider's API key from the environment once the

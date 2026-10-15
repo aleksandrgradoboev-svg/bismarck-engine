@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // unixReadBufferSize is the size of one read from the socket. It is a chunking

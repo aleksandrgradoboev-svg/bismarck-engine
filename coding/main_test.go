@@ -12,7 +12,7 @@ import (
 // there (pi-bash-*.log), and tests must not leave those files in the user's
 // temp directory, where pi's own sessions write the same names.
 //
-// It also gives them an empty home directory (bismarck-engine): skill and
+// It also gives them an empty home directory: skill and
 // session discovery read ~/.agents and ~/.pi, so without this the tests see
 // whatever the developer's machine has installed there. Both HOME and
 // USERPROFILE are set, because os.UserHomeDir reads USERPROFILE on Windows.

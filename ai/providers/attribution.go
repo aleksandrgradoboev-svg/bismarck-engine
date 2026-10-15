@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // Provider attribution headers, ported faithfully from pi

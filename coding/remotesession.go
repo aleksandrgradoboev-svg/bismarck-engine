@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/sky-valley/pi/client"
-	"github.com/sky-valley/pi/internal/jstext"
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/client"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // RemoteSessionOperation names the one mutation a RemoteSession may have in

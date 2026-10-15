@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // A minimal valid 1x1 PNG (IHDR + IDAT + IEND).

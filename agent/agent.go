@@ -6,7 +6,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 var defaultModel = &ai.Model{

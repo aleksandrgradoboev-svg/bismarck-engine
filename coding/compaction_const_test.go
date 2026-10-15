@@ -3,7 +3,7 @@ package coding
 import (
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // TestEstimateImageChars verifies the per-image token estimate uses pi's

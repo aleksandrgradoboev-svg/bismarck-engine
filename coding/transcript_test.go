@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 func fauxModel() protocol.ModelRef { return protocol.ModelRef{Provider: "faux", ID: "faux-1"} }

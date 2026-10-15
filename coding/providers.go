@@ -6,4 +6,4 @@ package coding
 // runs registerBuiltInApiProviders() at module load. This guarantees that a
 // session built from a catalog model is streamable without any manual wiring:
 // ResolveModel + NewSession + Run just work.
-import _ "github.com/sky-valley/pi/ai/providers"
+import _ "github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"

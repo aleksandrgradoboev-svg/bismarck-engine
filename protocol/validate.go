@@ -3,7 +3,7 @@ package protocol
 import (
 	"reflect"
 
-	"github.com/sky-valley/pi/protocol/cbor"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol/cbor"
 )
 
 // Constraint helpers mirroring the TypeBox modifiers pi's schemas use:

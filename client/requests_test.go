@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/sky-valley/pi/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
 )
 
 // TestCoalescedOutOfOrderResponses locks correlation by request id: two

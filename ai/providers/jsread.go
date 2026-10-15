@@ -8,7 +8,7 @@ import (
 	"math"
 	"unicode/utf8"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // Reading a parsed wire event the way pi's JavaScript reads it.

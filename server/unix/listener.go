@@ -19,8 +19,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sky-valley/pi/protocol"
-	"github.com/sky-valley/pi/server"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/protocol"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/server"
 )
 
 const (

@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // A context that declares tools but no system prompt normalizes to a leading

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // piMessagesSSE builds an SSE body of `data: <json>\n\n` frames from raw event

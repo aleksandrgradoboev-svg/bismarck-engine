@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
 )
 
 // TestBashKillsProcessTree verifies that cancelling a bash command kills

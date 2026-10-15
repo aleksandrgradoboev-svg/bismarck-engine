@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // pi's createAgentSession streams every request through

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sky-valley/pi/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
 )
 
 // TestEditFuzzyTrailingWhitespace: the model's oldText has different trailing

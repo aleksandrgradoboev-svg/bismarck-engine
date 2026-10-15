@@ -8,9 +8,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/ai/providers"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
 )
 
 // pi's AgentSession declares its prompt along two paths (upstream 9e05370b2):

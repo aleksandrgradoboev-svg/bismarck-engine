@@ -9,7 +9,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/sky-valley/pi/telemetry"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // Api identifies a wire protocol / API shape. Known values mirror pi's KnownApi

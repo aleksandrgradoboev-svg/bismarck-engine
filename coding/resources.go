@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // ConfigDirName is pi's per-project/user config directory name.

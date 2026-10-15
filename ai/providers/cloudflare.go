@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // Cloudflare base URLs with {VAR} placeholders, ported from pi cloudflare.ts.

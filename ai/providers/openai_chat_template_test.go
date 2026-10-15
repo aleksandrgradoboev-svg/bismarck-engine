@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // ctkModel builds a chat-template model with the given ordered kwargs JSON and

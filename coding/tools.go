@@ -23,9 +23,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 	"golang.org/x/text/unicode/norm"
@@ -2035,7 +2035,7 @@ func grepToolOps(cwd string, custom *GrepOperations) agent.AgentTool {
 						return filepath.SkipAll
 					}
 					// Model-facing paths use forward slashes on every OS, as the find
-					// tool already does (relativizeFindResultPath). bismarck-engine.
+					// tool already does (relativizeFindResultPath).
 					if !searchFile(p, filepath.ToSlash(rel), true) {
 						return filepath.SkipAll
 					}

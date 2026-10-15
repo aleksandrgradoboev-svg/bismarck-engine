@@ -3,8 +3,8 @@ package coding
 import (
 	"testing"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai/providers"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
 )
 
 // TestUnsetThinkingDefaultsToMediumOnReasoningModel verifies an unset thinking

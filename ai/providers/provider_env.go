@@ -1,6 +1,6 @@
 package providers
 
-import "github.com/sky-valley/pi/ai"
+import "github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 
 // getProviderEnvValue resolves a provider configuration value from the
 // per-stream scoped overrides first, then the OS environment. It delegates to

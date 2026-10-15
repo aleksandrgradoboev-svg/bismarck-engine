@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // anthropicWholeSSE is a complete anthropic stream: the 205 rows' server sends

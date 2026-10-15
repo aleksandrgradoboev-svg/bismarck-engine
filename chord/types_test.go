@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/chord/delta"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
 )
 
 // The value types of types.go: each marshals to exactly the JSON pi's

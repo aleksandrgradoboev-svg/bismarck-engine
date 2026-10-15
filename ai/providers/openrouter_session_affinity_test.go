@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
 // OpenRouter session affinity is on by default and uses its own header name

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/sky-valley/pi/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 // Models runtime ported from pi packages/ai/src/models.ts (732bb161; facade
