@@ -3,6 +3,7 @@ package coding
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -266,6 +267,9 @@ func TestWorktreeShadowSurvivesSymlinkedCwd(t *testing.T) {
 func TestWorktreeShadowFollowsTheLoadableCandidate(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root reads mode-000 files")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod 000 only sets read-only on Windows; the file stays readable")
 	}
 	isolatedHome(t)
 	_, main, worktree, worktreeSrc := nestedWorktree(t)

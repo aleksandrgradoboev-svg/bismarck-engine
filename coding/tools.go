@@ -2034,7 +2034,9 @@ func grepToolOps(cwd string, custom *GrepOperations) agent.AgentTool {
 						matchLimitReached = true
 						return filepath.SkipAll
 					}
-					if !searchFile(p, rel, true) {
+					// Model-facing paths use forward slashes on every OS, as the find
+					// tool already does (relativizeFindResultPath). bismarck-engine.
+					if !searchFile(p, filepath.ToSlash(rel), true) {
 						return filepath.SkipAll
 					}
 					return nil

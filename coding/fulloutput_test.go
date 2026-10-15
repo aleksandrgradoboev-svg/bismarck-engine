@@ -137,7 +137,10 @@ func TestOutputAccumulatorReadFullOutputMatchesPi(t *testing.T) {
 // the first error.
 func TestOutputAccumulatorReportsTempFileErrors(t *testing.T) {
 	t.Run("the file cannot be created", func(t *testing.T) {
-		t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+		missing := filepath.Join(t.TempDir(), "missing")
+		t.Setenv("TMPDIR", missing)
+		t.Setenv("TMP", missing) // os.TempDir reads TMP/TEMP on Windows
+		t.Setenv("TEMP", missing)
 		acc := newOutputAccumulator(2, 1000, "pi-test")
 		acc.append([]byte("1\n2\n3\n")) // three lines pass maxLines
 		acc.finish()

@@ -26,6 +26,13 @@ func newFakeEnv(dir string) *fakeEnv {
 
 func (f *fakeEnv) Cwd() string { return f.dir }
 
+// fakeDirPrefix is path as a directory prefix of the fake's file keys. The
+// keys are built with filepath.Join, so the separator is the OS one ("\" on
+// Windows), not a hard-coded "/".
+func fakeDirPrefix(path string) string {
+	return strings.TrimRight(path, `/\`) + string(filepath.Separator)
+}
+
 func (f *fakeEnv) AbsolutePath(_ context.Context, path string) (string, error) {
 	if filepath.IsAbs(path) {
 		return filepath.Clean(path), nil
@@ -41,7 +48,7 @@ func (f *fakeEnv) ReadBinaryFile(_ context.Context, path string) ([]byte, error)
 	}
 	// A real filesystem raises EISDIR for a directory; so does this one, which
 	// is what lets the read tool report pi's text without stat-ing local disk.
-	prefix := strings.TrimSuffix(path, "/") + "/"
+	prefix := fakeDirPrefix(path)
 	for p := range f.files {
 		if strings.HasPrefix(p, prefix) {
 			return nil, errors.New("EISDIR: illegal operation on a directory, read")
@@ -105,7 +112,7 @@ func (f *fakeEnv) Stat(_ context.Context, path string) (FileInfo, error) {
 	}
 	// Any path that is a prefix of a known file is a directory.
 	for p := range f.files {
-		if strings.HasPrefix(p, strings.TrimSuffix(path, "/")+"/") {
+		if strings.HasPrefix(p, fakeDirPrefix(path)) {
 			return FileInfo{Path: path, Name: filepath.Base(path), Kind: FileKindDirectory}, nil
 		}
 	}
@@ -113,7 +120,7 @@ func (f *fakeEnv) Stat(_ context.Context, path string) (FileInfo, error) {
 }
 func (f *fakeEnv) ListDir(_ context.Context, path string) ([]FileInfo, error) {
 	var out []FileInfo
-	prefix := strings.TrimSuffix(path, "/") + "/"
+	prefix := fakeDirPrefix(path)
 	for p, data := range f.files {
 		if strings.HasPrefix(p, prefix) {
 			out = append(out, FileInfo{Path: p, Name: filepath.Base(p), Kind: FileKindFile, Size: int64(len(data))})
@@ -257,7 +264,10 @@ func TestLocalEnvFileSystemRoundTrip(t *testing.T) {
 	if got, _ := env.AbsolutePath(ctx, "x.txt"); got != filepath.Join(dir, "x.txt") {
 		t.Fatalf("AbsolutePath(relative) = %q", got)
 	}
-	if got, _ := env.AbsolutePath(ctx, "/tmp/x.txt"); got != filepath.Clean("/tmp/x.txt") {
+	// "/tmp/x.txt" is not absolute on Windows (no volume), so build an absolute
+	// path that is one on every OS.
+	absPath := filepath.Join(filepath.VolumeName(dir)+string(filepath.Separator), "tmp", "x.txt")
+	if got, _ := env.AbsolutePath(ctx, absPath); got != filepath.Clean(absPath) {
 		t.Fatalf("AbsolutePath(absolute) = %q", got)
 	}
 }

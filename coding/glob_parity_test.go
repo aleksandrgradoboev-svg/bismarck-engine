@@ -367,7 +367,9 @@ func TestFindGlobalCoreExcludesFile(t *testing.T) {
 	excl := filepath.Join(home, "global-ignore")
 	os.WriteFile(excl, []byte("globalignored.txt\n"), 0o644)
 	cfg := filepath.Join(home, "gitconfig")
-	os.WriteFile(cfg, []byte("[core]\n\texcludesFile = "+excl+"\n"), 0o644)
+	// Forward slashes: git config treats "\" as an escape, so a Windows path
+	// written as-is would be mangled.
+	os.WriteFile(cfg, []byte("[core]\n\texcludesFile = "+filepath.ToSlash(excl)+"\n"), 0o644)
 	t.Setenv("GIT_CONFIG_GLOBAL", cfg)
 	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
 

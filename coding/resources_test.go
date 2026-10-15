@@ -254,7 +254,12 @@ func TestContextFileStripsLeadingBOM(t *testing.T) {
 		Cwd:           plainCwd,
 		ContextFiles:  LoadProjectContextFiles(plainCwd),
 	})
-	if strings.ReplaceAll(prompt, cwd, "CWD") != strings.ReplaceAll(plain, plainCwd, "CWD") {
+	// The <cwd> block prints the directory with forward slashes; on Windows
+	// that spelling differs from cwd itself, so normalize both.
+	norm := func(s, dir string) string {
+		return strings.ReplaceAll(strings.ReplaceAll(s, dir, "CWD"), filepath.ToSlash(dir), "CWD")
+	}
+	if norm(prompt, cwd) != norm(plain, plainCwd) {
 		t.Fatalf("BOM changed the assembled prompt:\n got: %q\nwant: %q", prompt, plain)
 	}
 }
