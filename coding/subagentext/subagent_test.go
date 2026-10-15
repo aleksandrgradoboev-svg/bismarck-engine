@@ -360,9 +360,13 @@ func TestTruncateParallelOutput(t *testing.T) {
 	}
 }
 
-// TestProjectTrust is pi's regression #8261 with this port's rule for hosts
-// that cannot ask.
+// TestProjectTrust is pi's regression #8261 with this port's rules: hosts that
+// cannot ask refuse, and the model cannot skip the question — a call that
+// sends pi's confirmProjectAgents: false is asked all the same.
 func TestProjectTrust(t *testing.T) {
+	if _, ok := Definition(nil, Options{}).Tool.Parameters.Properties["confirmProjectAgents"]; ok {
+		t.Fatal("the tool still offers confirmProjectAgents")
+	}
 	cases := []struct {
 		name         string
 		trusted      bool
@@ -374,7 +378,7 @@ func TestProjectTrust(t *testing.T) {
 		{name: "trusted skips confirmation", trusted: true, confirm: ptr(false), wantCalls: 0},
 		{name: "untrusted asks and is refused", confirm: ptr(false), wantCalls: 1, wantCanceled: true},
 		{name: "untrusted asks and is approved", confirm: ptr(true), wantCalls: 1},
-		{name: "with UI the call may skip the question", confirm: ptr(false), skipConfirm: true, wantCalls: 0},
+		{name: "with UI the call cannot skip the question", confirm: ptr(false), skipConfirm: true, wantCalls: 1, wantCanceled: true},
 		{name: "without UI untrusted is refused", wantCanceled: true},
 		{name: "without UI the call cannot skip", skipConfirm: true, wantCanceled: true},
 		{name: "without UI trusted runs", trusted: true},
