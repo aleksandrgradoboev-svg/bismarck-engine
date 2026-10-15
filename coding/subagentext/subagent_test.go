@@ -347,6 +347,45 @@ func TestParallelLimit(t *testing.T) {
 	}
 }
 
+// The tool reports what its subagents spent as its result's Usage, so the
+// dispatching session counts it; an agent that never ran adds nothing.
+func TestResultUsageSumsSubagents(t *testing.T) {
+	f := newFixture(t)
+	writeAgent(t, f.userDir, "a.md", "---\nname: a\ndescription: A\n---\nbody")
+	f.reg.SetResponses(steps(2, answer(func(task string) string { return strings.Repeat(task, 50) })))
+	res, err := f.run(t, map[string]any{"tasks": []any{
+		map[string]any{"agent": "a", "task": "one"},
+		map[string]any{"agent": "a", "task": "two"},
+		map[string]any{"agent": "ghost", "task": "three"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want ai.Usage
+	for _, r := range res.Details.(Details).Results {
+		for _, m := range r.Messages {
+			if am, ok := asAssistant(m); ok {
+				addUsage(&want, am.Usage)
+			}
+		}
+	}
+	if want.Input == 0 || want.Output == 0 {
+		t.Fatalf("the faux responses reported no usage: %+v", want)
+	}
+	if res.Usage == nil || *res.Usage != want {
+		t.Fatalf("result usage = %+v, want the subagents' %+v", res.Usage, want)
+	}
+
+	// Nothing ran: no usage.
+	res, err = f.run(t, map[string]any{"agent": "ghost", "task": "t"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Usage != nil {
+		t.Fatalf("an unknown agent reported usage %+v", *res.Usage)
+	}
+}
+
 func TestTruncateParallelOutput(t *testing.T) {
 	short := "short"
 	if truncateParallelOutput(short) != short {

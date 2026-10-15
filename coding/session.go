@@ -834,7 +834,9 @@ type RunResult struct {
 	// ToolCalls are the tool calls the model made during this run.
 	ToolCalls []ai.ToolCall
 	// Usage is the aggregate token usage + cost across every provider request in
-	// this run (multi-turn tool loops are summed).
+	// this run (multi-turn tool loops are summed), with what tools reported
+	// spending on their results — nested calls, subagents — as pi's session
+	// stats count it.
 	Usage ai.Usage
 	// StopReason is the final assistant stop reason.
 	StopReason ai.StopReason
@@ -1000,6 +1002,11 @@ func (s *Session) RunMessages(ctx context.Context, prompts []agent.AgentMessage)
 		}
 		if am, ok := messageAsAssistant(e.Message); ok {
 			addUsage(&result.Usage, am.Usage)
+		}
+		// What a tool spent — a codemode script's nested calls, subagents —
+		// counts too, as pi's getSessionStats counts toolResult usage.
+		if tr, ok := messageAsToolResult(e.Message); ok && tr.Usage != nil {
+			addUsage(&result.Usage, *tr.Usage)
 		}
 		return nil
 	})

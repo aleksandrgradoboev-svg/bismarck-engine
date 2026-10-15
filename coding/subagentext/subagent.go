@@ -106,6 +106,27 @@ type Result struct {
 	StopReason   string       `json:"stopReason,omitempty"`
 	ErrorMessage string       `json:"errorMessage,omitempty"`
 	Step         int          `json:"step,omitempty"`
+
+	// cost is everything the run spent — its responses and what its tools
+	// report, a nested subagent's included — for the tool result's Usage.
+	// Usage above is pi's display summary and leaves tool usage out.
+	cost ai.Usage
+}
+
+// addUsage adds u to dst, the token splits included.
+func addUsage(dst *ai.Usage, u ai.Usage) {
+	dst.Input += u.Input
+	dst.Output += u.Output
+	dst.CacheRead += u.CacheRead
+	dst.CacheWrite += u.CacheWrite
+	dst.CacheWrite1h += u.CacheWrite1h
+	dst.Reasoning += u.Reasoning
+	dst.TotalTokens += u.TotalTokens
+	dst.Cost.Input += u.Cost.Input
+	dst.Cost.Output += u.Cost.Output
+	dst.Cost.CacheRead += u.Cost.CacheRead
+	dst.Cost.CacheWrite += u.Cost.CacheWrite
+	dst.Cost.Total += u.Cost.Total
 }
 
 // Mode is the call's mode.
@@ -161,6 +182,16 @@ func (r Result) Output() string {
 		return out
 	}
 	return "(no output)"
+}
+
+func asToolResult(m ai.Message) (*ai.ToolResultMessage, bool) {
+	switch v := m.(type) {
+	case *ai.ToolResultMessage:
+		return v, true
+	case ai.ToolResultMessage:
+		return &v, true
+	}
+	return nil, false
 }
 
 func asAssistant(m ai.Message) (*ai.AssistantMessage, bool) {
@@ -270,7 +301,29 @@ func availableAgents(agents []Agent) string {
 	return strings.Join(names, ", ")
 }
 
-func (r *runner) execute(ctx context.Context, _ string, params map[string]any, onUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
+// execute runs the call and reports what its subagents spent, failed runs
+// included, as the result's Usage: the session counts a tool result's usage
+// with its own, as pi's session stats do, so a host's quota sees what
+// subagents spend. pi's example leaves it out.
+func (r *runner) execute(ctx context.Context, id string, params map[string]any, onUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
+	res, err := r.run(ctx, id, params, onUpdate)
+	if d, ok := res.Details.(Details); ok && err == nil {
+		var total ai.Usage
+		spent := false
+		for _, result := range d.Results {
+			if result.cost != (ai.Usage{}) {
+				addUsage(&total, result.cost)
+				spent = true
+			}
+		}
+		if spent {
+			res.Usage = &total
+		}
+	}
+	return res, err
+}
+
+func (r *runner) run(ctx context.Context, _ string, params map[string]any, onUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
 	scope := ScopeUser
 	if s, ok := params["agentScope"].(string); ok && s != "" {
 		scope = Scope(s)
@@ -587,7 +640,11 @@ func (r *runner) runAgent(ctx context.Context, agents []Agent, t taskParam, step
 		}
 		mu.Lock()
 		result.Messages = append(result.Messages, e.Message)
+		if tr, ok := asToolResult(e.Message); ok && tr.Usage != nil {
+			addUsage(&result.cost, *tr.Usage)
+		}
 		if am, ok := asAssistant(e.Message); ok {
+			addUsage(&result.cost, am.Usage)
 			result.Usage.Turns++
 			result.Usage.Input += am.Usage.Input
 			result.Usage.Output += am.Usage.Output
