@@ -124,6 +124,28 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    `Entry` and `VisibleEntry`; `"current"` is the `Current` point, 0. The task runtime, task
    definitions, `Tx` and the Session come with the stages that use them.
 
+   **Stage 1b-1, the Session kernel**: `durable` (pi `documents.ts`, `session/forks.ts`,
+   `session/observation.ts`, `session/transaction.ts`, `session/session.ts`, and the Session half of
+   `types.ts`), with pi's tests `session-definitions`, `session-documents`, `session-states` and
+   `session-watches`. The rest of the session suites (`forks`, `tables`, `checkpoints-migrations`,
+   `document-retention`) is stage 1b-2; the retention cases that need the harness wait for stage 4.
+   Go-only: a definition is one `Doc` whose semantics `DefineDoc` checks, since Go has no overloads to
+   type them, and an address is a `DocRef` built explicitly (`Session()`, `Conversation(id)`,
+   `Task(id)`, `.Member(key, seed)`), whose misuse is the error of the call that uses it; values are
+   `map[string]any`, nil for a retired incarnation. `Tx` operations block, and a callback may call
+   them from several goroutines: each stretch between two Storage calls runs under the
+   transaction's mutex, as pi's single thread runs the stretch between two awaits, and settlement
+   counts the operations still running, rejects the commit and waits for them. The mutation line is
+   a FIFO admitted and joined in one step. Watch and document-state listeners run on goroutines
+   started while frames wait, where pi queues a microtask; a watch listener returns an error where
+   pi's rejects. `withoutAbortSignal` is `context.WithoutCancel`; eviction timers are
+   `time.AfterFunc`. The harness's overrides of `report`, `conversationCreated` and `beforeClose` are
+   `SessionHooks`. Typed entry tokens (`defineEntry`) come with the harness. n/a: pi's type-only
+   assertions, and `Object.isFrozen`. Tests beyond pi's: definition semantics, misbuilt references
+   on every call, and no observer left attached by a cancelled watch acquisition. Where pi's tests
+   order calls by their synchronous parts, the Go tests order them explicitly (a held Storage call,
+   the transaction's pending count, its seal).
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
