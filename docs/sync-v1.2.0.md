@@ -33,8 +33,8 @@ its diff when it is ported.
 | `f1b2e77f` | load a symlinked AGENTS.md in nested git worktrees | ported |
 | `76dfb88f` | per-thinking-level sampling parameters | ported |
 | `bc2d8dc1` | drop mismatched item ids when replaying grammar tool calls | ported |
-| `36a686ee`, `f284a246` | record response and tool execution times | deferred: changes the session record's key order, done separately |
-| `fe11328b` | per-message prompt-cache usage in the faux provider | deferred |
+| `36a686ee`, `f284a246` | record response and tool execution times | ported: `AssistantMessage.DurationMs` (last key) timed by the assistant event stream through hooks on `EventStream`, since Go's stream is the generic type and has no `push`/`end` to override; `ToolResultMessage.DurationMs` between `isError` and `timestamp`, `AgentToolCallOutcome.DurationMs`, and `tool_execution_end`'s, nested calls included. n/a: `lazy.ts` (providers resolve synchronously here), `streamProxy` and the test mocks (no hand-written assistant streams), `durable`, rendering. The response-model capture predates the field, so its comparison drops `durationMs` like `timestamp` and checks that it is set |
+| `fe11328b` | per-message prompt-cache usage in the faux provider | ported |
 | `ddaa0a03`, `04b97ef0` | `+name`/`-name` and patterns in the tool list; MCP tools with `--tools` | with MCP |
 | `e6fb2581` | retry transient Windows EPERM on the auth lock | n/a: no file-based auth storage |
 | `a447ba11` | `before_agent_start` for runs started by custom messages | n/a: JavaScript extensions runtime |

@@ -72,6 +72,35 @@ func recordJSON(t *testing.T, calls *ai.NestedToolCalls) string {
 	return string(data)
 }
 
+// pi 36a686ee: a nested call's tool_execution_end carries the outcome's
+// durationMs, and has none when the tool did not run.
+func TestNestedRunnerEndEventCarriesDuration(t *testing.T) {
+	var events []agent.AgentEvent
+	d := int64(5)
+	runner := newNestedCallRunner(nestedHost{
+		tools:      func() []agent.AgentTool { return nil },
+		sequential: func() bool { return false },
+		run: func(_ context.Context, call ai.ToolCall, _ string, _ func(agent.AgentToolResult)) agent.AgentToolCallOutcome {
+			if call.Name == "ran" {
+				return agent.AgentToolCallOutcome{ToolCall: call, DurationMs: &d}
+			}
+			return agent.AgentToolCallOutcome{ToolCall: call, IsError: true}
+		},
+		emit: func(_ context.Context, e agent.AgentEvent) { events = append(events, e) },
+	})
+	runner.execute(context.Background(), "call", "ran", nil, nil)
+	runner.execute(context.Background(), "call", "blocked", nil, nil)
+	var ends []agent.AgentEvent
+	for _, e := range events {
+		if e.Type == agent.EvToolExecutionEnd {
+			ends = append(ends, e)
+		}
+	}
+	if len(ends) != 2 || ends[0].DurationMs == nil || *ends[0].DurationMs != 5 || ends[1].DurationMs != nil {
+		t.Fatalf("end events %+v", ends)
+	}
+}
+
 func TestNestedRunnerIDsEventsAndRecord(t *testing.T) {
 	echo := testTool("echo", func(_ context.Context, _ string, _ map[string]any, onUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
 		onUpdate(agent.AgentToolResult{Content: ai.ContentList{ai.TextContent{Text: "partial"}}})

@@ -247,7 +247,7 @@ func (r *nestedCallRunner) execute(ctx context.Context, callerID, name string, a
 	if outcome.Result.Usage != nil {
 		scope.recorder.addUsage(*outcome.Result.Usage)
 	}
-	r.host.emit(ctx, agent.AgentEvent{Type: agent.EvToolExecutionEnd, ToolCallID: id, ToolName: name, Result: outcome.Result, IsError: outcome.IsError, ParentToolCallID: callerID})
+	r.host.emit(ctx, agent.AgentEvent{Type: agent.EvToolExecutionEnd, ToolCallID: id, ToolName: name, Result: outcome.Result, IsError: outcome.IsError, DurationMs: outcome.DurationMs, ParentToolCallID: callerID})
 	return outcome
 }
 

@@ -1,6 +1,10 @@
 package ai
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"math"
+	"time"
+)
 
 // EventType is the discriminator for AssistantMessageEvent.
 type EventType string
@@ -153,8 +157,38 @@ func (e AssistantMessageEvent) MarshalJSON() ([]byte, error) {
 // AssistantMessage.
 type AssistantMessageEventStream = EventStream[AssistantMessageEvent, *AssistantMessage]
 
-// NewAssistantMessageEventStream creates an AssistantMessageEventStream.
+// NewAssistantMessageEventStream creates an AssistantMessageEventStream. The
+// stream also times the response (pi 36a686ee, f284a246): the final message —
+// of the "done" or "error" event, or the result passed to End — gets
+// DurationMs, measured with a monotonic clock from the stream's creation,
+// unless the message already has one or its Timestamp predates the stream. A
+// stream that forwards a response which started elsewhere, such as a deferred
+// result fetched later, therefore leaves it untimed.
 func NewAssistantMessageEventStream() *AssistantMessageEventStream {
+	started := time.Now()
+	startedAt := started.UnixMilli()
+	timeResponse := func(m *AssistantMessage) {
+		if m == nil || m.DurationMs != nil || m.Timestamp < startedAt {
+			return
+		}
+		// Math.max(0, Math.round(performance.now() - start)).
+		ms := max(0, int64(math.Round(float64(time.Since(started))/float64(time.Millisecond))))
+		m.DurationMs = &ms
+	}
+	s := newAssistantMessageEventStream()
+	s.onTerminal = func(e AssistantMessageEvent) {
+		switch e.Type {
+		case EventDone:
+			timeResponse(e.Message)
+		case EventError:
+			timeResponse(e.Error)
+		}
+	}
+	s.onEndResult = timeResponse
+	return s
+}
+
+func newAssistantMessageEventStream() *AssistantMessageEventStream {
 	return NewEventStream(
 		func(e AssistantMessageEvent) bool {
 			return e.Type == EventDone || e.Type == EventError

@@ -94,6 +94,10 @@ type AgentToolCallOutcome struct {
 	// result message carries. Result.IsError is only what the tool itself
 	// reported, and an AfterToolCall override can make the two differ.
 	IsError bool
+	// DurationMs is how long the tool's Execute took, measured with a
+	// monotonic clock and excluding hooks; nil when the tool did not run (pi
+	// durationMs, upstream 36a686ee).
+	DurationMs *int64
 }
 
 // ToolUpdateFunc streams partial tool results during execution.
@@ -446,6 +450,9 @@ type AgentEvent struct {
 	PartialResult    any
 	Result           any
 	IsError          bool
+	// DurationMs is set on tool_execution_end: how long the tool's Execute
+	// took, measured with a monotonic clock; nil when the tool did not run.
+	DurationMs *int64
 }
 
 // EventSink receives loop events. Returning an error aborts the loop.

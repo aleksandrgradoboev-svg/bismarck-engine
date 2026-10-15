@@ -31,6 +31,12 @@ type EventStream[T any, R any] struct {
 	hasResult  bool
 	isComplete func(T) bool
 	extract    func(T) R
+	// onTerminal and onEndResult, when set, see the terminal event and the
+	// result passed to End before the stream takes them, unless it is already
+	// done: the assistant stream times its response there (pi overrides push
+	// and end in AssistantMessageEventStream).
+	onTerminal  func(T)
+	onEndResult func(R)
 }
 
 // NewEventStream creates an EventStream. isComplete reports whether an event is
@@ -62,6 +68,9 @@ func (s *EventStream[T, R]) Push(event T) {
 
 	terminal := s.isComplete(event)
 	if terminal {
+		if s.onTerminal != nil {
+			s.onTerminal(event)
+		}
 		s.done = true
 		if !s.hasResult {
 			s.result = s.extract(event)
@@ -97,6 +106,9 @@ func (s *EventStream[T, R]) Push(event T) {
 func (s *EventStream[T, R]) End(result ...R) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if len(result) > 0 && !s.done && s.onEndResult != nil {
+		s.onEndResult(result[0])
+	}
 	if len(result) > 0 && !s.hasResult {
 		s.result = result[0]
 		s.hasResult = true
