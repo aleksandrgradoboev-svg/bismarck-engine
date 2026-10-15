@@ -79,6 +79,17 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
 1. **Subagents.** In pi v1.2.0 they are an example extension (`examples/extensions/subagent`,
    ≈1.2k lines): agents defined in `.md` files, each subagent a separate `pi` process with its own
    context. Here a subagent is a separate engine session in the same process.
+   **Ported** as `coding/subagentext`, from the example at `91130942` (one change since v1.2.0,
+   `91014991`, which only touches its terminal rendering): agent discovery, the three modes,
+   pi's limits and messages, `details` in pi's shape. Not ported: `renderCall`/`renderResult`
+   (terminal rendering) and the sample agents and workflow prompts. Differences: the host builds
+   each subagent's session (`Options.NewSession`) and resolves agent models
+   (`Options.ResolveModel`); the agent's `tools` narrow the session's active tools; without
+   `Options.Confirm` an untrusted project's agents are refused, where pi runs them unasked when it
+   has no UI, and `confirmProjectAgents: false` from the model only skips a question that could be
+   asked. Pi's regression `8261-subagent-project-trust` is ported in `TestProjectTrust`. Added to
+   `coding` for it: `SessionOptions.AppendSystemPrompt` (pi `--append-system-prompt`) and the
+   exported `ParseFrontmatter`.
 2. **`models.json`** (pi `core/model-config.ts`, `core/model-registry.ts`): custom models and
    providers for `cmd/pi`. Library users can already build an `ai.Model` directly.
 3. **`durable`**: 82 files, 25.2k lines, changing almost daily upstream; ported from the newest

@@ -758,6 +758,29 @@ func (v fmValue) isString() bool {
 	return !yamlCoreIntRe.MatchString(v.value) && !yamlCoreFloatRe.MatchString(v.value)
 }
 
+// FrontmatterValue is a scalar of a frontmatter header.
+type FrontmatterValue struct {
+	// Value is the scalar's text.
+	Value string
+	// IsString reports whether the scalar is a string under the YAML core
+	// schema — what pi's `typeof x === "string"` sees after its YAML parse.
+	// A plain true, 12 or null is not.
+	IsString bool
+}
+
+// ParseFrontmatter is pi's exported parseFrontmatter (utils/frontmatter.ts)
+// over the subset parseFrontmatter reads: the header's scalars by key and the
+// body after it. Sequences and flow collections are not parsed; a flow
+// collection such as [a, b] comes back as the plain text of the line.
+func ParseFrontmatter(content string) (map[string]FrontmatterValue, string) {
+	fm, body := parseFrontmatter(content)
+	out := make(map[string]FrontmatterValue, len(fm))
+	for k, v := range fm {
+		out[k] = FrontmatterValue{Value: v.value, IsString: v.isString()}
+	}
+	return out, body
+}
+
 // parseFrontmatter extracts a `--- ... ---` YAML header into a flat scalar map
 // and returns the remaining body (port of utils/frontmatter.ts, which uses the
 // real `yaml` parser; this is a minimal-but-correct subset for the flat

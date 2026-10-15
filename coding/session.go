@@ -56,10 +56,14 @@ type SessionOptions struct {
 	// tool registry locked, so it must not call back into the Session.
 	OnPrepareLoadoutError func(tool string, err error)
 
-	SystemPrompt  string
-	ThinkingLevel agent.ThinkingLevel
-	APIKey        string
-	SessionID     string
+	SystemPrompt string
+	// AppendSystemPrompt is added to the prompt, custom or default, as its
+	// addendum section, before project context and skills (pi
+	// appendSystemPrompt, CLI --append-system-prompt).
+	AppendSystemPrompt string
+	ThinkingLevel      agent.ThinkingLevel
+	APIKey             string
+	SessionID          string
 
 	// TrustProject enables discovery of project-local resources under
 	// <cwd>/.pi — currently the skills directory. It is pi's isProjectTrusted()
@@ -627,10 +631,11 @@ func NewSession(opts SessionOptions) *Session {
 	// active-tool list, never undefined, so the builder must not fall back to
 	// its [read,bash,edit,write] default.
 	sess.systemPromptOptions = BuildSystemPromptOptions{
-		CustomPrompt: opts.SystemPrompt,
-		Cwd:          cwd,
-		ContextFiles: sessionContextFiles(cwd, opts.NoContextFiles),
-		Skills:       sessionSkillsWithPaths(cwd, opts.TrustProject, opts.NoSkills, opts.SkillPaths),
+		CustomPrompt:       opts.SystemPrompt,
+		AppendSystemPrompt: opts.AppendSystemPrompt,
+		Cwd:                cwd,
+		ContextFiles:       sessionContextFiles(cwd, opts.NoContextFiles),
+		Skills:             sessionSkillsWithPaths(cwd, opts.TrustProject, opts.NoSkills, opts.SkillPaths),
 	}
 	thinking := opts.ThinkingLevel
 	if thinking == "" {
