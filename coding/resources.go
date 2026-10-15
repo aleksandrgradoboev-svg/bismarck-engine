@@ -241,8 +241,11 @@ func LoadProjectContextFiles(cwd string) []ContextFile {
 	var ancestors []ContextFile
 	current := cwd
 	for {
+		// Compare the directory's real path, not the file's: a worktree AGENTS.md
+		// that symlinks to the main repo's file resolves to the shadowed path
+		// itself (upstream f1b2e77f, #10681).
 		if cf, ok := loadContextFileFromDir(current); ok &&
-			!(hasShadowed && canonicalizePath(cf.Path) == shadowed) &&
+			!(hasShadowed && filepath.Join(canonicalizePath(current), filepath.Base(cf.Path)) == shadowed) &&
 			!seen[cf.Path] {
 			ancestors = append([]ContextFile{cf}, ancestors...)
 			seen[cf.Path] = true

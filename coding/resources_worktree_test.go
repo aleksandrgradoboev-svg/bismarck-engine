@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 )
 
@@ -285,4 +286,45 @@ func TestWorktreeShadowFollowsTheLoadableCandidate(t *testing.T) {
 	// main's AGENTS.md must survive.
 	assertContents(t, contextContents(LoadProjectContextFiles(worktreeSrc)),
 		"main agents", "worktree claude")
+}
+
+// Mirrors pi resource-loader.test.ts (upstream f1b2e77f, #10681): a worktree
+// AGENTS.md that symlinks to the main repo's file loads once, as the worktree's.
+func TestWorktreeSymlinkedContextLoadsOnce(t *testing.T) {
+	symlinkOrSkip := func(t *testing.T, target, link string) {
+		t.Helper()
+		if err := os.Symlink(target, link); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+	}
+	paths := func(files []ContextFile) []string {
+		var out []string
+		for _, f := range files {
+			out = append(out, f.Path)
+		}
+		return out
+	}
+
+	t.Run("worktree file links to the main repo's", func(t *testing.T) {
+		isolatedHome(t)
+		_, main, worktree, worktreeSrc := nestedWorktree(t)
+		writeFile(t, filepath.Join(main, "AGENTS.md"), "main repo instructions")
+		symlinkOrSkip(t, filepath.Join(main, "AGENTS.md"), filepath.Join(worktree, "AGENTS.md"))
+		got := paths(LoadProjectContextFiles(worktreeSrc))
+		if want := []string{filepath.Join(worktree, "AGENTS.md")}; !slices.Equal(got, want) {
+			t.Fatalf("context files = %v, want %v", got, want)
+		}
+	})
+	t.Run("both link to one shared file", func(t *testing.T) {
+		isolatedHome(t)
+		outer, main, worktree, worktreeSrc := nestedWorktree(t)
+		shared := filepath.Join(outer, "shared-agents.md")
+		writeFile(t, shared, "shared instructions")
+		symlinkOrSkip(t, shared, filepath.Join(main, "AGENTS.md"))
+		symlinkOrSkip(t, shared, filepath.Join(worktree, "AGENTS.md"))
+		got := paths(LoadProjectContextFiles(worktreeSrc))
+		if want := []string{filepath.Join(worktree, "AGENTS.md")}; !slices.Equal(got, want) {
+			t.Fatalf("context files = %v, want %v", got, want)
+		}
+	})
 }
