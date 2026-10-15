@@ -112,6 +112,18 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    `BACKGROUND_CONTEXT` and the abort-signal helpers are Go's `context`. A change callback that panics
    leaves the state usable, as pi's `finally` does; a test beyond pi's pins it.
 
+   **Stage 1a, records and storage**: `durable` (pi `types.ts`, its records, queries and the
+   `Storage` contract; `errors.ts`; `storage/scan.ts`), `durable/storage/memory` (pi
+   `storage/memory.ts`) and `durable/durabletest.TestStorage` (pi `testing/storage-conformance.ts`,
+   every case, run by `go test`; the memory storage passes it, as pi's `memory-storage.test.ts`
+   checks). Go-only: JSON payloads (entry data, task input, checkpoints, results, memos, details) are
+   `json.RawMessage`, which keeps every shape and pi's key order through storage; document values are
+   chord values. Copies are explicit, not through JSON: Go's JSON replaces malformed UTF-8, which would
+   merge two distinct string identities, the Go form of pi's lone-surrogate case; the memory storage's
+   address keys quote with `strconv.Quote` for the same reason. `Storage.entry`'s two overloads are
+   `Entry` and `VisibleEntry`; `"current"` is the `Current` point, 0. The task runtime, task
+   definitions, `Tx` and the Session come with the stages that use them.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
