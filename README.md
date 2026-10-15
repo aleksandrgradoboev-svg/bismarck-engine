@@ -7,9 +7,9 @@ MCP and agents — embedded as a library, with no Node.js runtime.
 ## Origin
 
 - The code started on 2026-10-15 from [sky-valley/pi](https://github.com/sky-valley/pi), a Go port
-  of pi (MIT), at commit `1067024e` (pi 0.99.2, pi source `5806068c2`), tagged `sky-valley-1067024`.
-  Its history is kept as the record of where the code came from; its copyright stands in
-  [LICENSE](LICENSE).
+  of pi (MIT), at commit `1067024e7cce0028602e638bbf6676c6d2883cda` (pi 0.99.2, pi source
+  `5806068c2`); its copyright stands in [LICENSE](LICENSE). The history up to v0.1.0 is squashed
+  into one commit; [docs/UPSTREAM.md](docs/UPSTREAM.md) records the base and the sync ledger.
 - This is an independent project, not a fork. **The source of changes is pi itself.** New pi
   commits are ported here directly; the sky-valley port is a reference while it is maintained,
   never a dependency.
@@ -27,7 +27,12 @@ MCP and agents — embedded as a library, with no Node.js runtime.
 | [`ai`](ai/) | `@earendil-works/pi-ai` | Unified LLM API: message/content/tool/model types, the channel-based `EventStream`, JSON-Schema tool validation, model catalog and cost, provider registry. |
 | [`ai/providers`](ai/providers/) | `pi-ai` providers | Providers over `net/http` SSE: faux (deterministic test double), Anthropic Messages, OpenAI Chat Completions, OpenAI Responses, Google Gemini. |
 | [`agent`](agent/) | `@earendil-works/pi-agent-core` | The agent runtime: `AgentLoop`, the stateful `Agent` with tool calling, `BeforeToolCall`/`AfterToolCall` hooks, steering and follow-up queues, sequential and parallel tool execution. |
-| [`coding`](coding/) | `@earendil-works/pi-coding-agent` | Built-in tools (`read`, `write`, `edit`, `bash`, `powershell`, `ls`, `find`, `grep`), the system prompt builder (AGENTS.md/CLAUDE.md context files, Agent Skills), the session runner, compaction, JSONL session persistence. |
+| [`coding`](coding/) | `@earendil-works/pi-coding-agent` | Built-in tools (`read`, `write`, `edit`, `bash`, `powershell`, `ls`, `find`, `grep`), the system prompt builder (AGENTS.md/CLAUDE.md context files, Agent Skills), the session runner with its tool registry (exposures, loadout hooks, nested tool calls), compaction, JSONL session persistence. |
+| [`mcp`](mcp/) | `@earendil-works/pi-mcp` | MCP client: JSON-RPC, stdio and Streamable HTTP transports, an in-memory transport for tests. |
+| [`coding/mcpext`](coding/mcpext/) | `pi-coding-agent` extensions/mcp | MCP servers from `mcp.json`, their tools with exposures (`direct`, `codemode`, `deferred`, `hidden`), resource tools, and `Bind`, which wires a server manager into a session. |
+| [`codemode`](codemode/) | `@earendil-works/pi-codemode` | The script sandbox: QuickJS (quickjs-ng, the `quickjs-wasi` build pi uses) under [wazero](https://github.com/tetratelabs/wazero), TypeScript declarations of the callable tools. |
+| [`coding/codemodetool`](coding/codemodetool/) | `pi-coding-agent` extensions/codemode | The `codemode` tool: the model writes JavaScript that calls other tools; its description lists them within a token budget. |
+| [`coding/toolsearch`](coding/toolsearch/) | `pi-coding-agent` extensions/tool-search | The `tool_search` tool and the BM25 ranker scripts' `searchTools()` shares. |
 | [`server`](server/), [`client`](client/), [`protocol`](protocol/) | pi-server, pi-client (removed upstream) | Transport-neutral session server and client over a CBOR wire format. |
 | [`cmd/pi`](cmd/pi/) | `pi` CLI | Print mode, interactive REPL, session resume, `pi models`, `pi sessions`. |
 
@@ -43,8 +48,10 @@ go test ./...          # live-API tests skip without keys
 go build -o pi ./cmd/pi
 ```
 
-CI runs `gofmt`, `go vet` and `go test` on Linux and Windows. The module's dependencies are
-limited to the standard library and `golang.org/x/{image,text}`; `internal/policy` enforces it.
+CI runs `gofmt`, `go vet` and `go test` on Linux and Windows, and the race detector over the
+concurrent parts (codemode, MCP, nested tool calls, the tool registry) on Linux. The module's
+dependencies are the standard library, `golang.org/x/{image,text}` and `github.com/tetratelabs/wazero`
+(Apache-2.0, pure Go, for codemode); `internal/policy` enforces the list.
 
 ## Using the library
 
@@ -79,6 +86,26 @@ res, err := sess.Run(ctx, "question")
 `coding.StartSession` / `coding.LoadSessionTree`. A runnable example is in
 [`examples/sdk`](examples/sdk/main.go).
 
+MCP servers come from an `mcp.json` in the `mcpServers` format other MCP clients share. Register
+the codemode and tool_search tools first — the servers' tools are reached through codemode by
+default — then bind a server manager to the session:
+
+```go
+loaded := mcpext.LoadConfig("mcp.json", cwd, false)
+manager := mcpext.NewManager(mcpext.ManagerOptions{Config: loaded, Cwd: cwd})
+sess.RegisterTools(
+    codemodetool.Definition(codemodetool.Options{Session: sess, Store: &codemodetool.Store{}}),
+    toolsearch.Definition(sess),
+)
+unbind := mcpext.Bind(sess, manager, mcpext.BindOptions{Warn: log.Println})
+manager.Start()
+defer func() { unbind(); manager.Close() }()
+```
+
+`Bind` registers the servers' tools as they connect, activates codemode or tool_search when the
+servers' exposures need them, lists the servers in the `mcp_servers` prompt section, and makes calls
+wait for the servers they need.
+
 The built-in providers register themselves when `coding` is imported. Using `ai` alone, blank-import
 them: `import _ "github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"`.
 
@@ -89,9 +116,15 @@ them: `import _ "github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
 - The grep tool reports model-facing paths with forward slashes on every OS.
 - Project-local resources under `<cwd>/.pi` load only with `SessionOptions.TrustProject`, pi's
   answer for a host with no UI to ask the user.
+- MCP calls wait for their servers in a session tool gate that runs before the tool executes
+  (`Session.AddToolGate`), not in a `tool_call` hook: hooks run under the agent loop's tool lock,
+  and a wait there would stall the rest of a parallel batch.
+- codemode's `store()` keeps its values in memory for the session; pi writes them to the session
+  file per branch.
 - Not ported: the interactive TUI and its host layer, the JavaScript extensions runtime (pi's
-  built-in extensions are wired in Go instead), and the wire APIs that would need a third-party
-  dependency (AWS Bedrock SigV4 and eventstream, OpenAI Codex WebSocket with zstd).
+  built-in extensions are wired in Go instead), codemode's `models.*` script globals (classifiers
+  and image generation), MCP OAuth sign-in, and the wire APIs that would need a further
+  third-party dependency (AWS Bedrock SigV4 and eventstream, OpenAI Codex WebSocket with zstd).
 
 ## License
 
