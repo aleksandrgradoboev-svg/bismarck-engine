@@ -292,11 +292,29 @@ func TestCloseStopsAnInitializingConnection(t *testing.T) {
 	}
 }
 
+// closeSignal closes its channel when the transport is closed.
+type closeSignal struct {
+	mcp.Transport
+	once   sync.Once
+	closed chan struct{}
+}
+
+func (t *closeSignal) Close() error {
+	t.once.Do(func() { close(t.closed) })
+	return t.Transport.Close()
+}
+
 func TestCloseStopsWaitingToRetry(t *testing.T) {
-	c := connectWith(t, httpEntry("fake", map[string]string{"Authorization": "x"}), failAll(503, "MCP HTTP request failed with status 503"))
+	// Close must land after the first attempt failed, while the connection
+	// waits to retry: closing during the attempt fails it with "closed"
+	// instead, and a fixed sleep was too short on a slow runner. The client
+	// closes the transport once initialize has failed, so the failure is
+	// settled when the transport closes.
+	attempt := &closeSignal{Transport: failAll(503, "MCP HTTP request failed with status 503")(), closed: make(chan struct{})}
+	c := connectWith(t, httpEntry("fake", map[string]string{"Authorization": "x"}), func() mcp.Transport { return attempt })
 	failure := make(chan error, 1)
 	go func() { _, err := c.Client(context.Background()); failure <- err }()
-	time.Sleep(10 * time.Millisecond)
+	<-attempt.closed
 	start := time.Now()
 	c.Close()
 	if err := <-failure; err == nil || !strings.Contains(err.Error(), "status 503") {
