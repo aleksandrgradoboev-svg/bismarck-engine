@@ -1,100 +1,80 @@
-# Синхронизация с Pi: 0.99.2 → v1.2.0 — план
+# Sync with pi: 0.99.2 → v1.2.0
 
-15.10.2026. Диапазон Pi: `5806068c2..v1.2.0` (`06a46693`, 13.10.2026) — **240 коммитов** без слияний.
-После релиза в Pi ещё 50 коммитов — следующая регулярная синхронизация.
+Range: pi `5806068c2..v1.2.0` (`06a46693`, 2026-10-13), 240 non-merge commits. pi has moved on
+since; the next sync starts from `06a46693`.
 
-Разбор сделан по затронутым путям и заголовкам коммитов. Окончательное решение по каждому
-коммиту — при переносе, по его diff.
+Commits were triaged by the paths they touch and their subjects; each one is decided again from
+its diff when it is ported.
 
-## 1. Сортировка 240 коммитов
+## 1. Triage
 
-| Группа | Коммитов | Решение |
+| Group | Commits | Decision |
 |---|---|---|
-| Ядро в нашем объёме (`agent`, `ai`, `coding`) | ≈17 | **переносим по одному** (раздел 2) |
-| MCP (`packages/mcp`, `extensions/mcp`) | 31 | в движке MCP ещё нет — **переносим снимок пакета на v1.2.0**, а не историю (раздел 3) |
-| Релизы и «Unreleased» (v1.0.0 … v1.2.0) | 12 | только версии в package.json — нет |
-| Аудит changelog, документация | ≈20 | нет |
-| TUI, CLI, буфер обмена, Termux, Kitty, OSC, полноэкранный режим | ≈57 | нет — у нас свой клиент |
-| OAuth и каталоги чужих провайдеров (ChatGPT, Anthropic, Bedrock, Cloudflare, Together, Mistral, Kimi, NVIDIA, Radius, OpenRouter, Azure Foundry) | ≈25 | нет — у нас один OpenAI-совместимый провайдер через LiteLLM |
-| Классификаторы и генерация картинок (llama.cpp, OpenAI Decisions, Clef) | ≈5 | нет — в движке этой подсистемы нет |
-| `durable` — новая обвязка агентов и подагентов | 68 | переносим **снимком, последним** (раздел 4) |
-| `codemode` | 25 | переносим **снимком**, после MCP (раздел 4) |
-| `server`/`client`/`protocol` — удаление в Pi | 15 | нет: Pi их удалил, у нас они остаются без upstream |
-| `env`, `session-backends/sqlite-node`, примеры, lock-файлы | — | нет |
+| Core in scope (`agent`, `ai`, `coding`) | ≈17 | port one by one (section 2) |
+| MCP (`packages/mcp`, `extensions/mcp`) | 31 | the engine has no MCP yet: port the v1.2.0 snapshot, not the history (section 3) |
+| Releases and "Unreleased" (v1.0.0 … v1.2.0) | 12 | version bumps only — no |
+| Changelog audits, documentation | ≈20 | no |
+| TUI, CLI, clipboard, terminals, full-screen mode | ≈57 | no: the engine is embedded, the host draws the UI |
+| OAuth and catalogs of other providers | ≈25 | no: out of scope |
+| Classifiers and image generation | ≈5 | no: the engine has no such subsystem |
+| `codemode` | 25 | port as a snapshot, after MCP (section 4) |
+| `durable` (agent harness, subagents) | 68 | port as a snapshot, last (section 4) |
+| Removal of `server`/`client`/`protocol` in pi | 15 | no: pi removed them; here they stay, without an upstream |
+| `env`, `session-backends/sqlite-node`, examples, lock files | — | no |
 
-## 2. Ядро: переносим по одному
+## 2. Core
 
-| Коммит Pi | Что | Область |
+| pi commit | Change | Status |
 |---|---|---|
-| `36a686ee` + `f284a246` | время ответа модели, исполнения инструментов (в событиях) | agent, ai, coding |
-| `76dfb88f` | параметры сэмплирования по уровню thinking | ai (OpenAI) |
-| `27075fe0` | оценка контекста: 3,5 символа на токен | ai |
-| `3874b3e9`, `5b6c792b`, `8b5708db`, `7bd01fb9` | повтор при «model at capacity», отмене HTTP/2, «server busy», ошибке upstream-провайдера | ai |
-| `bc2d8dc1` | id элементов при повторе grammar-вызовов инструментов | ai — проверить, касается ли OpenAI-совместимого |
-| `fe11328b` | учёт кэша в тестовом провайдере faux | ai (тесты) |
-| `c30840c2` | скрытые инструменты не попадают в правила промпта и подсказку скиллов | coding |
-| `f1b2e77f` | AGENTS.md по символической ссылке во вложенных git worktree | coding |
-| `15e7bdc1` | thinking не попадает в сводки компакции | coding |
-| `a447ba11` | событие `before_agent_start` для запусков из пользовательских сообщений | coding |
-| `6a51a39d` | `~` в шаблонах путей ресурсов | coding |
-| `e6fb2581` | повтор при временном EPERM на Windows при блокировке файла авторизации | coding — **важно для Windows** |
-| `ddaa0a03`, `04b97ef0` | `+имя`/`-имя` и шаблоны в списке инструментов; MCP-инструменты при `--tools` | coding — взять логику выбора, без CLI |
-| `7fd478a2` | удаление экспериментальной обвязки из pi-agent-core | agent — в движке её нет, сверить экспорт |
+| `27075fe0` | estimate request context at 3.5 characters per token | ported |
+| `3874b3e9`, `5b6c792b`, `8b5708db`, `7bd01fb9` | retry "model at capacity", HTTP/2 pending stream cancellation, "server busy", "upstream provider returned an error" | ported |
+| `15e7bdc1` | omit thinking from compaction summaries | ported |
+| `c30840c2` | keep hidden tools out of prompt rules and the skills hint | ported (core half; the codemode half lands with codemode) |
+| `f1b2e77f` | load a symlinked AGENTS.md in nested git worktrees | ported |
+| `76dfb88f` | per-thinking-level sampling parameters | ported |
+| `bc2d8dc1` | drop mismatched item ids when replaying grammar tool calls | ported |
+| `36a686ee`, `f284a246` | record response and tool execution times | deferred: changes the session record's key order, done separately |
+| `fe11328b` | per-message prompt-cache usage in the faux provider | deferred |
+| `ddaa0a03`, `04b97ef0` | `+name`/`-name` and patterns in the tool list; MCP tools with `--tools` | with MCP |
+| `e6fb2581` | retry transient Windows EPERM on the auth lock | n/a: no file-based auth storage |
+| `a447ba11` | `before_agent_start` for runs started by custom messages | n/a: JavaScript extensions runtime |
+| `6a51a39d` | expand `~` in resource setting patterns | n/a: no package manager |
+| `7fd478a2` | remove the experimental harness from pi-agent-core | n/a: never ported |
 
-Порядок: по одному коммиту на коммит движка, сообщение ссылается на коммит Pi
-(`port(ai): … (upstream <hash>)` — как вёл журнал порт sky-valley). После каждого — `go test ./...`.
+Each port is its own commit, `port(area): … (upstream <hash>)`, with `go test ./...` green after it.
 
-## 3. MCP: перенос снимка на v1.2.0
+Not from pi but needed by hosts that embed the engine, and modelled on pi's resource loader:
+`SessionOptions.NoContextFiles`, `NoSkills` and `SkillPaths` (pi `noContextFiles`, `noSkills`,
+`additionalSkillPaths`).
 
-| Часть Pi | Размер (без тестов) | Что берём |
+## 3. MCP: the v1.2.0 snapshot
+
+| pi part | Size (without tests) | Taken |
 |---|---|---|
-| `packages/mcp` — клиент MCP, транспорты, OAuth | 18 файлов, 3,3 тыс. строк | всё |
-| `extensions/mcp` — встроенное расширение: менеджер серверов, конфиг `mcp.json`, регистрация инструментов | 11 файлов, 4,3 тыс. строк | всё, кроме экрана `/mcp` (`ui.ts`) и команд `pi mcp …` (`cli.ts`) — это TUI |
-| `extensions/tool-search` — поиск по инструментам, когда их много | 2 файла, 0,3 тыс. строк | берём: у gyrfalcon и gt-data-1c вместе десятки инструментов |
+| `packages/mcp`: client, transports, OAuth | 18 files, 3.3k lines | all |
+| `extensions/mcp`: built-in extension — server manager, `mcp.json`, tool registration | 11 files, 4.3k lines | all but the `/mcp` screen (`ui.ts`) and the `pi mcp …` commands (`cli.ts`), which are TUI |
+| `extensions/tool-search`: search among many tools | 2 files, 0.3k lines | all |
 
-В Pi расширения подключаются через рантайм расширений на JS (`core/extensions`), которого в
-движке нет и не будет. Встроенные расширения подключаются в Go напрямую при создании сессии —
-так же, как это задумано в журнале порта sky-valley (`docs/UPSTREAM.md`, решение 2026-09-29).
+pi wires extensions through its JavaScript extensions runtime (`core/extensions`), which the
+engine does not have; built-in extensions are wired in Go when a session is created, as the
+sky-valley port planned (`docs/UPSTREAM.md`, ruling of 2026-09-29).
 
-Проверка: агент видит инструменты MCP-сервера и вызывает их; тест на эталонном MCP-сервере;
-живой прогон с gyrfalcon.
+Order inside MCP: protocol and client (done) → stdio and Streamable HTTP transports → the
+extension (config, server manager, tools, resources) → tool-search → OAuth.
 
-## 3б. models.json — до пробного прогона (15.10.2026)
+## 4. After MCP
 
-Консольный запуск движка (`cmd/pi`) знает только встроенный каталог моделей Pi; свою модель
-(адрес LiteLLM, имя, ключ, OpenAI-совместимый API) задать нечем. В Pi это `models.json`
-(`core/model-config.ts`, `core/model-registry.ts`), порт sky-valley его не переносил. Переносим:
-без него нет пробного прогона «движок + LiteLLM + gyrfalcon», а сервер «Бисмарка» использует тот
-же механизм.
+1. **Subagents.** In pi v1.2.0 they are an example extension (`examples/extensions/subagent`,
+   ≈1.2k lines): agents defined in `.md` files, each subagent a separate `pi` process with its own
+   context. Here a subagent is a separate engine session in the same process.
+2. **`models.json`** (pi `core/model-config.ts`, `core/model-registry.ts`): custom models and
+   providers for `cmd/pi`. Library users can already build an `ai.Model` directly.
+3. **`codemode`**: package and extension, 3.0k + 1.4k lines.
+4. **`durable`**: 82 files, 25.2k lines, changing almost daily upstream; ported from the newest
+   snapshot when this step starts, after measuring what changed since v1.2.0.
 
-Порядок: MCP → models.json → пробный прогон через `cmd/pi` → подагенты → codemode → durable.
+## 5. Bookkeeping
 
-## 3а. Подагенты — сразу после MCP (решение владельца, 15.10.2026)
-
-В Pi v1.2.0 готовые подагенты — пример-расширение `examples/extensions/subagent` (≈1,2 тыс.
-строк): агенты описаны `.md`-файлами, каждый подагент — отдельный процесс `pi` со своим
-контекстом. В движок переносим как встроенное расширение, но подагент — **отдельная сессия
-движка в том же процессе**, а не дочерний процесс: на сервере так проще и безопаснее.
-`durable` (задачи с владельцем, агенты на разговор) — фундамент, который подагенты подхватят
-позже.
-
-## 4. codemode и durable — переносим последними (решение владельца, 15.10.2026)
-
-| Что | Размер (без тестов) | Порядок |
-|---|---|---|
-| `codemode` — модель пишет код, вызывающий инструменты, вместо череды вызовов (пакет + расширение) | 3,0 + 1,4 тыс. строк | после MCP |
-| `durable` — обвязка агентов и подагентов | 82 файла, 25,2 тыс. строк | последним |
-
-`durable` в Pi активно развивается, поэтому переносим самый свежий снимок на момент начала
-этого этапа; перед переносом — замер изменений с v1.2.0.
-
-## 5. Учёт
-
-- `docs/UPSTREAM.md`: последний перенесённый коммит Pi → `06a46693` (v1.2.0).
-- Каталог моделей Pi (999 моделей) не пересобираем: в «Бисмарке» одна модель через LiteLLM.
-
-## 6. Оценка
-
-Грубая, до переноса первого коммита: раздел 2 — 1–2 рабочие сессии; раздел 3 — 3–5 сессий;
-codemode — 2–3 сессии; durable — самая крупная часть, оценка после свежего замера.
-Уточню после первых коммитов.
+- `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
+  `06a46693` (v1.2.0).
+- pi's model catalog is not regenerated in this sync.
