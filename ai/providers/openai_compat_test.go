@@ -370,3 +370,34 @@ func TestOpenAICompatCerebrasOmitsStrict(t *testing.T) {
 		}
 	}
 }
+
+// Mirrors pi sampling-options.test.ts (upstream 76dfb88f, #9776): sampling
+// parameters for the effective thinking level apply over model defaults, and
+// the "off" entry applies when reasoning is disabled.
+func TestOpenAICompatSamplingParamsByThinkingLevel(t *testing.T) {
+	ctx := ai.Context{Messages: []ai.Message{ai.NewUserText("hi", 1)}}
+
+	// low and medium are unsupported, so "low" clamps to high.
+	model := &ai.Model{
+		ID: "m", Api: ai.APIOpenAICompletions, Provider: "openai", MaxTokens: 1000, ContextWindow: 100000,
+		Reasoning:                     true,
+		ThinkingLevelMap:              ai.ThinkingLevelMap{"low": nil, "medium": nil},
+		SamplingParams:                map[string]any{"temperature": 1, "top_p": 0.95},
+		SamplingParamsByThinkingLevel: map[ai.ModelThinkingLevel]map[string]any{"high": {"temperature": 0.8, "top_k": 64}},
+	}
+	body := captureOpenAIBody(t, model, ctx, &ai.SimpleStreamOptions{Reasoning: "low"})
+	if body["temperature"] != 0.8 || body["top_p"] != 0.95 || body["top_k"] != float64(64) {
+		t.Fatalf("effective-level sampling = temperature %v, top_p %v, top_k %v; want 0.8, 0.95, 64",
+			body["temperature"], body["top_p"], body["top_k"])
+	}
+
+	off := &ai.Model{
+		ID: "m", Api: ai.APIOpenAICompletions, Provider: "openai", MaxTokens: 1000, ContextWindow: 100000,
+		Reasoning:                     true,
+		SamplingParamsByThinkingLevel: map[ai.ModelThinkingLevel]map[string]any{"off": {"temperature": 0.2}},
+	}
+	body = captureOpenAIBody(t, off, ctx, nil)
+	if body["temperature"] != 0.2 {
+		t.Fatalf("off sampling temperature = %v, want 0.2", body["temperature"])
+	}
+}

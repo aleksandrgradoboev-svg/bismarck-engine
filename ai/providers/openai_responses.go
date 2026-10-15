@@ -1122,10 +1122,10 @@ func buildResponsesParams(model *ai.Model, req ai.TranscriptContext, opts *OpenA
 		}
 	}
 
-	// Last so custom keys override the named request fields (upstream 25a2c8dc).
-	// Per-request keys override model defaults (upstream c01f687e5).
-	maps.Copy(params, model.SamplingParams)
-	maps.Copy(params, opts.SamplingParams)
+	// Last so model and request sampling parameters override the named request
+	// fields (upstream 25a2c8dc). Per-request keys override the thinking level's,
+	// which override model defaults (upstream c01f687e5, 76dfb88f).
+	maps.Copy(params, ai.ResolveSamplingParams(model, ai.ModelThinkingLevel(opts.ReasoningEffort), opts.SamplingParams))
 
 	return params, nil
 }
