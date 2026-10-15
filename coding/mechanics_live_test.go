@@ -365,7 +365,7 @@ func liveMemoryInSession(t *testing.T, model *ai.Model, key string) {
 
 // --- durable memory: persist a session to disk, reload it, recall the fact ---
 func liveMemoryResume(t *testing.T, model *ai.Model, key string) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 
 	s1 := NewSession(SessionOptions{Model: model, Cwd: cwd, NoTools: NoToolsAll, APIKey: key})

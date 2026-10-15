@@ -446,7 +446,7 @@ func readSessionFileRoles(t *testing.T, path string) []string {
 // A session with only setup entries stays in memory: no file, and it is
 // invisible to ListSessions (pi _persist, upstream ff72faba2).
 func TestSessionWithOnlySetupEntriesAbsentFromDisk(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 
 	rec, err := StartSession(cwd, &ai.Model{Provider: "anthropic", ID: "claude-sonnet-4-5"}, "off")
@@ -466,7 +466,7 @@ func TestSessionWithOnlySetupEntriesAbsentFromDisk(t *testing.T) {
 // The first user message creates the file, so the prompt survives a first
 // turn that never produces an assistant message (pi #10000).
 func TestFirstUserMessageCreatesSessionFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 
 	rec, err := StartSession(cwd, &ai.Model{Provider: "anthropic", ID: "claude-sonnet-4-5"})
@@ -496,7 +496,7 @@ func TestFirstUserMessageCreatesSessionFile(t *testing.T) {
 // once. pi appends a custom entry between the messages; the recorder has no
 // custom entries, so a thinking-level change stands in for it.
 func TestLaterSessionEntriesAppend(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 
 	rec, err := StartSession(cwd, nil)
@@ -518,7 +518,7 @@ func TestLaterSessionEntriesAppend(t *testing.T) {
 // tool result alone stays in memory like the setup entries, and is written
 // with them once the conversation starts (pi _hasConversation).
 func TestNonConversationMessagesStayOffDisk(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 
 	rec, err := StartSession(cwd, nil)
@@ -543,7 +543,7 @@ func TestNonConversationMessagesStayOffDisk(t *testing.T) {
 // entries of a session that has no file yet, for a new session and a resumed
 // one alike.
 func TestSessionRecorderKeepsNoWrittenEntries(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 
 	rec, err := StartSession(cwd, &ai.Model{Provider: "anthropic", ID: "claude-sonnet-4-5"}, "off")
@@ -578,7 +578,7 @@ func TestSessionRecorderKeepsNoWrittenEntries(t *testing.T) {
 // machine whose RTC has been reset to a pre-1970 date must therefore get an
 // error naming the fix, not a process abort from inside the id generator.
 func TestStartSessionReturnsAnErrorWhenNoIDCanBeMinted(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	withUUIDGenerator(t)
 	uuidMu.Lock()
 	uuidLastOrdinaryTimestamp = -1
@@ -655,7 +655,7 @@ func TestResumeSessionMigratesAV1FileToV3(t *testing.T) {
 // TestSessionIDAndFilenameShape verifies the header id is a uuidv7 (version 7,
 // RFC-4122 variant) and the filename is <iso-with-dashes>_<uuidv7>.jsonl.
 func TestSessionIDAndFilenameShape(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	rec, err := StartSession(cwd, nil)
 	if err != nil {
@@ -701,7 +701,7 @@ func TestEntryIDFallbackIsARandomUUIDv4(t *testing.T) {
 // TestEntryIDsCollisionChecked verifies entry ids are 8 hex chars and unique
 // across many recorded entries.
 func TestEntryIDsCollisionChecked(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	rec, _ := StartSession(cwd, nil)
 	// Force a flush so entries are observable, then read ids back from disk.

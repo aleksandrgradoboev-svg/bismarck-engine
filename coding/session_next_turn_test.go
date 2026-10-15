@@ -169,7 +169,7 @@ func sameJSON(t *testing.T, got, want any) (string, string, bool) {
 func TestSessionDeclaresPromptAcrossTurnsLikePi(t *testing.T) {
 	for _, scenario := range loadSessionPromptCapture(t).Sessions {
 		t.Run(scenario.Name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			setTestHome(t, t.TempDir())
 			reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{
 				Models: []providers.FauxModelDefinition{{ID: "faux-1", Reasoning: true}, {ID: "faux-2", Reasoning: true}},
 			})
@@ -309,7 +309,7 @@ func TestToolPromptGuidelinesMatchPiCapture(t *testing.T) {
 // there before any request declares it, and the first request declares exactly
 // that text.
 func TestSessionSystemPromptBeforeTheFirstRun(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 	defer reg.Unregister()
 	cwd := t.TempDir()

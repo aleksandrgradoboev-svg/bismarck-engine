@@ -41,7 +41,7 @@ func systemCount(messages []ai.Message) int {
 // prefix, so the compacted view leads with its replay. The summarization request
 // itself sees no prompt text.
 func TestCompactionKeepsPromptAndToolsOnTheNextRequest(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{
 		Models: []providers.FauxModelDefinition{{ID: "faux-1", ContextWindow: 1000}},
 	})
@@ -428,7 +428,7 @@ func TestCompactionSplitTurnSeedsHistoryWithPreviousSummary(t *testing.T) {
 // in-memory compaction: the replay holds the declared prompt plus both patches'
 // content, sections and tool removals, and neither patch stays in the view.
 func TestCompactionCheckpointFoldsSummarizedAndRetainedSystemPatches(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{
 		Models: []providers.FauxModelDefinition{{ID: "faux-1", ContextWindow: 1000}},
 	})

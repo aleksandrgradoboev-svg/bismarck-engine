@@ -41,7 +41,7 @@ func textFromAssistant(c ai.ContentList) string {
 }
 
 func TestSessionTreeForkAndBranches(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 
 	rec, err := StartSession(cwd, &ai.Model{ID: "m", Provider: "p"})

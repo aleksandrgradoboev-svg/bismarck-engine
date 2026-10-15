@@ -292,7 +292,7 @@ func TestLoadSkillsAgentsModeIsTheMirrorOfPiMode(t *testing.T) {
 // directory already resolved (names dedup first-wins, and it is scanned last).
 func TestLoadSkillsDiscoversUserAgentsDir(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	t.Setenv("USERPROFILE", home) // windows home lookup
 
 	agentsRoot := filepath.Join(home, ".agents", "skills")

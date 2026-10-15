@@ -35,7 +35,7 @@ func sessionEntryTypes(t *testing.T, path string) []string {
 // I10: StartSession with a thinking level records model_change then
 // thinking_level_change, in that order (pi sdk.ts:362-373 for new sessions).
 func TestStartSessionRecordsThinkingAfterModel(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	rec, err := StartSession(cwd, &ai.Model{ID: "m", Provider: "p"}, "medium")
 	if err != nil {
@@ -65,7 +65,7 @@ func TestStartSessionRecordsThinkingAfterModel(t *testing.T) {
 // entries load, the leaf is the file's last entry, flushed=true so appends are
 // immediate) — it never forks a new file.
 func TestResumeSessionAppendsToSameFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 
 	rec, err := StartSession(cwd, &ai.Model{ID: "m", Provider: "p"}, "medium")
@@ -134,7 +134,7 @@ func TestResumeSessionAppendsToSameFile(t *testing.T) {
 // I13(a): the first flush opens with O_EXCL ("wx" in pi) — an existing file at
 // the session path is never clobbered.
 func TestFirstFlushExclusiveCreate(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	rec, err := StartSession(cwd, nil)
 	if err != nil {

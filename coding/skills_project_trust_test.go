@@ -16,7 +16,7 @@ import (
 
 func TestLoadSkillsUntrustedSkipsProjectDir(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	cwd := t.TempDir()
 
 	writeSkill(t, filepath.Join(home, ".pi", "agent", "skills", "user-skill"),
@@ -56,7 +56,7 @@ func TestLoadSkillsUntrustedSkipsProjectDir(t *testing.T) {
 // relative path), so failing closed is both the safe and the faithful answer.
 func TestLoadSkillsWithoutHomeIgnoresRepoLocalUserDirs(t *testing.T) {
 	cwd := t.TempDir()
-	t.Setenv("HOME", "")
+	setTestHome(t, "")
 
 	const marker = "ZZ-REPO-PLANTED-AS-USER-SKILL"
 	writeSkill(t, filepath.Join(cwd, ".pi", "agent", "skills", "planted-agent"),
@@ -110,7 +110,7 @@ func TestLoadSkillsWithoutHomeIgnoresRepoLocalUserDirs(t *testing.T) {
 // directly would leave the wiring — SessionOptions.TrustProject reaching
 // sessionSkills — unlocked, and the ZERO VALUE is the security-relevant case.
 func TestNewSessionDefaultsToUntrustedProject(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 
 	const marker = "ZZ-UNTRUSTED-VIA-NEWSESSION"
@@ -135,7 +135,7 @@ func TestNewSessionDefaultsToUntrustedProject(t *testing.T) {
 // not be able to put its own text there.
 func TestSystemPromptOmitsUntrustedProjectSkill(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	cwd := t.TempDir()
 
 	const marker = "ZZ-ATTACKER-CONTROLLED-DESCRIPTION"

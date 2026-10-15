@@ -41,7 +41,7 @@ func writeUnterminatedSession(t *testing.T, cwd string) string {
 // terminate that line before appending, otherwise the next entry fuses onto the
 // unterminated tail and both entries are lost to every reader.
 func TestResumeSessionRepairsUnterminatedTail(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	path := writeUnterminatedSession(t, cwd)
 
@@ -79,7 +79,7 @@ func TestResumeSessionRepairsUnterminatedTail(t *testing.T) {
 // The repair must not double-append: a file that already ends in a newline is
 // left byte-identical by a resume that writes nothing.
 func TestResumeSessionKeepsTerminatedFileIntact(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	rec, err := StartSession(cwd, &ai.Model{ID: "m", Provider: "p"})
 	if err != nil {
@@ -105,7 +105,7 @@ func TestResumeSessionKeepsTerminatedFileIntact(t *testing.T) {
 // empty or non-session files: a file that is not a pi session is never written
 // to. In the port the same early return is the "not a pi session file" error.
 func TestResumeSessionDoesNotRepairInvalidFiles(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cases := map[string]string{
 		"empty":          "",
 		"no header":      `{"type":"message","id":"1"}`,

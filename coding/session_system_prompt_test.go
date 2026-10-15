@@ -64,7 +64,7 @@ func fauxText(text string) providers.FauxResponseStep {
 // system-prompt-updates.test.ts 'declares the prompt and tools once and reuses
 // them across resume'.
 func TestSessionDeclaresPromptAndToolsOnce(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 	defer reg.Unregister()
 	cwd := t.TempDir()
@@ -107,7 +107,7 @@ func TestSessionDeclaresPromptAndToolsOnce(t *testing.T) {
 // session JSON round-trip': a resumed transcript replays to the same prompt and
 // tools, so the next Run declares nothing.
 func TestSessionResumedTranscriptDeclaresNothingNew(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 	defer reg.Unregister()
 	cwd := t.TempDir()
@@ -142,7 +142,7 @@ func TestSessionResumedTranscriptDeclaresNothingNew(t *testing.T) {
 // A transcript declared under another tool loadout, resumed into this session,
 // gets exactly the difference: the sections that changed and the tool removals.
 func TestSessionResumedTranscriptDeclaresOnlyTheDifference(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 	defer reg.Unregister()
 	cwd := t.TempDir()
@@ -187,7 +187,7 @@ func TestSessionResumedTranscriptDeclaresOnlyTheDifference(t *testing.T) {
 // synthesized on load, then the whole declaration — sections and tools — with
 // the next prompt.
 func TestSessionDeclaresPromptForTranscriptWithoutSystemMessage(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 	defer reg.Unregister()
 	cwd := t.TempDir()
@@ -228,7 +228,7 @@ func TestSessionDeclaresPromptForTranscriptWithoutSystemMessage(t *testing.T) {
 
 // RunPrint prompts through the same declaration as Run.
 func TestSessionRunPrintDeclaresPrompt(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 	defer reg.Unregister()
 	sess := NewSession(SessionOptions{Model: reg.GetModel(), Cwd: t.TempDir()})
@@ -253,7 +253,7 @@ func (uiNotice) MessageRole() ai.Role { return "notice" }
 // app's UI-only message stays out of the session file
 // (agent-session.ts:925-945 at 2b0a123de).
 func TestSessionRecordSkipsUIOnlyMessages(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 	defer reg.Unregister()
 	cwd := t.TempDir()
@@ -286,7 +286,7 @@ func TestSessionRecordSkipsUIOnlyMessages(t *testing.T) {
 // sections in prompt order, an integer timestamp, and the tool declarations the
 // loop attached after it. Reloading the file replays the same prompt text.
 func TestSessionRecordsDeclaredSystemMessage(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 	defer reg.Unregister()
 	cwd := t.TempDir()
@@ -390,7 +390,7 @@ func jsonKeys(t *testing.T, raw json.RawMessage) []string {
 // recorded system message keeps the ordinary producer key order — a forced
 // prompt writes none of its own.
 func TestSessionForcedPromptIsSentButNeverRecorded(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 	defer reg.Unregister()
 	cwd := t.TempDir()
@@ -539,7 +539,7 @@ func jsonText(t *testing.T, v any) string {
 // the same function — does read, so the prompt the head replaces would be left
 // in the request beside it and the forced text would read as an ADDITION to it.
 func TestSessionForcedPromptProjectionDropsPointerSystemMessages(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 	defer reg.Unregister()
 	sess := NewSession(SessionOptions{Model: reg.GetModel(), Cwd: t.TempDir()})
@@ -568,7 +568,7 @@ func TestSessionForcedPromptProjectionDropsPointerSystemMessages(t *testing.T) {
 // after NewSession keeps a wrapper an embedder installed on the field — the only
 // correct embedder pattern now that NewSession always installs a transform.
 func TestSessionEnableCompactionKeepsAnEmbeddersTransform(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 	defer reg.Unregister()
 	sess := NewSession(SessionOptions{Model: reg.GetModel(), Cwd: t.TempDir()})
@@ -590,7 +590,7 @@ func TestSessionEnableCompactionKeepsAnEmbeddersTransform(t *testing.T) {
 // compaction is permanent, so a fresh state would drop a summary already taken
 // and let the turns it replaced reappear.
 func TestSessionReEnableCompactionKeepsTheCheckpoint(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 	defer reg.Unregister()
 	sess := NewSession(SessionOptions{Model: reg.GetModel(), Cwd: t.TempDir()})

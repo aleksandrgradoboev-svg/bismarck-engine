@@ -21,7 +21,7 @@ func writeSkill(t *testing.T, dir, content string) {
 // then project, insertion order — no name sort).
 func TestLoadSkillsPreservesDiscoveryOrder(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	cwd := t.TempDir()
 
 	// User skill sorts after the project skill by name — discovery order must
@@ -43,7 +43,7 @@ func TestLoadSkillsPreservesDiscoveryOrder(t *testing.T) {
 // I11: a folded block-scalar description (`description: >-`) loads, folded to
 // a single line like the YAML parser pi uses.
 func TestSkillBlockScalarDescription(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	writeSkill(t, filepath.Join(cwd, ".pi", "skills", "folded"),
 		"---\nname: folded\ndescription: >-\n  Line one of the description\n  continues on line two.\n---\nbody\n")
@@ -85,7 +85,7 @@ func TestParseFrontmatterMultilinePlain(t *testing.T) {
 // A quoted "true" is a string and must NOT disable (pi: `=== true` after a
 // real YAML parse).
 func TestSkillDisableModelInvocationStrictBool(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	writeSkill(t, filepath.Join(cwd, ".pi", "skills", "plain-true"),
 		"---\nname: plain-true\ndescription: d\ndisable-model-invocation: true\n---\n")

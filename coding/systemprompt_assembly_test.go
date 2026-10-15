@@ -22,7 +22,7 @@ func sessionSystemPrompt(t *testing.T, s *Session) string {
 // I1: the resolved tools' PromptGuidelines must appear in the rules section of
 // the session's system prompt, in tool order.
 func TestNewSessionCollectsPromptGuidelines(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	s := NewSession(SessionOptions{Cwd: t.TempDir()})
 	prompt := sessionSystemPrompt(t, s)
 
@@ -50,7 +50,7 @@ func TestNewSessionCollectsPromptGuidelines(t *testing.T) {
 // the block telling the model to load them with bash (upstream 1d6dbf9e3).
 // This is the wiring half: NewSession → resolveTools → BuildSystemPrompt.
 func TestNewSessionBashOnlyKeepsSkills(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	skillDir := filepath.Join(cwd, ".pi", "skills", "demo-skill")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
@@ -82,7 +82,7 @@ func TestNewSessionBashOnlyKeepsSkills(t *testing.T) {
 // still gets the project context, skills and cwd sections after it, in pi's
 // order — and never the default prompt's tools, rules or docs sections.
 func TestNewSessionCustomPromptStillAssembles(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cwd, "AGENTS.md"), []byte("follow the rules"), 0o644); err != nil {
 		t.Fatal(err)

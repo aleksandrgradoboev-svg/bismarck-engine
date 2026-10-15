@@ -15,7 +15,7 @@ import (
 func TestSessionPersistenceRoundTrip(t *testing.T) {
 	// Redirect HOME so the session dir is isolated.
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	cwd := t.TempDir()
 
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
@@ -68,7 +68,7 @@ func TestSessionPersistenceRoundTrip(t *testing.T) {
 }
 
 func TestResumeContinuesConversation(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 	defer reg.Unregister()

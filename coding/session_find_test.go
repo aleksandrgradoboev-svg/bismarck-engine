@@ -33,7 +33,7 @@ const sessionMessageLine = `{"type":"message","id":"m1","parentId":null,"timesta
 // pi: "reopens an exact ID from a renamed session file" — the lookup keys on
 // the header id, not the file name pi's recorder would have chosen.
 func TestFindSessionByIDMatchesTheHeaderNotTheFileName(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	dir := DefaultSessionDir(cwd)
 	want := writeSessionFile(t, dir, "imported-session.jsonl", sessionHeaderLine("renamed-id", cwd), sessionMessageLine)
@@ -53,7 +53,7 @@ func TestFindSessionByIDMatchesTheHeaderNotTheFileName(t *testing.T) {
 // content pi never reads, and a file whose first entry is not a header is not
 // a session even if a header appears further down.
 func TestFindSessionByIDReadsOnlyTheFirstEntry(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	dir := DefaultSessionDir(cwd)
 	first := writeSessionFile(t, dir, "a.jsonl",
@@ -102,7 +102,7 @@ func TestFindSessionByIDReadsOnlyTheFirstEntry(t *testing.T) {
 // ends exactly at the limit is still found (the EOF probe), one byte more is
 // not, and an oversized file never hides its neighbours.
 func TestFindSessionByIDBoundsTheHeaderScan(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	dir := DefaultSessionDir(cwd)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -158,7 +158,7 @@ func TestFindSessionByIDBoundsTheHeaderScan(t *testing.T) {
 // directories, and only the one recorded for cwd matches; the default
 // directory itself, even when passed explicitly, is never filtered.
 func TestFindSessionByIDFiltersByCwdInACustomDirectory(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	root := t.TempDir()
 	projectA := filepath.Join(root, "project-a")
 	projectB := filepath.Join(root, "project-b")
@@ -193,7 +193,7 @@ func TestFindSessionByIDFiltersByCwdInACustomDirectory(t *testing.T) {
 // found (pi readSessionHeaderForDiscovery), and a missing directory is simply
 // empty.
 func TestFindSessionByIDIsBestEffort(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	dir := DefaultSessionDir(cwd)
 	if err := os.MkdirAll(filepath.Join(dir, "a-directory.jsonl"), 0o755); err != nil {
@@ -219,7 +219,7 @@ func TestFindSessionByIDIsBestEffort(t *testing.T) {
 // cwd never matches), and the default directory -- implicit or explicit -- is
 // never filtered.
 func TestListSessionsFiltersByCwdInACustomDirectory(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	root := t.TempDir()
 	projectA := filepath.Join(root, "project-a")
 	projectB := filepath.Join(root, "project-b")
@@ -261,7 +261,7 @@ func TestListSessionsFiltersByCwdInACustomDirectory(t *testing.T) {
 // line after the header is transcript content — the listing reports the
 // header's id and cwd, never a later line's, and agrees with FindSessionByID.
 func TestListSessionsDecidesByTheFirstParsedEntry(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	root := t.TempDir()
 	cwd := filepath.Join(root, "project")
 	other := filepath.Join(root, "other")
@@ -301,7 +301,7 @@ func TestListSessionsDecidesByTheFirstParsedEntry(t *testing.T) {
 // interleaved timestamps are enough for an unstable sort to scramble the tie
 // groups. Filed independently by this cycle's go and parity reviews.
 func TestListSessionsBreaksTimestampTiesByFileName(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	dir := DefaultSessionDir(cwd)
 	stamps := []string{"2026-09-20T00:00:00.000Z", "2026-09-20T00:00:01.000Z", "2026-09-20T00:00:02.000Z"}
@@ -344,7 +344,7 @@ func TestListSessionsBreaksTimestampTiesByFileName(t *testing.T) {
 // session is resumed and `--continue` could reopen an older session than the
 // one last written to.
 func TestLatestSessionOrdersByFileMtime(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	cwd := t.TempDir()
 	dir := DefaultSessionDir(cwd)
 	header := func(id, ts string) string {
@@ -397,7 +397,7 @@ func TestLatestSessionOrdersByFileMtime(t *testing.T) {
 // os.Getwd() before it gets this far. Found by this cycle's JS-semantics
 // review.
 func TestLatestSessionEmptyCwdDoesNotFilter(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	sessionDir := t.TempDir()
 	elsewhere := filepath.Join(t.TempDir(), "some-other-project")
 	path := writeSessionFile(t, sessionDir, "other.jsonl", sessionHeaderLine("other-id", elsewhere), sessionMessageLine)
