@@ -1,5 +1,7 @@
 package durable
 
+import "time"
+
 // Internals the external tests synchronize on: Go calls block where pi's
 // return promises, so a test that needs a call admitted or registered before
 // the next one waits for it here.
@@ -30,4 +32,10 @@ func TxSealed(tx *Tx) bool {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 	return tx.sealed
+}
+
+// SetDefaultDocumentRetention sets the retention of every Session that keeps
+// the default, and returns the previous one.
+func SetDefaultDocumentRetention(d time.Duration) time.Duration {
+	return time.Duration(defaultDocumentRetention.Swap(int64(d)))
 }

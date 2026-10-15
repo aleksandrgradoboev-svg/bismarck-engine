@@ -224,7 +224,11 @@ func materializeDocumentValue(def DocDef, record DocumentCreate, version int, va
 	if version == def.Version {
 		return value, nil
 	}
-	migrated, err := CloneValue(def.Migrate(value, version))
+	migrated, err := callHook(func() map[string]any { return def.Migrate(value, version) })
+	if err != nil {
+		return nil, err
+	}
+	migrated, err = CloneValue(migrated)
 	if err == nil && migrated == nil {
 		err = fmt.Errorf("Document %d (%s) migration returned no JSON object", record.ID, record.Kind)
 	}
@@ -236,9 +240,24 @@ func initialValue(def DocDef, seed any) (map[string]any, error) {
 	if !def.Family {
 		seed = nil
 	}
-	value, err := CloneValue(def.Initial(seed))
+	value, err := callHook(func() map[string]any { return def.Initial(seed) })
+	if err != nil {
+		return nil, err
+	}
+	value, err = CloneValue(value)
 	if err == nil && value == nil {
 		err = fmt.Errorf("Document %s initial value is not a JSON object", def.Kind)
 	}
 	return value, err
+}
+
+// callHook runs a definition's hook; a panic is its error, as a throw is in
+// pi, so it rejects the operation and leaves the Session usable.
+func callHook[T any](hook func() T) (result T, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = panicError(r)
+		}
+	}()
+	return hook(), nil
 }

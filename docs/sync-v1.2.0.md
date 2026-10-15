@@ -146,6 +146,20 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    order calls by their synchronous parts, the Go tests order them explicitly (a held Storage call,
    the transaction's pending count, its seal).
 
+   **Stage 1b-2, the rest of the session suites**: `session-forks`, `session-tables`,
+   `session-checkpoints-migrations` and `session-document-retention`. The kernel changes they
+   required: a definition hook (`Initial`, `Migrate`, `CheckpointWhen`) that panics rejects the
+   operation and leaves the Session usable, as pi's throw does; the cache's clock and retention are
+   guarded as pi guards them (a panicking clock counts as `time.Now`, a panicking retention as the
+   default); a retention of 100 years or more never expires, pi's `Infinity`, since a `Duration` ends
+   after 292 years and a clock can pass that; and a sweep that falls due while a job holds the line
+   runs at the end of that job, still on the line, where pi queues it in a microtask, so the next
+   call cannot read a document that should have left. The retention cases that need the harness (a
+   settings change, the same events with and without eviction) wait for stage 4. n/a: timers that
+   cannot be unreferenced, non-numeric retentions (a negative one keeps the default), the suite-wide
+   retention override, and pi's `this` in `checkpointWhen`. The test storage stands for a closed
+   database without discarding its records, so `reopen` can read them, as pi's does.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

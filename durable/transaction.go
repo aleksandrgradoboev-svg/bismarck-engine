@@ -1239,8 +1239,14 @@ func (tx *Tx) assemble() ([]StorageWrite, error) {
 		if w, ok := plan.content.(DocumentChangeWrite); ok && w.Content.Kind == ContentDelta && plan.change != nil && plan.change.loaded != nil {
 			change := plan.change
 			info := CheckpointInfo{DeltasSinceBase: change.loaded.deltasSinceBase}
-			if change.def != nil && change.def.CheckpointWhen != nil && change.def.CheckpointWhen(change.prepared.Value(), change.prepared.Ops(), info) {
-				plan.content = DocumentChangeWrite{ID: w.ID, Content: DocumentContent{Version: change.version, Kind: ContentBase, Value: change.prepared.Value()}}
+			if change.def != nil && change.def.CheckpointWhen != nil {
+				base, err := callHook(func() bool { return change.def.CheckpointWhen(change.prepared.Value(), change.prepared.Ops(), info) })
+				if err != nil {
+					return nil, err
+				}
+				if base {
+					plan.content = DocumentChangeWrite{ID: w.ID, Content: DocumentContent{Version: change.version, Kind: ContentBase, Value: change.prepared.Value()}}
+				}
 			}
 		}
 		if plan.content != nil {
