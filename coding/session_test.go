@@ -75,6 +75,32 @@ func TestSessionUsesCodingSystemPrompt(t *testing.T) {
 	}
 }
 
+func TestSessionAppendSystemPrompt(t *testing.T) {
+	for _, custom := range []string{"", "You are a test assistant."} {
+		reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
+		var capturedSystem string
+		reg.SetResponses([]providers.FauxResponseStep{
+			func(req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+				capturedSystem = ai.GetCurrentSystemPrompt(req.Messages)
+				return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "ok"}}, ai.StopStop)
+			},
+		})
+		sess := NewSession(SessionOptions{Model: reg.GetModel(), Cwd: t.TempDir(), SystemPrompt: custom, AppendSystemPrompt: "APPENDED RULE",
+			NoTools: NoToolsAll, NoContextFiles: true, NoSkills: true})
+		if _, err := sess.Run(context.Background(), "hi"); err != nil {
+			t.Fatal(err)
+		}
+		reg.Unregister()
+		appended := strings.Index(capturedSystem, "APPENDED RULE")
+		if appended < 0 {
+			t.Fatalf("custom %q: appended prompt missing: %q", custom, capturedSystem)
+		}
+		if custom != "" && !(strings.Index(capturedSystem, custom) >= 0 && strings.Index(capturedSystem, custom) < appended) {
+			t.Fatalf("custom prompt should come first: %q", capturedSystem)
+		}
+	}
+}
+
 func TestResolveModelFromCatalog(t *testing.T) {
 	m, err := ResolveModel("anthropic/claude-sonnet-4-5")
 	if err != nil {
