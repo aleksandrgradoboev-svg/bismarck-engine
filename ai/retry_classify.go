@@ -34,10 +34,16 @@ type providerErrorPattern struct {
 // matching the same text where every "." is flanked by ASCII literals.
 const jsDot = `[^\n\r\x{2028}\x{2029}\x{10000}-\x{10FFFF}]`
 
+// nonCapturingGroups blanks the delimiters of "(?:...)" groups for the syntax
+// check in buildProviderErrorPattern; a bare "(" still fails it.
+var nonCapturingGroups = strings.NewReplacer("(?:", "", ")", "")
+
 func buildProviderErrorPattern(patterns []string) providerErrorPattern {
 	alternatives := make([]string, len(patterns))
 	for i, pattern := range patterns {
-		if strings.ContainsAny(pattern, `\^$|*+()[]{}`) {
+		// A non-capturing group "(?:...)" means the same in RE2 and JavaScript,
+		// so it is allowed (upstream 7bd01fb9: "provider.?returned.?(?:an.?)?error").
+		if strings.ContainsAny(nonCapturingGroups.Replace(pattern), `\^$|*+()[]{}`) {
 			// Lowercasing would corrupt escapes and classes (\S is not \s), and
 			// RE2 and JavaScript disagree on several of them.
 			panic(fmt.Sprintf("ai: provider error pattern %q uses RegExp syntax beyond literals, \".\" and \"?\"; "+
@@ -104,9 +110,12 @@ var nonRetryableProviderLimitErrorPattern = buildProviderErrorPattern([]string{
 var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 	// Generic provider load, HTTP status, and server-side transient failures.
 	"overloaded",
+	"server_busy", // upstream 8b5708db
+	"servers are currently busy",
 	// Azure OpenAI's peak-load capacity refusal (#9669): a transient capacity
 	// message, not an account limit.
 	"currently experiencing high demand",
+	"model is at capacity", // upstream 3874b3e9
 	"rate.?limit",
 	"too many requests",
 	"429",
@@ -121,8 +130,9 @@ var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 	"internal.?error",
 
 	// Wrapper/provider text for transient upstream failures, including OpenRouter
-	// "Provider returned error" responses (#2264).
-	"provider.?returned.?error",
+	// "Provider returned error" responses (#2264) and gateway wording such as
+	// "The upstream provider returned an error" (#10842, upstream 7bd01fb9).
+	"provider.?returned.?(?:an.?)?error",
 	"exceeded request buffer limit while retrying upstream",
 
 	// Network, proxy, and fetch transport failures. This includes OpenAI Codex
@@ -157,6 +167,10 @@ var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 	"stream ended before message_stop",
 	"stream ended before a terminal response event",
 	"http2 request did not get a response",
+	// Node ERR_HTTP2_STREAM_CANCEL: the HTTP/2 session died before the request was
+	// sent, e.g. after the Bedrock SDK's 5-minute session timeout (#10379,
+	// upstream 5b6c792b). Kept for parity with pi's classifier.
+	"pending stream has been canceled",
 
 	// Provider-requested retry delay cap failures should flow through the outer
 	// retry policy so callers can surface/abort the backoff (#1123).

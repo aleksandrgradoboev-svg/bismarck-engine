@@ -3,15 +3,13 @@
 // in package ai.
 //
 //   node --experimental-strip-types capture.mts <extraction> <out.json> <sha>
-//   e.g. ... capture.mts <dir> classify-3dd803d7e.json 3dd803d7e
+//   e.g. ... capture.mts <dir> classify-06a46693.json 06a46693
 //
 // <extraction> holds packages/ai at <sha> (`git archive <sha> packages/ai` from
-// the upstream clone) and a node_modules resolving pi-ai's dependencies (the npm
-// build's). It is a src capture, checked against the build when a release
-// ships the source it read (the BUILD wins): classify-3dd803d7e.json was
-// captured from src at 3dd803d7e with the 0.99.1 build's node_modules, and
-// utils/retry.ts is identical at v0.99.1 (d86654abb), whose dist/utils/retry.js
-// builds both patterns with exactly these sources and flags.
+// the upstream clone). No node_modules is needed: utils/retry.ts has only a
+// type import, which --experimental-strip-types erases, and fauxAssistantMessage
+// is rebuilt below. classify-06a46693.json was captured from src at v1.2.0
+// (06a46693), the release that ships that source.
 //
 // Every row records three answers: isRetryableAssistantError on the message
 // retry.test.ts would build (fauxAssistantMessage), and RegExp.prototype.test of
@@ -36,7 +34,20 @@ if (!extraction || !outFile || !sha) {
 }
 const src = path.join(extraction, "packages/ai/src");
 const load = (file: string) => import(pathToFileURL(path.join(src, file)).href);
-const { fauxAssistantMessage } = await load("providers/faux.ts");
+// fauxAssistantMessage (providers/faux.ts) is rebuilt here instead of imported:
+// faux.ts pulls models.ts and with it every provider SDK, while
+// isRetryableAssistantError reads only stopReason and errorMessage. The shape
+// below is faux.ts's at v1.2.0 for those fields.
+const fauxAssistantMessage = (
+	content: string,
+	options: { stopReason?: string; errorMessage?: string } = {},
+) => ({
+	role: "assistant",
+	content: content === "" ? [] : [{ type: "text", text: content }],
+	stopReason: options.stopReason ?? "stop",
+	...(options.errorMessage === undefined ? {} : { errorMessage: options.errorMessage }),
+	timestamp: 0,
+});
 const { isRetryableAssistantError } = await load("utils/retry.ts");
 
 const retryTs = path.join(src, "utils/retry.ts");
@@ -99,6 +110,8 @@ const rows: Row[] = [
 	error("pi: ChatGPT subscription usage limit", chatGPTUsageLimitMessage),
 	error("pi: temporary ChatGPT usage error", "subscription_sharing_usage_unavailable: Usage cannot be checked."),
 	error("pi: temporary ChatGPT user error", "subscription_sharing_user_unavailable: User cannot be loaded."),
+	error("pi: HTTP/2 pending stream cancellation (#10379)", "The pending stream has been canceled"),
+	error("pi: HTTP/2 pending stream cancellation, wrapped (#10379)", "The pending stream has been canceled (caused by: socket closed)"),
 
 	// isRetryableAssistantError's guard: only stopReason "error" with error text.
 	{ covers: "guard: stop", stopReason: "stop", errorMessage: "overloaded" },
@@ -110,7 +123,10 @@ const rows: Row[] = [
 
 	// One row per retryable alternative that no other alternative matches.
 	error("overloaded", "Overloaded"),
+	error("server_busy", "SERVER_BUSY"),
+	error("servers are currently busy", "Servers Are Currently Busy"),
 	error("currently experiencing high demand", "Currently Experiencing High Demand"),
+	error("model is at capacity", "Selected model is at capacity"),
 	error("rate.?limit", "rate_limit_error"),
 	error("too many requests", "Too Many Requests"),
 	error("429", "HTTP 429"),
@@ -123,7 +139,8 @@ const rows: Row[] = [
 	error("service.?unavailable", "Service Unavailable"),
 	error("server.?error", "server_error"),
 	error("internal.?error", "InternalError"),
-	error("provider.?returned.?error", "Provider returned error"),
+	error("provider.?returned.?(?:an.?)?error", "Provider returned error"),
+	error("provider.?returned.?(?:an.?)?error: an", "The upstream provider returned an error"),
 	error("network.?error", "NetworkError when attempting to fetch resource."),
 	error("connection.?error", "Connection error."),
 	error("connection.?refused", "connection refused"),
@@ -146,6 +163,7 @@ const rows: Row[] = [
 	error("ended without", "stream ended without message_stop"),
 	error("stream ended before message_stop", "Anthropic stream ended before message_stop"),
 	error("http2 request did not get a response", "http2 request did not get a response"),
+	error("pending stream has been canceled", "PENDING STREAM HAS BEEN CANCELED"),
 	error("retry delay", "Retry delay 120000ms exceeds maxRetryDelayMs"),
 	error("you can retry your request", "the model is busy; you can retry your request"),
 	error("try your request again", "please try your request again shortly"),
