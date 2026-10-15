@@ -1,0 +1,40 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "text": "",
+      "stringContent": true,
+      "message": {
+        "role": "system",
+        "content": "",
+        "sections": {
+          "preamble": "v1"
+        },
+        "timestamp": 1789603200000
+      }
+    },
+    {
+      "role": "user",
+      "text": "The conversation history before this point was compacted into the following summary:\n\n<summary>\nall summarized\n</summary>"
+    },
+    {
+      "role": "user",
+      "text": "two"
+    }
+  ],
+  "entries": [
+    {
+      "id": "i3",
+      "messages": 2
+    },
+    {
+      "id": "i4",
+      "messages": 1
+    }
+  ]
+}

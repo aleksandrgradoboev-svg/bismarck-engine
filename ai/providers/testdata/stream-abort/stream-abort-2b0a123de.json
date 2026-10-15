@@ -1,0 +1,1868 @@
+{
+	"source": "upstream 2b0a123de packages/ai/src/api, @anthropic-ai/sdk 0.124.0 sha512-cN5O8i9UVxHeOQAzj/XjshWXG8KiibJDw9OGpH2Z/eR3n/RBxdoLxDJOcfqAJWvjaMDFfHTBADU04hWRJVkDyA==, openai 7.19.0 sha512-MX2s3u2L5racTO0CC/SWpCOasJQBCJrqLKXK+l82cAhdeF8mPMBEe/gxMm0ZFa2xpKpOFLRjxv5afYEZbBXmbQ==, @google/genai 2.21.0 sha512-+PDtco2/Z0ONdzCGekCoCT+O1VJS9xJQNN4XzQpXG/t3El/SWWMkCWlFRO1KmivOHPa4Q0VjUYu1HBKCZ/v33Q==, node v26.4.0 (undici 8.5.0)",
+	"runs": [
+		{
+			"api": "anthropic-messages",
+			"mode": "an abort while a read is pending",
+			"status": 200,
+			"segments": [
+				"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":3,\"output_tokens\":0}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"in hand\"}}\n\n"
+			],
+			"observed": [
+				"message_start",
+				"content_block_start",
+				"content_block_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "This operation was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "an abort from the callback with events left in its read",
+			"status": 200,
+			"segments": [
+				"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":3,\"output_tokens\":0}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"in hand\"}}\n\n"
+			],
+			"observed": [
+				"message_start",
+				"content_block_start",
+				"content_block_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "an abort from the callback on its read's last event",
+			"status": 200,
+			"segments": [
+				"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":3,\"output_tokens\":0}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"in hand\"}}\n\n"
+			],
+			"observed": [
+				"message_start",
+				"content_block_start",
+				"content_block_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "an abort from the callback with the next read already in",
+			"status": 200,
+			"segments": [
+				"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":3,\"output_tokens\":0}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"in hand\"}}\n\n",
+				"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" and more\"}}\n\n"
+			],
+			"observed": [
+				"message_start",
+				"content_block_start",
+				"content_block_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "an abort from the callback on the last event of a body already complete",
+			"status": 200,
+			"segments": [
+				"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":3,\"output_tokens\":0}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"in hand\"}}\n\n",
+				"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" and more\"}}\n\n"
+			],
+			"observed": [
+				"message_start",
+				"content_block_start",
+				"content_block_delta",
+				"content_block_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand and more\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "an abort while an error body is read",
+			"status": 500,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "the connection drops mid-body",
+			"status": 200,
+			"segments": [
+				"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":3,\"output_tokens\":0}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"in hand\"}}\n\n"
+			],
+			"observed": [
+				"message_start",
+				"content_block_start",
+				"content_block_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "terminated",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "a custom fetch's body fails mid-body",
+			"status": 200,
+			"segments": [
+				"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":3,\"output_tokens\":0}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"in hand\"}}\n\n"
+			],
+			"customBodyError": "the custom fetch's body failed",
+			"observed": [
+				"message_start",
+				"content_block_start",
+				"content_block_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "the custom fetch's body failed",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "an abort while a retryable error body is read",
+			"status": 429,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"retryAfter": "120",
+			"maxRetries": 1,
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "the connection drops while a retryable error body is read",
+			"status": 429,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"retryAfter": "120",
+			"maxRetries": 1,
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Server requested 120s retry delay (max: 60s). 429 terminated",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "a custom fetch's retryable error body fails mid-body",
+			"retryAfter": "120",
+			"maxRetries": 1,
+			"status": 429,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"customBodyError": "the custom fetch's body failed",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Server requested 120s retry delay (max: 60s). 429 the custom fetch's body failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "the request gets no response: the connection is refused",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "the request gets no response: the connection is refused at a /timeout path",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "the request gets no response: the server closes the connection",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "the request gets no response: the response is not HTTP",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "the request gets no response: undici's client refuses a header value",
+			"headers": {
+				"x-test": "a\u0001b"
+			},
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "a custom fetch rejects",
+			"customFetchError": "the custom fetch failed",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "a custom fetch rejects with a timeout",
+			"customFetchError": "the custom fetch timed out",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Request timed out.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "the request gets no response: timeoutMs passes first",
+			"timeoutMs": 200,
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Request timed out.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "a custom fetch rejects with an AbortError of its own",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Request timed out.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "a custom fetch rejects once the signal aborts",
+			"customFetchError": "the custom fetch failed",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "a custom fetch's body ignores an abort from the callback",
+			"status": 200,
+			"segments": [
+				"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":3,\"output_tokens\":0}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"in hand\"}}\n\n",
+				"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" and more\"}}\n\n",
+				"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":2}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+			],
+			"observed": [
+				"message_start",
+				"content_block_start",
+				"content_block_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "a custom fetch's body fails once the signal aborts",
+			"status": 200,
+			"segments": [
+				"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":3,\"output_tokens\":0}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"in hand\"}}\n\n"
+			],
+			"customBodyError": "the custom fetch's body failed",
+			"observed": [
+				"message_start",
+				"content_block_start",
+				"content_block_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "the custom fetch's body failed",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "an abort while a read is pending",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"start\"}\n\ndata: {\"type\":\"text_start\",\"contentIndex\":0}\n\ndata: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"in hand\"}\n\n"
+			],
+			"observed": [
+				"start",
+				"text_start",
+				"text_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "This operation was aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "an abort from the callback with events left in its read",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"start\"}\n\ndata: {\"type\":\"text_start\",\"contentIndex\":0}\n\ndata: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"in hand\"}\n\n"
+			],
+			"observed": [
+				"start",
+				"text_start",
+				"text_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "This operation was aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "an abort from the callback on its read's last event",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"start\"}\n\ndata: {\"type\":\"text_start\",\"contentIndex\":0}\n\ndata: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"in hand\"}\n\n"
+			],
+			"observed": [
+				"start",
+				"text_start",
+				"text_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "This operation was aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "an abort from the callback with the next read already in",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"start\"}\n\ndata: {\"type\":\"text_start\",\"contentIndex\":0}\n\ndata: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"in hand\"}\n\n",
+				"data: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\" and more\"}\n\n"
+			],
+			"observed": [
+				"start",
+				"text_start",
+				"text_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "This operation was aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "an abort from the callback on the last event of a body already complete",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"start\"}\n\ndata: {\"type\":\"text_start\",\"contentIndex\":0}\n\ndata: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"in hand\"}\n\n",
+				"data: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\" and more\"}\n\n"
+			],
+			"observed": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "This operation was aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "an abort while an error body is read",
+			"status": 500,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "This operation was aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "an already-aborted signal",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "This operation was aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "an abort before the response arrives",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "This operation was aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "the connection drops mid-body",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"start\"}\n\ndata: {\"type\":\"text_start\",\"contentIndex\":0}\n\ndata: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"in hand\"}\n\n"
+			],
+			"observed": [
+				"start",
+				"text_start",
+				"text_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "terminated",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "the connection drops while an error body is read",
+			"status": 500,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "terminated",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "a custom fetch's body fails mid-body",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"start\"}\n\ndata: {\"type\":\"text_start\",\"contentIndex\":0}\n\ndata: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"in hand\"}\n\n"
+			],
+			"customBodyError": "the custom fetch's body failed",
+			"observed": [
+				"start",
+				"text_start",
+				"text_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "the custom fetch's body failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "the request gets no response: the connection is refused",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "fetch failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "the request gets no response: the connection is refused at a /timeout path",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "fetch failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "the request gets no response: the server closes the connection",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "fetch failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "the request gets no response: the response is not HTTP",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "fetch failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "the request gets no response: undici's client refuses a header value",
+			"headers": {
+				"x-test": "a\u0001b"
+			},
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "fetch failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "a custom fetch rejects",
+			"customFetchError": "the custom fetch failed",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "the custom fetch failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "a custom fetch rejects with a timeout",
+			"customFetchError": "the custom fetch timed out",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "the custom fetch timed out",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "a custom fetch rejects once the signal aborts",
+			"customFetchError": "the custom fetch failed",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "the custom fetch failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "a custom fetch's body ignores an abort from the callback",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"start\"}\n\ndata: {\"type\":\"text_start\",\"contentIndex\":0}\n\ndata: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"in hand\"}\n\n",
+				"data: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\" and more\"}\n\n",
+				"data: {\"type\":\"text_end\",\"contentIndex\":0,\"content\":\"in hand and more\"}\n\ndata: {\"type\":\"done\",\"reason\":\"stop\",\"usage\":{\"input\":1,\"output\":2,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":3,\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0,\"total\":0}}}\n\n"
+			],
+			"observed": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta",
+				"text_end",
+				"done"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta",
+				"text_end",
+				"done"
+			],
+			"stopReason": "stop",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand and more\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "pi-messages",
+			"mode": "a custom fetch's body fails once the signal aborts",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"start\"}\n\ndata: {\"type\":\"text_start\",\"contentIndex\":0}\n\ndata: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"in hand\"}\n\n"
+			],
+			"customBodyError": "the custom fetch's body failed",
+			"observed": [
+				"start",
+				"text_start",
+				"text_delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "the custom fetch's body failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "an abort while a read is pending",
+			"status": 200,
+			"segments": [
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"in\"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" \"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hand\"}}]}\n\n"
+			],
+			"observed": [
+				"",
+				"",
+				""
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta",
+				"text_delta",
+				"text_end",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "an abort from the callback with events left in its read",
+			"status": 200,
+			"segments": [
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"in\"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" \"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hand\"}}]}\n\n"
+			],
+			"observed": [
+				""
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_end",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "an abort from the callback on its read's last event",
+			"status": 200,
+			"segments": [
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"in\"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" \"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hand\"}}]}\n\n"
+			],
+			"observed": [
+				"",
+				"",
+				""
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta",
+				"text_delta",
+				"text_end",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "an abort from the callback with the next read already in",
+			"status": 200,
+			"segments": [
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"in\"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" \"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hand\"}}]}\n\n",
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" and more\"}}]}\n\n"
+			],
+			"observed": [
+				""
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_end",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "an abort from the callback on the last event of a body already complete",
+			"status": 200,
+			"segments": [
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"in\"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" \"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hand\"}}]}\n\n",
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" and more\"}}]}\n\n"
+			],
+			"observed": [
+				"",
+				"",
+				"",
+				""
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta",
+				"text_delta",
+				"text_delta",
+				"text_end",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand and more\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "an abort while an error body is read",
+			"status": 500,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "the connection drops mid-body",
+			"status": 200,
+			"segments": [
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"in\"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" \"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hand\"}}]}\n\n"
+			],
+			"observed": [
+				"",
+				"",
+				""
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "terminated",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "the connection drops while an error body is read",
+			"status": 500,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "500 terminated",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "a custom fetch's body fails mid-body",
+			"status": 200,
+			"segments": [
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"in\"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" \"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hand\"}}]}\n\n"
+			],
+			"customBodyError": "the custom fetch's body failed",
+			"observed": [
+				"",
+				"",
+				""
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "the custom fetch's body failed",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "an abort while a retryable error body is read",
+			"status": 429,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"retryAfter": "120",
+			"maxRetries": 1,
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "the connection drops while a retryable error body is read",
+			"status": 429,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"retryAfter": "120",
+			"maxRetries": 1,
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Server requested 120s retry delay (max: 60s). 429 terminated",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "a custom fetch's retryable error body fails mid-body",
+			"retryAfter": "120",
+			"maxRetries": 1,
+			"status": 429,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"customBodyError": "the custom fetch's body failed",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Server requested 120s retry delay (max: 60s). 429 the custom fetch's body failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "the request gets no response: the connection is refused",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "the request gets no response: the connection is refused at a /timeout path",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "the request gets no response: the server closes the connection",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "the request gets no response: the response is not HTTP",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "the request gets no response: undici's client refuses a header value",
+			"headers": {
+				"x-test": "a\u0001b"
+			},
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "a custom fetch rejects",
+			"customFetchError": "the custom fetch failed",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "a custom fetch rejects with a timeout",
+			"customFetchError": "the custom fetch timed out",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Request timed out.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "the request gets no response: timeoutMs passes first",
+			"timeoutMs": 200,
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Request timed out.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "a custom fetch rejects with an AbortError of its own",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Request timed out.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "a custom fetch rejects once the signal aborts",
+			"customFetchError": "the custom fetch failed",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "a custom fetch's body ignores an abort from the callback",
+			"status": 200,
+			"segments": [
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"in\"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" \"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hand\"}}]}\n\n",
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" and more\"}}]}\n\n",
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
+			],
+			"observed": [
+				""
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_end",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "a custom fetch's body fails once the signal aborts",
+			"status": 200,
+			"segments": [
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"in\"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" \"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hand\"}}]}\n\n"
+			],
+			"customBodyError": "the custom fetch's body failed",
+			"observed": [
+				"",
+				"",
+				""
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "the custom fetch's body failed",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-completions",
+			"mode": "a custom fetch's body hangs, ignoring an abort while a read is pending",
+			"status": 200,
+			"segments": [
+				"data: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"in\"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" \"}}]}\n\ndata: {\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hand\"}}]}\n\n"
+			],
+			"observed": [
+				"",
+				"",
+				""
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta",
+				"text_delta",
+				"text_end",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "an abort while a read is pending",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[]}}\n\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\"in hand\"}\n\n"
+			],
+			"observed": [
+				"response.output_item.added",
+				"response.content_part.added",
+				"response.output_text.delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "OpenAI Responses stream ended before a terminal response event",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "an abort from the callback with events left in its read",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[]}}\n\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\"in hand\"}\n\n"
+			],
+			"observed": [
+				"response.output_item.added"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "OpenAI Responses stream ended before a terminal response event",
+			"content": "[{\"type\":\"text\",\"text\":\"\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "an abort from the callback on its read's last event",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[]}}\n\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\"in hand\"}\n\n"
+			],
+			"observed": [
+				"response.output_item.added",
+				"response.content_part.added",
+				"response.output_text.delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "OpenAI Responses stream ended before a terminal response event",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "an abort from the callback with the next read already in",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[]}}\n\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\"in hand\"}\n\n",
+				"data: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\" and more\"}\n\n"
+			],
+			"observed": [
+				"response.output_item.added"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "OpenAI Responses stream ended before a terminal response event",
+			"content": "[{\"type\":\"text\",\"text\":\"\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "an abort from the callback on the last event of a body already complete",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[]}}\n\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\"in hand\"}\n\n",
+				"data: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\" and more\"}\n\n"
+			],
+			"observed": [
+				"response.output_item.added",
+				"response.content_part.added",
+				"response.output_text.delta",
+				"response.output_text.delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "OpenAI Responses stream ended before a terminal response event",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand and more\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "an abort while an error body is read",
+			"status": 500,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "the connection drops mid-body",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[]}}\n\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\"in hand\"}\n\n"
+			],
+			"observed": [
+				"response.output_item.added",
+				"response.content_part.added",
+				"response.output_text.delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "terminated",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "the connection drops while an error body is read",
+			"status": 500,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "OpenAI API error (500): 500 terminated",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "a custom fetch's body fails mid-body",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[]}}\n\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\"in hand\"}\n\n"
+			],
+			"customBodyError": "the custom fetch's body failed",
+			"observed": [
+				"response.output_item.added",
+				"response.content_part.added",
+				"response.output_text.delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "the custom fetch's body failed",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "an abort while a retryable error body is read",
+			"status": 429,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"retryAfter": "120",
+			"maxRetries": 1,
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "the connection drops while a retryable error body is read",
+			"status": 429,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"retryAfter": "120",
+			"maxRetries": 1,
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Server requested 120s retry delay (max: 60s). 429 terminated",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "a custom fetch's retryable error body fails mid-body",
+			"retryAfter": "120",
+			"maxRetries": 1,
+			"status": 429,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"customBodyError": "the custom fetch's body failed",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Server requested 120s retry delay (max: 60s). 429 the custom fetch's body failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "the request gets no response: the connection is refused",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "the request gets no response: the connection is refused at a /timeout path",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "the request gets no response: the server closes the connection",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "the request gets no response: the response is not HTTP",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "the request gets no response: undici's client refuses a header value",
+			"headers": {
+				"x-test": "a\u0001b"
+			},
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "a custom fetch rejects",
+			"customFetchError": "the custom fetch failed",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "a custom fetch rejects with a timeout",
+			"customFetchError": "the custom fetch timed out",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Request timed out.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "the request gets no response: timeoutMs passes first",
+			"timeoutMs": 200,
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Request timed out.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "a custom fetch rejects with an AbortError of its own",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Request timed out.",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "a custom fetch rejects once the signal aborts",
+			"customFetchError": "the custom fetch failed",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "a custom fetch's body ignores an abort from the callback",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[]}}\n\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\"in hand\"}\n\n",
+				"data: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\" and more\"}\n\n",
+				"data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"in hand and more\"}]}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":2,\"total_tokens\":3}}}\n\n"
+			],
+			"observed": [
+				"response.output_item.added"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "OpenAI Responses stream ended before a terminal response event",
+			"content": "[{\"type\":\"text\",\"text\":\"\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "a custom fetch's body fails once the signal aborts",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[]}}\n\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\"in hand\"}\n\n"
+			],
+			"customBodyError": "the custom fetch's body failed",
+			"observed": [
+				"response.output_item.added",
+				"response.content_part.added",
+				"response.output_text.delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "the custom fetch's body failed",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "openai-responses",
+			"mode": "a custom fetch's body hangs, ignoring an abort while a read is pending",
+			"status": 200,
+			"segments": [
+				"data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[]}}\n\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\"in hand\"}\n\n"
+			],
+			"observed": [
+				"response.output_item.added",
+				"response.content_part.added",
+				"response.output_text.delta"
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "OpenAI Responses stream ended before a terminal response event",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "an abort from the callback on the last event of a body already complete",
+			"status": 200,
+			"segments": [
+				"data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"in hand\"}],\"role\":\"model\"}}]}\n\n",
+				"data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\" and more\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":2,\"totalTokenCount\":3}}\n\n"
+			],
+			"observed": [
+				"",
+				""
+			],
+			"events": [
+				"start",
+				"text_start",
+				"text_delta",
+				"text_delta",
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "This operation was aborted",
+			"content": "[{\"type\":\"text\",\"text\":\"in hand and more\"}]",
+			"diagnostics": []
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "an abort while an error body is read",
+			"status": 500,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "the connection drops while an error body is read",
+			"status": 500,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "terminated",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "an abort while a retryable error body is read",
+			"status": 429,
+			"segments": [
+				"{\"error\":{\"message\":\"cut short"
+			],
+			"retryAfter": "120",
+			"maxRetries": 1,
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "the request gets no response: the connection is refused",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "fetch failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "the request gets no response: the connection is refused at a /timeout path",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "fetch failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "the request gets no response: the server closes the connection",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "fetch failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "the request gets no response: the response is not HTTP",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "fetch failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "the request gets no response: undici's client refuses a header value",
+			"headers": {
+				"x-test": "a\u0001b"
+			},
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "fetch failed",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "a custom fetch rejects",
+			"customFetchError": "the custom fetch failed",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Custom fetch is not supported by the Google Generative AI adapter",
+			"content": "[]",
+			"diagnostics": []
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "a custom fetch rejects with a timeout",
+			"customFetchError": "the custom fetch timed out",
+			"observed": [],
+			"events": [
+				"error"
+			],
+			"stopReason": "error",
+			"errorMessage": "Custom fetch is not supported by the Google Generative AI adapter",
+			"content": "[]",
+			"diagnostics": []
+		}
+	]
+}

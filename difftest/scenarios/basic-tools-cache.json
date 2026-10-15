@@ -1,0 +1,79 @@
+{
+  "name": "basic-tools-cache",
+  "note": "Direct OpenAI: multi-turn transcript with a tool call + tool result, tool schemas, and session-based prompt caching (short retention).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "stream",
+  "model": {
+    "id": "gpt-4o-mini",
+    "name": "GPT-4o mini",
+    "api": "openai-completions",
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "reasoning": false,
+    "input": ["text", "image"],
+    "cost": { "input": 0.15, "output": 0.6, "cacheRead": 0, "cacheWrite": 0 },
+    "contextWindow": 128000,
+    "maxTokens": 16384
+  },
+  "context": {
+    "systemPrompt": "You are a helpful assistant.",
+    "messages": [
+      { "role": "user", "content": "What is in /tmp?", "timestamp": 1 },
+      {
+        "role": "assistant",
+        "content": [
+          { "type": "text", "text": "Let me look." },
+          { "type": "toolCall", "id": "call_1", "name": "list_dir", "arguments": { "path": "/tmp", "depth": 1 } }
+        ],
+        "api": "openai-completions",
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "usage": { "input": 10, "output": 5, "cacheRead": 0, "cacheWrite": 0 },
+        "stopReason": "toolUse",
+        "timestamp": 2
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_1",
+        "toolName": "list_dir",
+        "content": [{ "type": "text", "text": "a.txt\nb.txt" }],
+        "isError": false,
+        "timestamp": 3
+      },
+      { "role": "user", "content": "Thanks — now read a.txt", "timestamp": 4 }
+    ],
+    "tools": [
+      {
+        "name": "list_dir",
+        "description": "List a directory.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": { "type": "string", "description": "Absolute path." },
+            "depth": { "type": "number" }
+          },
+          "required": ["path"],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "read_file",
+        "description": "Read a file.",
+        "parameters": {
+          "type": "object",
+          "properties": { "path": { "type": "string" } },
+          "required": ["path"],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "sessionId": "session-basic-tools-cache",
+    "temperature": 0.2,
+    "maxTokens": 1024,
+    "toolChoice": "auto"
+  }
+}

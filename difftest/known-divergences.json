@@ -1,0 +1,19 @@
+{
+  "_readme": [
+    "ACCEPTED DIVERGENCE BASELINE — this file is a DEBT LEDGER, not settled policy.",
+    "Every entry below is a place where the Go port is KNOWN WRONG and pi is right.",
+    "An entry buys time; it does not close the bug. It exists so that the runner can",
+    "exit 0 on a known-bad-but-unchanged state, and so that the NEXT new regression",
+    "cannot hide inside the noise.",
+    "",
+    "Each `matches` element excuses EXACTLY ONE difference: same scenario, same JSON",
+    "path, same kind of difference. A different path, a different field, or the same",
+    "field differing by VALUE instead of key order is a FAIL. This is deliberately",
+    "not a scenario-level or path-level mute.",
+    "",
+    "An entry that stops firing is reported FIXED and FAILS the run — see README.md",
+    "'Retiring a baseline entry'. Do not add an entry to make a red run green: add",
+    "one only for a divergence that is already escalated and has a home in the ledger."
+  ],
+  "divergences": []
+}

@@ -1,0 +1,41 @@
+{
+  "name": "sampling-params",
+  "note": "Upstream 25a2c8dcf (Go fc6f777). streamSimple merges Model.samplingParams with options.samplingParams per key (request wins), then Object.assign's the result onto the body LAST, so a sampling key named like a request field (temperature, max_tokens) overrides it. Includes a key present only on the model, a key present only on the request, an overridden key, and a JSON null. Shipped in pi-ai 0.84.2; backend flipped to dist (README rule).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "custom-model",
+    "name": "Custom llama.cpp model",
+    "api": "openai-completions",
+    "provider": "custom-provider",
+    "baseUrl": "http://127.0.0.1:9/v1",
+    "reasoning": false,
+    "input": ["text"],
+    "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+    "contextWindow": 32768,
+    "maxTokens": 4096,
+    "samplingParams": {
+      "top_k": 40,
+      "min_p": 0.05,
+      "repetition_penalty": 1.1,
+      "temperature": 0.9,
+      "mirostat": null
+    }
+  },
+  "context": {
+    "systemPrompt": "sys",
+    "messages": [{ "role": "user", "content": "hi", "timestamp": 1 }]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "temperature": 0.2,
+    "maxTokens": 512,
+    "samplingParams": {
+      "top_p": 0.95,
+      "top_k": 0,
+      "temperature": 1.5,
+      "max_tokens": 77
+    }
+  }
+}

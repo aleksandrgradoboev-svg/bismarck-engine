@@ -1,0 +1,39 @@
+{
+  "thinkingLevel": "low",
+  "model": {
+    "provider": "anthropic",
+    "modelId": "claude-x"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "text": "hi"
+    },
+    {
+      "role": "user",
+      "text": "go"
+    }
+  ],
+  "entries": [
+    {
+      "id": "s1",
+      "messages": 1
+    },
+    {
+      "id": "s2",
+      "messages": 0
+    },
+    {
+      "id": "s3",
+      "messages": 0
+    },
+    {
+      "id": "s4",
+      "messages": 0
+    },
+    {
+      "id": "s5",
+      "messages": 1
+    }
+  ]
+}

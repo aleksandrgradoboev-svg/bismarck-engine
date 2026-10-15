@@ -1,0 +1,46 @@
+{
+  "name": "responses-chatgpt-sign-in-explicit-cache",
+  "note": "Upstream 02eed88fd (Go d8532cc): the explicit prompt-cache arm of responses-chatgpt-sign-in. A model with supportsExplicitPromptCacheMode would send prompt_cache_options {ttl:\"30m\"} for cacheRetention long; with a ChatGPT access token it is omitted too.",
+  "backend": "dist",
+  "api": "openai-responses",
+  "entry": "stream",
+  "model": {
+    "id": "gpt-5.5",
+    "name": "GPT-5.5",
+    "api": "openai-responses",
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 1.25,
+      "output": 10,
+      "cacheRead": 0.125,
+      "cacheWrite": 0
+    },
+    "contextWindow": 400000,
+    "maxTokens": 128000,
+    "compat": {
+      "supportsExplicitPromptCacheMode": true
+    }
+  },
+  "context": {
+    "systemPrompt": "You are a helpful assistant.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi",
+        "timestamp": 1
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "chatgpt-access-token",
+    "maxTokens": 1024,
+    "temperature": 0.5,
+    "cacheRetention": "long",
+    "sessionId": "session-1"
+  }
+}

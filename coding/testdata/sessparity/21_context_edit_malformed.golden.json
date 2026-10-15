@@ -1,0 +1,52 @@
+{
+  "thinkingLevel": "off",
+  "model": null,
+  "messages": [
+    {
+      "role": "user",
+      "text": ""
+    },
+    {
+      "role": "user",
+      "text": ""
+    },
+    {
+      "role": "user",
+      "text": ""
+    },
+    {
+      "role": "user",
+      "text": "four"
+    }
+  ],
+  "entries": [
+    {
+      "id": "m1",
+      "messages": 1
+    },
+    {
+      "id": "m2",
+      "messages": 0
+    },
+    {
+      "id": "m3",
+      "messages": 1
+    },
+    {
+      "id": "m4",
+      "messages": 0
+    },
+    {
+      "id": "m5",
+      "messages": 1
+    },
+    {
+      "id": "m6",
+      "messages": 0
+    },
+    {
+      "id": "m7",
+      "messages": 1
+    }
+  ]
+}

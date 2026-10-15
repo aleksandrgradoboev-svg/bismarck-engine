@@ -1,0 +1,125 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "text": "string stays a string on a user",
+      "stringContent": true
+    },
+    {
+      "role": "assistant",
+      "text": "assistant string becomes one text block"
+    },
+    {
+      "role": "toolResult",
+      "text": "[redacted]"
+    },
+    {
+      "role": "user",
+      "text": "custom string"
+    },
+    {
+      "role": "user",
+      "text": "custom-role array"
+    },
+    {
+      "role": "user",
+      "text": "Ran `ls`\n```\na.txt\n```"
+    },
+    {
+      "role": "system",
+      "text": "",
+      "stringContent": true,
+      "message": {
+        "role": "system",
+        "content": "",
+        "sections": {
+          "preamble": "v1"
+        },
+        "timestamp": 1790035207000
+      }
+    },
+    {
+      "role": "user",
+      "text": "user array <image>"
+    },
+    {
+      "role": "assistant",
+      "text": "done"
+    }
+  ],
+  "entries": [
+    {
+      "id": "d1",
+      "messages": 1
+    },
+    {
+      "id": "d2",
+      "messages": 1
+    },
+    {
+      "id": "d3",
+      "messages": 1
+    },
+    {
+      "id": "d4",
+      "messages": 1
+    },
+    {
+      "id": "d5",
+      "messages": 1
+    },
+    {
+      "id": "d6",
+      "messages": 1
+    },
+    {
+      "id": "d7",
+      "messages": 1
+    },
+    {
+      "id": "d8",
+      "messages": 1
+    },
+    {
+      "id": "e1",
+      "messages": 0
+    },
+    {
+      "id": "e2",
+      "messages": 0
+    },
+    {
+      "id": "e3",
+      "messages": 0
+    },
+    {
+      "id": "e4",
+      "messages": 0
+    },
+    {
+      "id": "e5",
+      "messages": 0
+    },
+    {
+      "id": "e6",
+      "messages": 0
+    },
+    {
+      "id": "e7",
+      "messages": 0
+    },
+    {
+      "id": "e8",
+      "messages": 0
+    },
+    {
+      "id": "e9",
+      "messages": 1
+    }
+  ]
+}

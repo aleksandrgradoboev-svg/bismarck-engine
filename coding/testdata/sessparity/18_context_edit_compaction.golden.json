@@ -1,0 +1,68 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "text": "",
+      "stringContent": true,
+      "message": {
+        "role": "system",
+        "content": "",
+        "sections": {
+          "preamble": "v1"
+        },
+        "timestamp": 1789603200000
+      }
+    },
+    {
+      "role": "user",
+      "text": "The conversation history before this point was compacted into the following summary:\n\n<summary>\nS\n</summary>"
+    },
+    {
+      "role": "user",
+      "text": "kept question, edited after compaction"
+    },
+    {
+      "role": "assistant",
+      "text": "kept answer, edited before compaction"
+    },
+    {
+      "role": "user",
+      "text": "next"
+    }
+  ],
+  "entries": [
+    {
+      "id": "h6",
+      "messages": 2
+    },
+    {
+      "id": "h3",
+      "messages": 1
+    },
+    {
+      "id": "h4",
+      "messages": 1
+    },
+    {
+      "id": "h5",
+      "messages": 0
+    },
+    {
+      "id": "h7",
+      "messages": 0
+    },
+    {
+      "id": "h8",
+      "messages": 0
+    },
+    {
+      "id": "h9",
+      "messages": 1
+    }
+  ]
+}

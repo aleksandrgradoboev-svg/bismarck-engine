@@ -1,0 +1,491 @@
+{
+	"sha": "95fbc0499",
+	"now": 1700000000000,
+	"defaultState": {
+		"messages": "[]",
+		"systemPrompt": ""
+	},
+	"customInitialState": {
+		"messages": "[{\"role\":\"system\",\"content\":\"You are a helpful assistant.\",\"timestamp\":0}]",
+		"systemPrompt": "You are a helpful assistant."
+	},
+	"initialPromptAndTools": {
+		"messages": "[{\"role\":\"system\",\"content\":\"You are helpful.\",\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo input\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}],\"timestamp\":0}]",
+		"systemPrompt": "You are helpful."
+	},
+	"initialTranscriptStartsWithSystem": {
+		"messages": "[{\"role\":\"system\",\"content\":\"kept\",\"timestamp\":5},{\"role\":\"user\",\"content\":\"old\",\"timestamp\":6}]",
+		"systemPrompt": "kept"
+	},
+	"initialTranscriptWithLaterSystem": {
+		"messages": "[{\"role\":\"system\",\"content\":\"P\",\"timestamp\":0},{\"role\":\"user\",\"content\":\"u\",\"timestamp\":1},{\"role\":\"system\",\"content\":\"late\",\"timestamp\":2}]",
+		"systemPrompt": "P\n\nlate"
+	},
+	"declaresLoadoutChanges": {
+		"requests": [
+			[
+				"+first",
+				"-"
+			],
+			[
+				"+first",
+				"-",
+				"+second",
+				"-first"
+			],
+			[
+				"+first",
+				"-",
+				"+second",
+				"-first"
+			]
+		],
+		"roles": [
+			"system",
+			"user",
+			"assistant",
+			"system",
+			"user",
+			"assistant",
+			"user",
+			"assistant"
+		],
+		"system": [
+			"{\"role\":\"system\",\"content\":\"You are helpful.\",\"toolsAdded\":[{\"name\":\"first\",\"description\":\"first tool\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}],\"timestamp\":0}",
+			"{\"role\":\"system\",\"content\":\"\",\"timestamp\":1700000000000,\"toolsAdded\":[{\"name\":\"second\",\"description\":\"second tool\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}],\"toolsRemoved\":[{\"name\":\"first\"}]}"
+		],
+		"systemPrompt": "You are helpful."
+	},
+	"mergesPendingSystemMessage": {
+		"systemCounts": [
+			2
+		],
+		"roles": [
+			"system",
+			"system",
+			"user",
+			"assistant"
+		],
+		"system": [
+			"{\"role\":\"system\",\"content\":\"You are helpful.\",\"timestamp\":0}",
+			"{\"role\":\"system\",\"content\":\"\",\"sections\":{\"skills\":\"<skills>x</skills>\"},\"timestamp\":1,\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo input\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}]}"
+		],
+		"systemPrompt": "You are helpful.\n\n<skills>x</skills>"
+	},
+	"rewritesPendingDeclarations": {
+		"system": [
+			"{\"role\":\"system\",\"content\":\"You are helpful.\",\"toolsAdded\":[{\"name\":\"first\",\"description\":\"first tool\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}],\"timestamp\":0}",
+			"{\"role\":\"system\",\"content\":\"\",\"sections\":{\"note\":\"<note>x</note>\"},\"timestamp\":1}"
+		],
+		"currentTools": [
+			"first"
+		]
+	},
+	"pendingDeclaresTheDelta": {
+		"system": [
+			"{\"role\":\"system\",\"content\":\"You are helpful.\",\"timestamp\":0}",
+			"{\"role\":\"system\",\"content\":\"\",\"timestamp\":1,\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo input\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}]}"
+		]
+	},
+	"pendingNoOpToolFieldsAreDropped": {
+		"restated": [
+			"{\"role\":\"system\",\"content\":\"You are helpful.\",\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo input\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}],\"timestamp\":0}",
+			"{\"role\":\"system\",\"content\":\"\",\"timestamp\":1}"
+		],
+		"removedUnknown": [
+			"{\"role\":\"system\",\"content\":\"You are helpful.\",\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo input\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}],\"timestamp\":0}",
+			"{\"role\":\"system\",\"content\":\"\",\"timestamp\":1}"
+		]
+	},
+	"lastPendingSystemMessageCarriesTheDelta": {
+		"roles": [
+			"system",
+			"system",
+			"system",
+			"user",
+			"assistant"
+		],
+		"system": [
+			"{\"role\":\"system\",\"content\":\"\",\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo input\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}],\"timestamp\":0}",
+			"{\"role\":\"system\",\"content\":\"a\",\"toolsAdded\":[{\"name\":\"x\",\"description\":\"x tool\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}],\"timestamp\":1}",
+			"{\"role\":\"system\",\"content\":\"b\",\"timestamp\":2,\"toolsRemoved\":[{\"name\":\"x\"}]}"
+		]
+	},
+	"declarationInsertedBeforeFirstNonSystem": {
+		"roles": [
+			"system",
+			"user",
+			"system",
+			"user",
+			"user",
+			"assistant"
+		],
+		"system": [
+			"{\"role\":\"system\",\"content\":\"\",\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo input\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}],\"timestamp\":0}",
+			"{\"role\":\"system\",\"content\":\"\",\"timestamp\":1700000000000,\"toolsAdded\":[{\"name\":\"second\",\"description\":\"second tool\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}]}"
+		]
+	},
+	"resetBaseline": {
+		"messages": "[{\"role\":\"system\",\"content\":\"You are helpful.\",\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo input\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}],\"timestamp\":0}]",
+		"replayed": "[{\"role\":\"system\",\"content\":\"base\\n\\nmore\",\"sections\":{\"b\":\"B\"},\"timestamp\":3}]",
+		"replayedSystemPrompt": "base\n\nmore\n\nB"
+	},
+	"resetWithoutSystemMessage": {
+		"messages": "[]"
+	},
+	"continueSystemOnly": {
+		"error": "No messages to continue from"
+	},
+	"continueLastSystem": {
+		"error": "",
+		"requests": [
+			[
+				"system",
+				"user",
+				"system"
+			]
+		],
+		"roles": [
+			"system",
+			"user",
+			"system",
+			"assistant"
+		],
+		"system": [
+			"{\"role\":\"system\",\"content\":\"P\",\"timestamp\":0}",
+			"{\"role\":\"system\",\"content\":\"late\",\"timestamp\":2}"
+		],
+		"systemPrompt": "P\n\nlate"
+	},
+	"agentFinishTurnEnd": {
+		"requestCount": 1,
+		"sawAbortSignal": true,
+		"callbackContextRoles": [
+			"system",
+			"user",
+			"assistant",
+			"toolResult"
+		]
+	},
+	"derivedSystemPrompt": {
+		"systemPrompt": "You are helpful.\n\n<skills>x</skills>"
+	},
+	"loopProviderContext": {
+		"keys": [
+			"messages"
+		],
+		"sameObject": true,
+		"systemCount": 1,
+		"events": [
+			"agent_start",
+			"turn_start",
+			"message_start",
+			"message_end",
+			"system:{\"role\":\"system\",\"content\":\"Transcript prompt\",\"toolsAdded\":[],\"timestamp\":1}",
+			"message_start",
+			"message_end",
+			"message_start",
+			"message_end",
+			"turn_end",
+			"agent_end"
+		],
+		"roles": [
+			"system",
+			"user",
+			"assistant"
+		]
+	},
+	"loopProviderContextDeclaredTools": {
+		"sameObject": false,
+		"systemCount": 1,
+		"events": [
+			"agent_start",
+			"turn_start",
+			"message_start",
+			"message_end",
+			"system:{\"role\":\"system\",\"content\":\"Transcript prompt\",\"timestamp\":1,\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo tool\",\"parameters\":{\"type\":\"object\",\"required\":[\"value\"],\"properties\":{\"value\":{\"type\":\"string\"}}}}]}",
+			"message_start",
+			"message_end",
+			"message_start",
+			"message_end",
+			"turn_end",
+			"agent_end"
+		],
+		"roles": [
+			"system",
+			"user",
+			"assistant"
+		]
+	},
+	"loopPrepareNextTurn": {
+		"llmCalls": 2,
+		"prepareCalls": 1,
+		"convertedSecondTurnHasUpdate": true,
+		"events": [
+			"agent_start",
+			"turn_start",
+			"message_start",
+			"message_end",
+			"system:{\"role\":\"system\",\"content\":\"\",\"timestamp\":1700000000000,\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo tool\",\"parameters\":{\"type\":\"object\",\"required\":[\"value\"],\"properties\":{\"value\":{\"type\":\"string\"}}}}]}",
+			"message_start",
+			"message_end",
+			"message_start",
+			"message_end",
+			"tool_execution_start",
+			"tool_execution_end",
+			"message_start",
+			"message_end",
+			"turn_end",
+			"turn_start",
+			"message_start",
+			"message_end",
+			"system:{\"role\":\"system\",\"content\":\"updated guidance\",\"timestamp\":1}",
+			"message_start",
+			"message_end",
+			"turn_end",
+			"agent_end"
+		],
+		"roles": [
+			"system",
+			"user",
+			"assistant",
+			"toolResult",
+			"system",
+			"assistant"
+		]
+	},
+	"loopPreparedBeforeSteering": {
+		"llmCalls": 2,
+		"secondRequestRoles": [
+			"system",
+			"user",
+			"assistant",
+			"toolResult",
+			"system",
+			"user",
+			"user"
+		],
+		"events": [
+			"agent_start",
+			"turn_start",
+			"message_start",
+			"message_end",
+			"system:{\"role\":\"system\",\"content\":\"\",\"timestamp\":1700000000000,\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo tool\",\"parameters\":{\"type\":\"object\",\"required\":[\"value\"],\"properties\":{\"value\":{\"type\":\"string\"}}}}]}",
+			"message_start",
+			"message_end",
+			"message_start",
+			"message_end",
+			"tool_execution_start",
+			"tool_execution_end",
+			"message_start",
+			"message_end",
+			"turn_end",
+			"turn_start",
+			"message_start",
+			"message_end",
+			"system:{\"role\":\"system\",\"content\":\"updated guidance\",\"timestamp\":1,\"toolsAdded\":[{\"name\":\"second\",\"description\":\"second tool\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}]}",
+			"message_start",
+			"message_end",
+			"message_start",
+			"message_end",
+			"message_start",
+			"message_end",
+			"turn_end",
+			"agent_end"
+		],
+		"roles": [
+			"system",
+			"user",
+			"assistant",
+			"toolResult",
+			"system",
+			"user",
+			"user",
+			"assistant"
+		],
+		"contents": [
+			"",
+			"echo something",
+			"",
+			"",
+			"updated guidance",
+			"prepared",
+			"steer",
+			""
+		]
+	},
+	"loopPreparedToolRemoval": {
+		"llmCalls": 2,
+		"events": [
+			"agent_start",
+			"turn_start",
+			"message_start",
+			"message_end",
+			"system:{\"role\":\"system\",\"content\":\"\",\"timestamp\":1700000000000,\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo tool\",\"parameters\":{\"type\":\"object\",\"required\":[\"value\"],\"properties\":{\"value\":{\"type\":\"string\"}}}}]}",
+			"message_start",
+			"message_end",
+			"message_start",
+			"message_end",
+			"tool_execution_start",
+			"tool_execution_end",
+			"message_start",
+			"message_end",
+			"turn_end",
+			"turn_start",
+			"message_start",
+			"message_end",
+			"system:{\"role\":\"system\",\"content\":\"\",\"timestamp\":1700000000000,\"toolsRemoved\":[{\"name\":\"echo\"}]}",
+			"message_start",
+			"message_end",
+			"turn_end",
+			"agent_end"
+		],
+		"roles": [
+			"system",
+			"user",
+			"assistant",
+			"toolResult",
+			"system",
+			"assistant"
+		]
+	},
+	"loopPreparedMessagesWithoutContext": {
+		"llmCalls": 2,
+		"secondRequestRoles": [
+			"system",
+			"user",
+			"assistant",
+			"toolResult",
+			"system"
+		],
+		"events": [
+			"agent_start",
+			"turn_start",
+			"message_start",
+			"message_end",
+			"system:{\"role\":\"system\",\"content\":\"\",\"timestamp\":1700000000000,\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo tool\",\"parameters\":{\"type\":\"object\",\"required\":[\"value\"],\"properties\":{\"value\":{\"type\":\"string\"}}}}]}",
+			"message_start",
+			"message_end",
+			"message_start",
+			"message_end",
+			"tool_execution_start",
+			"tool_execution_end",
+			"message_start",
+			"message_end",
+			"turn_end",
+			"turn_start",
+			"message_start",
+			"message_end",
+			"system:{\"role\":\"system\",\"content\":\"guide\",\"timestamp\":5}",
+			"message_start",
+			"message_end",
+			"turn_end",
+			"agent_end"
+		],
+		"roles": [
+			"system",
+			"user",
+			"assistant",
+			"toolResult",
+			"system",
+			"assistant"
+		]
+	},
+	"loopDeclarationBeforeCustomMessage": {
+		"requests": [
+			[
+				"system",
+				"user"
+			]
+		],
+		"events": [
+			"agent_start",
+			"turn_start",
+			"message_start",
+			"message_end",
+			"system:{\"role\":\"system\",\"content\":\"\",\"timestamp\":1700000000000,\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"echo tool\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}]}",
+			"message_start",
+			"message_end",
+			"message_start",
+			"message_end",
+			"message_start",
+			"message_end",
+			"turn_end",
+			"agent_end"
+		],
+		"roles": [
+			"system",
+			"notification",
+			"user",
+			"assistant"
+		]
+	},
+	"loopFinishTurnEnd": {
+		"llmCalls": 1,
+		"executed": [
+			"hello"
+		],
+		"steeringPolls": 1,
+		"followUpPolls": 0,
+		"callbackToolResultIds": [
+			"tool-1"
+		],
+		"callbackContextRoles": [
+			"system",
+			"user",
+			"assistant",
+			"toolResult"
+		],
+		"roles": [
+			"system",
+			"user",
+			"assistant",
+			"toolResult"
+		],
+		"events": [
+			"agent_start",
+			"turn_start",
+			"message_start",
+			"message_end",
+			"system:{\"role\":\"system\",\"content\":\"\",\"timestamp\":1700000000000,\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo tool\",\"parameters\":{\"type\":\"object\",\"required\":[\"value\"],\"properties\":{\"value\":{\"type\":\"string\"}}}}]}",
+			"message_start",
+			"message_end",
+			"message_start",
+			"message_end",
+			"tool_execution_start",
+			"tool_execution_end",
+			"message_start",
+			"message_end",
+			"turn_end",
+			"agent_end"
+		]
+	},
+	"loopParallelNotAllTerminate": {
+		"callIndex": 2,
+		"roles": [
+			"system",
+			"user",
+			"assistant",
+			"toolResult",
+			"toolResult",
+			"assistant"
+		]
+	},
+	"loopContinueDeclaresTools": {
+		"events": [
+			"agent_start",
+			"turn_start",
+			"message_start",
+			"message_end",
+			"system:{\"role\":\"system\",\"content\":\"\",\"timestamp\":1700000000000,\"toolsAdded\":[{\"name\":\"echo\",\"description\":\"Echo tool\",\"parameters\":{\"type\":\"object\",\"required\":[\"value\"],\"properties\":{\"value\":{\"type\":\"string\"}}}}]}",
+			"message_start",
+			"message_end",
+			"turn_end",
+			"agent_end"
+		],
+		"roles": [
+			"system",
+			"assistant"
+		]
+	}
+}

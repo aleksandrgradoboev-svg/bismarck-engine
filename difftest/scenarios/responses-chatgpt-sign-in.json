@@ -1,0 +1,43 @@
+{
+  "name": "responses-chatgpt-sign-in",
+  "note": "Upstream 02eed88fd (Go d8532cc): a credential sent to OpenAI itself (provider openai, baseUrl https://api.openai.com/v1) that is not an \"sk-\" API key is a Sign in with ChatGPT access token, and token sharing rejects max_output_tokens, temperature and prompt_cache_retention, so both sides omit them; prompt_cache_key still goes. The other openai-provider scenarios use \"sk-test-key\" so they keep covering those fields, as upstream switched its own tests to \"sk-\" keys.",
+  "backend": "dist",
+  "api": "openai-responses",
+  "entry": "stream",
+  "model": {
+    "id": "gpt-5.5",
+    "name": "GPT-5.5",
+    "api": "openai-responses",
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 1.25,
+      "output": 10,
+      "cacheRead": 0.125,
+      "cacheWrite": 0
+    },
+    "contextWindow": 400000,
+    "maxTokens": 128000
+  },
+  "context": {
+    "systemPrompt": "You are a helpful assistant.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi",
+        "timestamp": 1
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "chatgpt-access-token",
+    "maxTokens": 1024,
+    "temperature": 0.5,
+    "cacheRetention": "long",
+    "sessionId": "session-1"
+  }
+}

@@ -1,0 +1,242 @@
+{
+  "name": "responses-midconvo-additional-tools",
+  "note": "Native variant of responses-deferred-additional-tools (upstream 9e05370b2): compat.supportsMidConvoSystemMessages keeps the mid-transcript system message in place, and it carries content, so its rendered update is sent as a developer message where it sits (after the first tool result; transformMessages holds it behind the pending call until the next assistant message, which does not move it). With supportsAdditionalTools and purely additive tool history, body.tools keeps only the leading message's base_tool and late_tool is loaded by an additional_tools developer item immediately before that update ('anchors OpenAI additions at their developer message'). npm 0.85.1 predated the transcript model; it shipped in pi-ai 0.86.1, and the backend flipped to dist at the 0.87.1 re-pin (README rule).",
+  "backend": "dist",
+  "api": "openai-responses",
+  "entry": "streamSimple",
+  "model": {
+    "id": "gpt-5.6-sol",
+    "name": "GPT-5.6 Sol",
+    "api": "openai-responses",
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 1.25,
+      "output": 10,
+      "cacheRead": 0.125,
+      "cacheWrite": 0
+    },
+    "contextWindow": 400000,
+    "maxTokens": 128000,
+    "compat": {
+      "supportsMidConvoSystemMessages": true,
+      "supportsAdditionalTools": true
+    }
+  },
+  "context": {
+    "systemPrompt": "You are a helpful assistant.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi",
+        "timestamp": 1
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_1|fc_1",
+            "name": "base_tool",
+            "arguments": {
+              "q": "x"
+            }
+          }
+        ],
+        "api": "openai-responses",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "stopReason": "toolUse",
+        "timestamp": 2
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_1|fc_1",
+        "toolName": "base_tool",
+        "content": [
+          {
+            "type": "text",
+            "text": "done"
+          }
+        ],
+        "isError": false,
+        "timestamp": 3
+      },
+      {
+        "role": "system",
+        "content": "late_tool is now available.",
+        "toolsAdded": [
+          {
+            "name": "late_tool",
+            "description": "A tool introduced mid-transcript.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ],
+        "timestamp": 3
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_2|fc_2",
+            "name": "late_tool",
+            "arguments": {
+              "path": "/a"
+            },
+            "namespace": "mcp_fs"
+          }
+        ],
+        "api": "openai-responses",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "stopReason": "toolUse",
+        "timestamp": 4
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_2|fc_2",
+        "toolName": "late_tool",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok"
+          }
+        ],
+        "isError": false,
+        "timestamp": 5
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_3|fc_3",
+            "name": "base_tool",
+            "arguments": {
+              "q": "y"
+            },
+            "namespace": "mcp_other"
+          }
+        ],
+        "api": "openai-responses",
+        "provider": "openai",
+        "model": "gpt-5.4",
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "stopReason": "toolUse",
+        "timestamp": 6
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_3|fc_3",
+        "toolName": "base_tool",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok"
+          }
+        ],
+        "isError": false,
+        "timestamp": 7
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_4|fc_4",
+            "name": "late_tool",
+            "arguments": {
+              "path": "/b"
+            },
+            "namespace": "mcp_fs"
+          }
+        ],
+        "api": "openai-responses",
+        "provider": "openai",
+        "model": "gpt-5.4",
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "stopReason": "toolUse",
+        "timestamp": 8
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_4|fc_4",
+        "toolName": "late_tool",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok"
+          }
+        ],
+        "isError": false,
+        "timestamp": 9
+      },
+      {
+        "role": "user",
+        "content": "next",
+        "timestamp": 10
+      }
+    ],
+    "tools": [
+      {
+        "name": "base_tool",
+        "description": "Base tool.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "q": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "q"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "sk-test-key",
+    "sessionId": "session-responses-midconvo-additional-tools",
+    "maxTokens": 1024
+  }
+}

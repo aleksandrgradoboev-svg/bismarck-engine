@@ -1,0 +1,70 @@
+{
+  "name": "reasoning-details-replay-number-forms",
+  "note": "Upstream 4ca636c5e+b7bb00b93. pi does not replay the provider's BYTES: it replays the object JSON.parse produced, re-serialized by the SDK, so a redundant number form is renormalized on the wire (1.0 -> 1, 1e2 -> 100, -0 -> 0) and a magnitude float64 cannot hold survives validation as Infinity and is written as null. Python-stack providers reached through OpenRouter emit 1.0-style float literals routinely, so this is the reachable half. Post-0.84.2 surface, so backend is src: REQUIRES PI_UPSTREAM_SHA >= b7bb00b93. Shipped in pi-ai 0.84.3 (release 4e58f324f); flipped to backend:\"dist\" — the published build is the stronger ground truth (README rule).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "anthropic/claude-sonnet-5",
+    "name": "Anthropic: Claude Sonnet 5",
+    "api": "openai-completions",
+    "provider": "openrouter",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 2,
+      "output": 10,
+      "cacheRead": 0.2,
+      "cacheWrite": 2.5
+    },
+    "contextWindow": 200000,
+    "maxTokens": 64000
+  },
+  "context": {
+    "systemPrompt": "You read files.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "a",
+        "timestamp": 1
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "thinkingSignature": "[{\"type\":\"reasoning.text\",\"text\":\"t\",\"index\":0,\"conf\":1.0},{\"type\":\"reasoning.text\",\"text\":\"u\",\"index\":1e0,\"scale\":1e2,\"neg\":-0},{\"type\":\"reasoning.summary\",\"summary\":\"s\",\"index\":1e400}]"
+          },
+          {
+            "type": "text",
+            "text": "t"
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "openrouter",
+        "model": "anthropic/claude-sonnet-5",
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "stopReason": "stop",
+        "timestamp": 2
+      },
+      {
+        "role": "user",
+        "content": "b",
+        "timestamp": 3
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "maxTokens": 1024
+  }
+}

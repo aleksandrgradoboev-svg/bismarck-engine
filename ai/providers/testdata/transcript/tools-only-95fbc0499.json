@@ -1,0 +1,203 @@
+{
+	"sha": "95fbc0499",
+	"context": {
+		"messages": [
+			{
+				"role": "system",
+				"content": "",
+				"toolsAdded": [
+					{
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				],
+				"timestamp": 0
+			},
+			{
+				"role": "user",
+				"content": "before",
+				"timestamp": 1
+			}
+		]
+	},
+	"anthropic-messages": {
+		"model": "claude-sonnet-4-5",
+		"messages": [
+			{
+				"role": "user",
+				"content": [
+					{
+						"type": "text",
+						"text": "before",
+						"cache_control": {
+							"type": "ephemeral"
+						}
+					}
+				]
+			}
+		],
+		"max_tokens": 1000,
+		"stream": true,
+		"tools": [
+			{
+				"name": "base_tool",
+				"description": "base_tool tool",
+				"eager_input_streaming": true,
+				"input_schema": {
+					"type": "object",
+					"properties": {},
+					"required": []
+				},
+				"cache_control": {
+					"type": "ephemeral"
+				}
+			}
+		],
+		"thinking": {
+			"type": "disabled"
+		}
+	},
+	"anthropic-messages-oauth": {
+		"model": "claude-sonnet-4-5",
+		"messages": [
+			{
+				"role": "user",
+				"content": [
+					{
+						"type": "text",
+						"text": "before",
+						"cache_control": {
+							"type": "ephemeral"
+						}
+					}
+				]
+			}
+		],
+		"max_tokens": 1000,
+		"stream": true,
+		"betas": [
+			"claude-code-20250219",
+			"oauth-2025-04-20"
+		],
+		"system": [
+			{
+				"type": "text",
+				"text": "You are Claude Code, Anthropic's official CLI for Claude.",
+				"cache_control": {
+					"type": "ephemeral"
+				}
+			}
+		],
+		"tools": [
+			{
+				"name": "base_tool",
+				"description": "base_tool tool",
+				"eager_input_streaming": true,
+				"input_schema": {
+					"type": "object",
+					"properties": {},
+					"required": []
+				},
+				"cache_control": {
+					"type": "ephemeral"
+				}
+			}
+		],
+		"thinking": {
+			"type": "disabled"
+		}
+	},
+	"openai-responses": {
+		"model": "gpt-4.1",
+		"input": [
+			{
+				"role": "user",
+				"content": [
+					{
+						"type": "input_text",
+						"text": "before"
+					}
+				]
+			}
+		],
+		"stream": true,
+		"store": false,
+		"max_output_tokens": 1000,
+		"tools": [
+			{
+				"type": "function",
+				"name": "base_tool",
+				"description": "base_tool tool",
+				"parameters": {
+					"type": "object",
+					"properties": {}
+				}
+			}
+		],
+		"reasoning": {
+			"effort": "none"
+		}
+	},
+	"openai-completions": {
+		"model": "custom-model",
+		"messages": [
+			{
+				"role": "user",
+				"content": "before"
+			}
+		],
+		"stream": true,
+		"stream_options": {
+			"include_usage": true
+		},
+		"store": false,
+		"max_completion_tokens": 1000,
+		"tools": [
+			{
+				"type": "function",
+				"function": {
+					"name": "base_tool",
+					"description": "base_tool tool",
+					"parameters": {
+						"type": "object",
+						"properties": {}
+					}
+				}
+			}
+		]
+	},
+	"google-generative-ai": {
+		"contents": [
+			{
+				"parts": [
+					{
+						"text": "before"
+					}
+				],
+				"role": "user"
+			}
+		],
+		"tools": [
+			{
+				"functionDeclarations": [
+					{
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parametersJsonSchema": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				]
+			}
+		],
+		"generationConfig": {
+			"maxOutputTokens": 1000
+		}
+	},
+	"fauxSerializedContext": "system:tool+:{\"name\":\"base_tool\",\"description\":\"base_tool tool\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}\n\nuser:before"
+}

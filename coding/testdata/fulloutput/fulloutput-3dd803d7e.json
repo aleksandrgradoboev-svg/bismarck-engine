@@ -1,0 +1,435 @@
+{
+	"sha": "3dd803d7e",
+	"node": "v26.4.0",
+	"rows": [
+		{
+			"name": "small output, no temp file",
+			"chunks": [
+				"68656c6c6f0a",
+				"776f726c64"
+			],
+			"readMax": 1048576,
+			"snapshot": {
+				"content": "hello\nworld",
+				"truncated": false,
+				"truncatedBy": null,
+				"totalLines": 2,
+				"totalBytes": 11,
+				"outputLines": 2,
+				"outputBytes": 11,
+				"lastLinePartial": false,
+				"tempFile": false,
+				"tempFileBeforeFinish": false
+			},
+			"full": {
+				"content": "hello\nworld",
+				"truncated": false
+			}
+		},
+		{
+			"name": "no output",
+			"chunks": [],
+			"readMax": 1048576,
+			"snapshot": {
+				"content": "",
+				"truncated": false,
+				"truncatedBy": null,
+				"totalLines": 0,
+				"totalBytes": 0,
+				"outputLines": 0,
+				"outputBytes": 0,
+				"lastLinePartial": false,
+				"tempFile": false,
+				"tempFileBeforeFinish": false
+			},
+			"full": {
+				"content": "",
+				"truncated": false
+			}
+		},
+		{
+			"name": "a byte-order mark, no temp file",
+			"chunks": [
+				"efbbbf610a"
+			],
+			"readMax": 1048576,
+			"snapshot": {
+				"content": "a\n",
+				"truncated": false,
+				"truncatedBy": null,
+				"totalLines": 1,
+				"totalBytes": 2,
+				"outputLines": 1,
+				"outputBytes": 2,
+				"lastLinePartial": false,
+				"tempFile": false,
+				"tempFileBeforeFinish": false
+			},
+			"full": {
+				"content": "a\n",
+				"truncated": false
+			}
+		},
+		{
+			"name": "invalid bytes, no temp file",
+			"chunks": [
+				"61ff62e282"
+			],
+			"readMax": 1048576,
+			"snapshot": {
+				"content": "a�b�",
+				"truncated": false,
+				"truncatedBy": null,
+				"totalLines": 1,
+				"totalBytes": 8,
+				"outputLines": 1,
+				"outputBytes": 8,
+				"lastLinePartial": false,
+				"tempFile": false,
+				"tempFileBeforeFinish": false
+			},
+			"full": {
+				"content": "a�b�",
+				"truncated": false
+			}
+		},
+		{
+			"name": "a character split across chunks",
+			"chunks": [
+				"61e2",
+				"82ac62"
+			],
+			"readMax": 1048576,
+			"snapshot": {
+				"content": "a€b",
+				"truncated": false,
+				"truncatedBy": null,
+				"totalLines": 1,
+				"totalBytes": 5,
+				"outputLines": 1,
+				"outputBytes": 5,
+				"lastLinePartial": false,
+				"tempFile": false,
+				"tempFileBeforeFinish": false
+			},
+			"full": {
+				"content": "a€b",
+				"truncated": false
+			}
+		},
+		{
+			"name": "a temp file under readMax",
+			"chunks": [
+				"310a320a330a"
+			],
+			"maxLines": 2,
+			"maxBytes": 1000,
+			"readMax": 1000,
+			"snapshot": {
+				"content": "2\n3",
+				"truncated": true,
+				"truncatedBy": "lines",
+				"totalLines": 3,
+				"totalBytes": 6,
+				"outputLines": 2,
+				"outputBytes": 3,
+				"lastLinePartial": false,
+				"tempFile": true,
+				"tempFileBeforeFinish": true
+			},
+			"full": {
+				"content": "1\n2\n3\n",
+				"truncated": false
+			}
+		},
+		{
+			"name": "over readMax",
+			"chunks": [
+				"30313233343536373839",
+				"4142434445464748494a"
+			],
+			"maxBytes": 8,
+			"readMax": 10,
+			"snapshot": {
+				"content": "CDEFGHIJ",
+				"truncated": true,
+				"truncatedBy": "bytes",
+				"totalLines": 1,
+				"totalBytes": 20,
+				"outputLines": 1,
+				"outputBytes": 8,
+				"lastLinePartial": true,
+				"tempFile": true,
+				"tempFileBeforeFinish": true
+			},
+			"full": {
+				"content": "01234\n\n[... 10 bytes omitted ...]\n\nFGHIJ",
+				"truncated": true
+			}
+		},
+		{
+			"name": "the head cuts a character",
+			"chunks": [
+				"61626364c3a9505152535455565758595a",
+				"c3a931323334"
+			],
+			"maxBytes": 5,
+			"readMax": 10,
+			"snapshot": {
+				"content": "1234",
+				"truncated": true,
+				"truncatedBy": "bytes",
+				"totalLines": 1,
+				"totalBytes": 23,
+				"outputLines": 1,
+				"outputBytes": 4,
+				"lastLinePartial": true,
+				"tempFile": true,
+				"tempFileBeforeFinish": true
+			},
+			"full": {
+				"content": "abcd\n\n[... 13 bytes omitted ...]\n\n1234",
+				"truncated": true
+			}
+		},
+		{
+			"name": "a byte-order mark leads the head",
+			"chunks": [
+				"efbbbf68656c6c6f20776f726c64207461696c21"
+			],
+			"maxBytes": 5,
+			"readMax": 10,
+			"snapshot": {
+				"content": "tail!",
+				"truncated": true,
+				"truncatedBy": "bytes",
+				"totalLines": 1,
+				"totalBytes": 17,
+				"outputLines": 1,
+				"outputBytes": 5,
+				"lastLinePartial": true,
+				"tempFile": true,
+				"tempFileBeforeFinish": true
+			},
+			"full": {
+				"content": "he\n\n[... 10 bytes omitted ...]\n\ntail!",
+				"truncated": true
+			}
+		},
+		{
+			"name": "a byte-order mark leads the tail",
+			"chunks": [
+				"41414141414141414141efbbbf7a7a"
+			],
+			"maxBytes": 5,
+			"readMax": 10,
+			"snapshot": {
+				"content": "﻿zz",
+				"truncated": true,
+				"truncatedBy": "bytes",
+				"totalLines": 1,
+				"totalBytes": 15,
+				"outputLines": 1,
+				"outputBytes": 5,
+				"lastLinePartial": true,
+				"tempFile": true,
+				"tempFileBeforeFinish": true
+			},
+			"full": {
+				"content": "AAAAA\n\n[... 5 bytes omitted ...]\n\nzz",
+				"truncated": true
+			}
+		},
+		{
+			"name": "the head ends in an invalid sequence",
+			"chunks": [
+				"616263e08078787878787878787878"
+			],
+			"maxBytes": 5,
+			"readMax": 10,
+			"snapshot": {
+				"content": "xxxxx",
+				"truncated": true,
+				"truncatedBy": "bytes",
+				"totalLines": 1,
+				"totalBytes": 19,
+				"outputLines": 1,
+				"outputBytes": 5,
+				"lastLinePartial": true,
+				"tempFile": true,
+				"tempFileBeforeFinish": true
+			},
+			"full": {
+				"content": "abc��\n\n[... 5 bytes omitted ...]\n\nxxxxx",
+				"truncated": true
+			}
+		},
+		{
+			"name": "the tail ends in a cut character",
+			"chunks": [
+				"79797979797979797979616263e282"
+			],
+			"maxBytes": 5,
+			"readMax": 10,
+			"snapshot": {
+				"content": "bc�",
+				"truncated": true,
+				"truncatedBy": "bytes",
+				"totalLines": 1,
+				"totalBytes": 16,
+				"outputLines": 1,
+				"outputBytes": 5,
+				"lastLinePartial": true,
+				"tempFile": true,
+				"tempFileBeforeFinish": true
+			},
+			"full": {
+				"content": "yyyyy\n\n[... 5 bytes omitted ...]\n\nabc�",
+				"truncated": true
+			}
+		},
+		{
+			"name": "an odd readMax",
+			"chunks": [
+				"6162636465666768696a6b6c6d6e6f707172737475"
+			],
+			"maxBytes": 5,
+			"readMax": 11,
+			"snapshot": {
+				"content": "qrstu",
+				"truncated": true,
+				"truncatedBy": "bytes",
+				"totalLines": 1,
+				"totalBytes": 21,
+				"outputLines": 1,
+				"outputBytes": 5,
+				"lastLinePartial": true,
+				"tempFile": true,
+				"tempFileBeforeFinish": true
+			},
+			"full": {
+				"content": "abcde\n\n[... 10 bytes omitted ...]\n\npqrstu",
+				"truncated": true
+			}
+		},
+		{
+			"name": "the tail is all continuation bytes",
+			"chunks": [
+				"303132333435363738398080808080"
+			],
+			"maxBytes": 5,
+			"readMax": 10,
+			"snapshot": {
+				"content": "�",
+				"truncated": true,
+				"truncatedBy": "bytes",
+				"totalLines": 1,
+				"totalBytes": 25,
+				"outputLines": 1,
+				"outputBytes": 3,
+				"lastLinePartial": true,
+				"tempFile": true,
+				"tempFileBeforeFinish": true
+			},
+			"full": {
+				"content": "01234\n\n[... 5 bytes omitted ...]\n\n",
+				"truncated": true
+			}
+		},
+		{
+			"name": "invalid bytes and a cut character in the snapshot",
+			"chunks": [
+				"61ff62",
+				"e282"
+			],
+			"readMax": 1048576,
+			"snapshot": {
+				"content": "a�b�",
+				"truncated": false,
+				"truncatedBy": null,
+				"totalLines": 1,
+				"totalBytes": 8,
+				"outputLines": 1,
+				"outputBytes": 8,
+				"lastLinePartial": false,
+				"tempFile": false,
+				"tempFileBeforeFinish": false
+			},
+			"full": {
+				"content": "a�b�",
+				"truncated": false
+			}
+		},
+		{
+			"name": "a byte-order mark in the snapshot",
+			"chunks": [
+				"efbbbf68690a"
+			],
+			"readMax": 1048576,
+			"snapshot": {
+				"content": "hi\n",
+				"truncated": false,
+				"truncatedBy": null,
+				"totalLines": 1,
+				"totalBytes": 3,
+				"outputLines": 1,
+				"outputBytes": 3,
+				"lastLinePartial": false,
+				"tempFile": false,
+				"tempFileBeforeFinish": false
+			},
+			"full": {
+				"content": "hi\n",
+				"truncated": false
+			}
+		},
+		{
+			"name": "invalid bytes count decoded",
+			"chunks": [
+				"ffffff"
+			],
+			"maxBytes": 8,
+			"readMax": 1048576,
+			"snapshot": {
+				"content": "��",
+				"truncated": true,
+				"truncatedBy": "bytes",
+				"totalLines": 1,
+				"totalBytes": 9,
+				"outputLines": 1,
+				"outputBytes": 6,
+				"lastLinePartial": true,
+				"tempFile": true,
+				"tempFileBeforeFinish": true
+			},
+			"full": {
+				"content": "���",
+				"truncated": false
+			}
+		},
+		{
+			"name": "a byte-order mark counts in the raw bytes",
+			"chunks": [
+				"efbbbf6162636465"
+			],
+			"maxBytes": 5,
+			"readMax": 1048576,
+			"snapshot": {
+				"content": "abcde",
+				"truncated": false,
+				"truncatedBy": null,
+				"totalLines": 1,
+				"totalBytes": 5,
+				"outputLines": 1,
+				"outputBytes": 5,
+				"lastLinePartial": false,
+				"tempFile": true,
+				"tempFileBeforeFinish": true
+			},
+			"full": {
+				"content": "abcde",
+				"truncated": false
+			}
+		}
+	]
+}

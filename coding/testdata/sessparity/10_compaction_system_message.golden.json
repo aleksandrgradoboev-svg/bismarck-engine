@@ -1,0 +1,115 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "text": "",
+      "stringContent": true,
+      "message": {
+        "role": "system",
+        "content": "",
+        "sections": {
+          "preamble": "v2",
+          "cwd": "<cwd>\n/a\n</cwd>"
+        },
+        "toolsAdded": [
+          {
+            "name": "read",
+            "description": "Read a file",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "offset": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        ],
+        "timestamp": 1789603207000
+      }
+    },
+    {
+      "role": "user",
+      "text": "The conversation history before this point was compacted into the following summary:\n\n<summary>\nearlier\n</summary>"
+    },
+    {
+      "role": "assistant",
+      "text": "first"
+    },
+    {
+      "role": "user",
+      "text": "two"
+    },
+    {
+      "role": "assistant",
+      "text": "second"
+    },
+    {
+      "role": "user",
+      "text": "three"
+    },
+    {
+      "role": "system",
+      "text": "extra instructions",
+      "stringContent": true,
+      "message": {
+        "role": "system",
+        "content": "extra instructions",
+        "sections": {
+          "cwd": "<cwd>\n/b\n</cwd>"
+        },
+        "timestamp": 1789603209000,
+        "toolsRemoved": [
+          {
+            "name": "read"
+          }
+        ]
+      }
+    },
+    {
+      "role": "assistant",
+      "text": "third"
+    }
+  ],
+  "entries": [
+    {
+      "id": "a7",
+      "messages": 2
+    },
+    {
+      "id": "a3",
+      "messages": 1
+    },
+    {
+      "id": "a5",
+      "messages": 1
+    },
+    {
+      "id": "a6",
+      "messages": 1
+    },
+    {
+      "id": "a8",
+      "messages": 1
+    },
+    {
+      "id": "a9",
+      "messages": 1
+    },
+    {
+      "id": "a10",
+      "messages": 1
+    }
+  ]
+}

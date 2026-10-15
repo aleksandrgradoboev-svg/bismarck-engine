@@ -1,0 +1,74 @@
+{
+  "name": "empty-text-part-openai-completions",
+  "note": "Upstream 1b6ddca87 (pi #9797): openai-completions drops empty text parts from array-form user content, so an image-only message carries no {type:\"text\",text:\"\"} part, and a message of only empty text is skipped. Post-dated the 0.87.0 build (against it this scenario FAILs: $.messages has 4 elements, not 3). Shipped in pi-ai 0.87.1; backend flipped to dist (README rule).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "gpt-4o-mini",
+    "name": "GPT-4o mini",
+    "api": "openai-completions",
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "reasoning": false,
+    "input": [
+      "text",
+      "image"
+    ],
+    "cost": {
+      "input": 0.15,
+      "output": 0.6,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "contextWindow": 128000,
+    "maxTokens": 16384
+  },
+  "context": {
+    "systemPrompt": "You are helpful.",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": ""
+          },
+          {
+            "type": "image",
+            "data": "ZmFrZQ==",
+            "mimeType": "image/png"
+          }
+        ],
+        "timestamp": 1
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": ""
+          }
+        ],
+        "timestamp": 2
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Describe it."
+          },
+          {
+            "type": "text",
+            "text": ""
+          }
+        ],
+        "timestamp": 3
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key"
+  }
+}

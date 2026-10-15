@@ -1,0 +1,39 @@
+{
+  "name": "deepseek-fix-custom",
+  "note": "Upstream c185d4123 (Go b71388d): custom model hitting the baseUrl-substring ('deepseek.com') route into isDeepSeek — mirrors the upstream test's localOpenAICompletionsModel-based custom-deepseek case (maxTokens 123 -> max_tokens, never max_completion_tokens). Pin 31b513e31 contains the fix sha, so the default PI_UPSTREAM_SHA reference carries it. Shipped in pi-ai 0.84.2; backend flipped to dist (README rule).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "custom-deepseek-model",
+    "name": "Custom DeepSeek Model",
+    "api": "openai-completions",
+    "provider": "custom-deepseek",
+    "baseUrl": "https://api.deepseek.com",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "contextWindow": 128000,
+    "maxTokens": 8192
+  },
+  "context": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hi",
+        "timestamp": 1
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test",
+    "maxTokens": 123
+  }
+}

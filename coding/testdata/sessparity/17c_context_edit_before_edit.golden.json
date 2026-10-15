@@ -1,0 +1,27 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "text": "q"
+    },
+    {
+      "role": "assistant",
+      "text": "original answer"
+    }
+  ],
+  "entries": [
+    {
+      "id": "g1",
+      "messages": 1
+    },
+    {
+      "id": "g2",
+      "messages": 1
+    }
+  ]
+}

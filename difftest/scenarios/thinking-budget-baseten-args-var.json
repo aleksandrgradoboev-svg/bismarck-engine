@@ -1,0 +1,55 @@
+{
+  "name": "thinking-budget-baseten-args-var",
+  "note": "Upstream b23741269. The budget is threaded into BOTH buildChatTemplateValues call sites; this covers the baseten one (chat_template_args), which upstream's own suite does not test. reasoning high -> thinking_budget 15360. backend src (post-0.84.2): REQUIRES PI_UPSTREAM_SHA >= b23741269 (at the older pin pi emits no budget key at all and this FAILs). Shipped in pi-ai 0.84.3 (release 4e58f324f); flipped to backend:\"dist\" — the published build is the stronger ground truth (README rule).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "orderSensitivePaths": [
+    "$.chat_template_args"
+  ],
+  "model": {
+    "id": "custom-baseten-budget",
+    "name": "Baseten reasoning model",
+    "api": "openai-completions",
+    "provider": "baseten",
+    "baseUrl": "https://inference.baseten.co/v1",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "contextWindow": 128000,
+    "maxTokens": 16384,
+    "compat": {
+      "thinkingFormat": "baseten",
+      "supportsReasoningEffort": true,
+      "chatTemplateArgs": {
+        "thinking": {
+          "$var": "thinking.enabled"
+        },
+        "thinking_budget": {
+          "$var": "thinking.budget"
+        }
+      }
+    }
+  },
+  "context": {
+    "systemPrompt": "sys",
+    "messages": [
+      {
+        "role": "user",
+        "content": "think",
+        "timestamp": 1
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "reasoning": "high"
+  }
+}

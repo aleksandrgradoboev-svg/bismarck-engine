@@ -1,0 +1,16 @@
+# Generated per run: the captured wire bytes from both sides.
+out/
+
+# Upstream TypeScript extracted read-only by `git archive <sha>` for "src"
+# scenarios, plus the node_modules symlink run.sh drops beside it. Rebuilt on
+# demand, tens of MB, and reproducible from ~/.cache/pi-upstream.
+pisrc/
+
+# Compiled Go side of the harness.
+port/pidiff
+port/port
+
+# npm's own artefacts on the pi side; the harness pulls the real build from
+# ~/.cache/pi-npm and needs nothing installed here.
+pi/node_modules/
+pi/package-lock.json

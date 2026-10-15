@@ -1,0 +1,1118 @@
+{
+	"version": "0.87.1",
+	"contextWindow": 2000,
+	"settings": {
+		"enabled": true,
+		"reserveTokens": 200,
+		"keepRecentTokens": 150
+	},
+	"scenarios": [
+		{
+			"name": "stale-usage-in-kept-range",
+			"entries": [
+				{
+					"type": "session",
+					"version": 3,
+					"id": "01a0ceab-3521-722d-ae3f-902c8c73c3b0",
+					"timestamp": "2026-09-23T14:28:41.890Z",
+					"cwd": "/tmp/capture-trigger"
+				},
+				{
+					"type": "message",
+					"id": "766b45dd",
+					"parentId": null,
+					"timestamp": "2026-09-23T14:28:41.891Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q1"
+							}
+						],
+						"timestamp": 1790170121890
+					}
+				},
+				{
+					"type": "message",
+					"id": "53e3ea87",
+					"parentId": "766b45dd",
+					"timestamp": "2026-09-23T14:28:41.891Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a1"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 900,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 900,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790170121891
+					}
+				},
+				{
+					"type": "message",
+					"id": "076b0d18",
+					"parentId": "53e3ea87",
+					"timestamp": "2026-09-23T14:28:41.892Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q2"
+							}
+						],
+						"timestamp": 1790170121892
+					}
+				},
+				{
+					"type": "message",
+					"id": "08db6fb3",
+					"parentId": "076b0d18",
+					"timestamp": "2026-09-23T14:28:41.892Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a2 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 1900,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 1900,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790170121893
+					}
+				},
+				{
+					"type": "compaction",
+					"id": "96d3f768",
+					"parentId": "08db6fb3",
+					"timestamp": "2026-09-23T14:28:41.892Z",
+					"summary": "## Goal\nold work",
+					"firstKeptEntryId": "076b0d18",
+					"tokensBefore": 1900,
+					"details": {
+						"readFiles": [],
+						"modifiedFiles": []
+					},
+					"fromHook": false
+				}
+			],
+			"prepared": false,
+			"prompt": "q3",
+			"requests": [
+				{
+					"prompt": [
+						"user:The conversation history before this point was compacted into the following summary:\n\n<summary>\n## Goal\nold work\n</summary>",
+						"user:q2",
+						"assistant:a2 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem",
+						"user:q3"
+					]
+				}
+			]
+		},
+		{
+			"name": "stale-usage-then-error",
+			"entries": [
+				{
+					"type": "session",
+					"version": 3,
+					"id": "01a0ceab-352f-722d-ae3f-902e5af98cf0",
+					"timestamp": "2026-09-23T14:28:41.903Z",
+					"cwd": "/tmp/capture-trigger"
+				},
+				{
+					"type": "message",
+					"id": "e8caa3cb",
+					"parentId": null,
+					"timestamp": "2026-09-23T14:28:41.903Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q1"
+							}
+						],
+						"timestamp": 1790170121890
+					}
+				},
+				{
+					"type": "message",
+					"id": "ae3cf9af",
+					"parentId": "e8caa3cb",
+					"timestamp": "2026-09-23T14:28:41.903Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a1"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 900,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 900,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790170121891
+					}
+				},
+				{
+					"type": "message",
+					"id": "c85adf2d",
+					"parentId": "ae3cf9af",
+					"timestamp": "2026-09-23T14:28:41.903Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q2"
+							}
+						],
+						"timestamp": 1790170121892
+					}
+				},
+				{
+					"type": "message",
+					"id": "478d6547",
+					"parentId": "c85adf2d",
+					"timestamp": "2026-09-23T14:28:41.903Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a2 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 1900,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 1900,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790170121893
+					}
+				},
+				{
+					"type": "compaction",
+					"id": "c4354c2b",
+					"parentId": "478d6547",
+					"timestamp": "2026-09-23T14:28:41.904Z",
+					"summary": "## Goal\nold work",
+					"firstKeptEntryId": "c85adf2d",
+					"tokensBefore": 1900,
+					"details": {
+						"readFiles": [],
+						"modifiedFiles": []
+					},
+					"fromHook": false
+				},
+				{
+					"type": "message",
+					"id": "56a01fb3",
+					"parentId": "c4354c2b",
+					"timestamp": "2026-09-23T14:28:41.904Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q3"
+							}
+						],
+						"timestamp": 1790177321890
+					}
+				},
+				{
+					"type": "message",
+					"id": "d047f849",
+					"parentId": "56a01fb3",
+					"timestamp": "2026-09-23T14:28:41.904Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": ""
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "error",
+						"errorMessage": "upstream unavailable",
+						"timestamp": 1790177321891
+					}
+				}
+			],
+			"prepared": true,
+			"prompt": "q4",
+			"requests": [
+				{
+					"prompt": [
+						"user:The conversation history before this point was compacted into the following summary:\n\n<summary>\n## Goal\nold work\n</summary>",
+						"user:q2",
+						"assistant:a2 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem",
+						"user:q3",
+						"assistant:",
+						"user:q4"
+					]
+				}
+			]
+		},
+		{
+			"name": "fresh-usage-over-threshold",
+			"entries": [
+				{
+					"type": "session",
+					"version": 3,
+					"id": "01a0ceab-3534-722d-ae3f-9031f05c3a01",
+					"timestamp": "2026-09-23T14:28:41.908Z",
+					"cwd": "/tmp/capture-trigger"
+				},
+				{
+					"type": "message",
+					"id": "f28a4f83",
+					"parentId": null,
+					"timestamp": "2026-09-23T14:28:41.908Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q1"
+							}
+						],
+						"timestamp": 1790170121890
+					}
+				},
+				{
+					"type": "message",
+					"id": "eba10ccc",
+					"parentId": "f28a4f83",
+					"timestamp": "2026-09-23T14:28:41.908Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a1"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 900,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 900,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790170121891
+					}
+				},
+				{
+					"type": "message",
+					"id": "0b11d88b",
+					"parentId": "eba10ccc",
+					"timestamp": "2026-09-23T14:28:41.908Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q2"
+							}
+						],
+						"timestamp": 1790170121892
+					}
+				},
+				{
+					"type": "message",
+					"id": "159b0020",
+					"parentId": "0b11d88b",
+					"timestamp": "2026-09-23T14:28:41.909Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a2 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 1900,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 1900,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790170121893
+					}
+				},
+				{
+					"type": "compaction",
+					"id": "9eb04696",
+					"parentId": "159b0020",
+					"timestamp": "2026-09-23T14:28:41.909Z",
+					"summary": "## Goal\nold work",
+					"firstKeptEntryId": "0b11d88b",
+					"tokensBefore": 1900,
+					"details": {
+						"readFiles": [],
+						"modifiedFiles": []
+					},
+					"fromHook": false
+				},
+				{
+					"type": "message",
+					"id": "e6f8320b",
+					"parentId": "9eb04696",
+					"timestamp": "2026-09-23T14:28:41.909Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q3"
+							}
+						],
+						"timestamp": 1790177321890
+					}
+				},
+				{
+					"type": "message",
+					"id": "f4430405",
+					"parentId": "e6f8320b",
+					"timestamp": "2026-09-23T14:28:41.909Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a3 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 1900,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 1900,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790177321891
+					}
+				}
+			],
+			"prepared": true,
+			"prompt": "q4",
+			"requests": [
+				{
+					"summarization": "<conversation>\n[User]: q2\n\n[Assistant]: a2 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem\n</conversation>\n\n<previous-summary>\n## Goal\nold work\n</previous-summary>\n\nThe messages above are NEW conversation messages to incorporate into the existing summary provided in <previous-summary> tags.\n\nUpdate the existing structured summary with new information. RULES:\n- PRESERVE all existing information from the previous summary\n- ADD new progress, decisions, and context from the new messages\n- UPDATE the Progress section: move items from \"In Progress\" to \"Done\" when completed\n- UPDATE \"Next Steps\" based on what was accomplished\n- PRESERVE exact file paths, function names, and error messages\n- If something is no longer relevant, you may remove it\n\nUse this EXACT format:\n\n## Goal\n[Preserve existing goals, add new ones if the task expanded]\n\n## Constraints & Preferences\n- [Preserve existing, add new ones discovered]\n\n## Progress\n### Done\n- [x] [Include previously done items AND newly completed items]\n\n### In Progress\n- [ ] [Current work - update based on progress]\n\n### Blocked\n- [Current blockers - remove if resolved]\n\n## Key Decisions\n- **[Decision]**: [Brief rationale] (preserve all previous, add new)\n\n## Next Steps\n1. [Update based on current state]\n\n## Critical Context\n- [Preserve important context, add new if needed]\n\nKeep each section concise. Preserve exact file paths, function names, and error messages."
+				},
+				{
+					"summarization": "# Conversation\n[User]: q3\n\n# Instructions\nThe messages above are earlier context from an ongoing conversation. Later messages are stored separately and do not need to be reconstructed.\n\nCreate a concise checkpoint of the user's request and the progress shown above. This checkpoint will be placed before the later messages so the conversation can continue with the necessary context.\n\n## Original Request\n[What did the user ask for?]\n\n## Progress So Far\n- [Key decisions and work completed in these messages]\n\n## Context Needed to Continue\n- [Information from these messages needed to understand the later work]\n\nOnly summarize information explicitly present above. Do not infer or recreate later messages."
+				},
+				{
+					"prompt": [
+						"user:The conversation history before this point was compacted into the following summary:\n\n<summary>\nSUMMARY 1\n\n---\n\n**Turn Context (split turn):**\n\nSUMMARY 2\n</summary>",
+						"assistant:a3 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem",
+						"user:q4"
+					]
+				}
+			]
+		},
+		{
+			"name": "fresh-usage-under-threshold",
+			"entries": [
+				{
+					"type": "session",
+					"version": 3,
+					"id": "01a0ceab-353a-722d-ae3f-9037bee2b4dd",
+					"timestamp": "2026-09-23T14:28:41.914Z",
+					"cwd": "/tmp/capture-trigger"
+				},
+				{
+					"type": "message",
+					"id": "cd1e4ecb",
+					"parentId": null,
+					"timestamp": "2026-09-23T14:28:41.914Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q1"
+							}
+						],
+						"timestamp": 1790170121890
+					}
+				},
+				{
+					"type": "message",
+					"id": "5700fc48",
+					"parentId": "cd1e4ecb",
+					"timestamp": "2026-09-23T14:28:41.915Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a1"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 900,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 900,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790170121891
+					}
+				},
+				{
+					"type": "message",
+					"id": "a31eb447",
+					"parentId": "5700fc48",
+					"timestamp": "2026-09-23T14:28:41.915Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q2"
+							}
+						],
+						"timestamp": 1790170121892
+					}
+				},
+				{
+					"type": "message",
+					"id": "f41829e8",
+					"parentId": "a31eb447",
+					"timestamp": "2026-09-23T14:28:41.915Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a2 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 1900,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 1900,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790170121893
+					}
+				},
+				{
+					"type": "compaction",
+					"id": "ed216fb8",
+					"parentId": "f41829e8",
+					"timestamp": "2026-09-23T14:28:41.915Z",
+					"summary": "## Goal\nold work",
+					"firstKeptEntryId": "a31eb447",
+					"tokensBefore": 1900,
+					"details": {
+						"readFiles": [],
+						"modifiedFiles": []
+					},
+					"fromHook": false
+				},
+				{
+					"type": "message",
+					"id": "5d05a84a",
+					"parentId": "ed216fb8",
+					"timestamp": "2026-09-23T14:28:41.915Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q3"
+							}
+						],
+						"timestamp": 1790177321890
+					}
+				},
+				{
+					"type": "message",
+					"id": "e2847794",
+					"parentId": "5d05a84a",
+					"timestamp": "2026-09-23T14:28:41.915Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a3 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 100,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 100,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790177321891
+					}
+				}
+			],
+			"prepared": true,
+			"prompt": "q4",
+			"requests": [
+				{
+					"prompt": [
+						"user:The conversation history before this point was compacted into the following summary:\n\n<summary>\n## Goal\nold work\n</summary>",
+						"user:q2",
+						"assistant:a2 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem",
+						"user:q3",
+						"assistant:a3 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem",
+						"user:q4"
+					]
+				}
+			]
+		},
+		{
+			"name": "stale-usage-then-system-patches",
+			"entries": [
+				{
+					"type": "session",
+					"version": 3,
+					"id": "01a0ceab-353e-722d-ae3f-903a479246ad",
+					"timestamp": "2026-09-23T14:28:41.918Z",
+					"cwd": "/tmp/capture-trigger"
+				},
+				{
+					"type": "message",
+					"id": "600e9c0a",
+					"parentId": null,
+					"timestamp": "2026-09-23T14:28:41.918Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q1"
+							}
+						],
+						"timestamp": 1790170121890
+					}
+				},
+				{
+					"type": "message",
+					"id": "8ff82ca7",
+					"parentId": "600e9c0a",
+					"timestamp": "2026-09-23T14:28:41.918Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a1"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 900,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 900,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790170121891
+					}
+				},
+				{
+					"type": "message",
+					"id": "d90a7d6a",
+					"parentId": "8ff82ca7",
+					"timestamp": "2026-09-23T14:28:41.918Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q2"
+							}
+						],
+						"timestamp": 1790170121892
+					}
+				},
+				{
+					"type": "message",
+					"id": "8615c65b",
+					"parentId": "d90a7d6a",
+					"timestamp": "2026-09-23T14:28:41.918Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a2 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 1900,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 1900,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790170121893
+					}
+				},
+				{
+					"type": "compaction",
+					"id": "db466ab6",
+					"parentId": "8615c65b",
+					"timestamp": "2026-09-23T14:28:41.919Z",
+					"summary": "## Goal\nold work",
+					"firstKeptEntryId": "d90a7d6a",
+					"tokensBefore": 1900,
+					"details": {
+						"readFiles": [],
+						"modifiedFiles": []
+					},
+					"fromHook": false
+				},
+				{
+					"type": "message",
+					"id": "b2a1b7ee",
+					"parentId": "db466ab6",
+					"timestamp": "2026-09-23T14:28:41.919Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"sections": {
+							"preamble": "1 rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule "
+						},
+						"timestamp": 1790177321890
+					}
+				},
+				{
+					"type": "message",
+					"id": "c164e60a",
+					"parentId": "b2a1b7ee",
+					"timestamp": "2026-09-23T14:28:41.919Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"sections": {
+							"preamble": "2 rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule "
+						},
+						"timestamp": 1790177321891
+					}
+				},
+				{
+					"type": "message",
+					"id": "d195e070",
+					"parentId": "c164e60a",
+					"timestamp": "2026-09-23T14:28:41.919Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"sections": {
+							"preamble": "3 rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule "
+						},
+						"timestamp": 1790177321892
+					}
+				},
+				{
+					"type": "message",
+					"id": "f4a5bead",
+					"parentId": "d195e070",
+					"timestamp": "2026-09-23T14:28:41.919Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"sections": {
+							"preamble": "4 rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule "
+						},
+						"timestamp": 1790177321893
+					}
+				},
+				{
+					"type": "message",
+					"id": "dc185346",
+					"parentId": "f4a5bead",
+					"timestamp": "2026-09-23T14:28:41.919Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"sections": {
+							"preamble": "5 rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule "
+						},
+						"timestamp": 1790177321894
+					}
+				},
+				{
+					"type": "message",
+					"id": "0a8eb83a",
+					"parentId": "dc185346",
+					"timestamp": "2026-09-23T14:28:41.919Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"sections": {
+							"preamble": "6 rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule "
+						},
+						"timestamp": 1790177321895
+					}
+				},
+				{
+					"type": "message",
+					"id": "02a1c944",
+					"parentId": "0a8eb83a",
+					"timestamp": "2026-09-23T14:28:41.919Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"sections": {
+							"preamble": "7 rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule rule "
+						},
+						"timestamp": 1790177321896
+					}
+				}
+			],
+			"prepared": true,
+			"prompt": "q3",
+			"requests": [
+				{
+					"prompt": [
+						"user:The conversation history before this point was compacted into the following summary:\n\n<summary>\n## Goal\nold work\n</summary>",
+						"user:q2",
+						"assistant:a2 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem",
+						"user:q3"
+					]
+				}
+			]
+		},
+		{
+			"name": "usage-before-context-edit",
+			"entries": [
+				{
+					"type": "session",
+					"version": 3,
+					"id": "01a0ceab-3543-722d-ae3f-903f5fa2ea3b",
+					"timestamp": "2026-09-23T14:28:41.923Z",
+					"cwd": "/tmp/capture-trigger"
+				},
+				{
+					"type": "message",
+					"id": "dc16ff4e",
+					"parentId": null,
+					"timestamp": "2026-09-23T14:28:41.923Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q1"
+							}
+						],
+						"timestamp": 1790170121890
+					}
+				},
+				{
+					"type": "message",
+					"id": "8f354965",
+					"parentId": "dc16ff4e",
+					"timestamp": "2026-09-23T14:28:41.923Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a1 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 1900,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 1900,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790170121891
+					}
+				},
+				{
+					"type": "context_edit",
+					"id": "0a3fd623",
+					"parentId": "8f354965",
+					"timestamp": "2026-09-23T14:28:41.923Z",
+					"targetId": "dc16ff4e",
+					"replacement": {
+						"content": "q1, shortened"
+					}
+				}
+			],
+			"prepared": true,
+			"prompt": "q2",
+			"requests": [
+				{
+					"prompt": [
+						"user:q1, shortened",
+						"assistant:a1 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem",
+						"user:q2"
+					]
+				}
+			]
+		},
+		{
+			"name": "usage-without-compaction",
+			"entries": [
+				{
+					"type": "session",
+					"version": 3,
+					"id": "01a0ceab-3545-722d-ae3f-9040765ca28b",
+					"timestamp": "2026-09-23T14:28:41.925Z",
+					"cwd": "/tmp/capture-trigger"
+				},
+				{
+					"type": "message",
+					"id": "fd543b39",
+					"parentId": null,
+					"timestamp": "2026-09-23T14:28:41.925Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "q1"
+							}
+						],
+						"timestamp": 1790170121890
+					}
+				},
+				{
+					"type": "message",
+					"id": "aa769fee",
+					"parentId": "fd543b39",
+					"timestamp": "2026-09-23T14:28:41.925Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "a1 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem"
+							}
+						],
+						"api": "faux",
+						"provider": "faux",
+						"model": "faux-1",
+						"usage": {
+							"input": 1900,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 1900,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1790170121891
+					}
+				}
+			],
+			"prepared": true,
+			"prompt": "q2",
+			"requests": [
+				{
+					"summarization": "# Conversation\n[User]: q1\n\n# Instructions\nThe messages above are earlier context from an ongoing conversation. Later messages are stored separately and do not need to be reconstructed.\n\nCreate a concise checkpoint of the user's request and the progress shown above. This checkpoint will be placed before the later messages so the conversation can continue with the necessary context.\n\n## Original Request\n[What did the user ask for?]\n\n## Progress So Far\n- [Key decisions and work completed in these messages]\n\n## Context Needed to Continue\n- [Information from these messages needed to understand the later work]\n\nOnly summarize information explicitly present above. Do not infer or recreate later messages."
+				},
+				{
+					"prompt": [
+						"user:The conversation history before this point was compacted into the following summary:\n\n<summary>\nNo prior history.\n\n---\n\n**Turn Context (split turn):**\n\nSUMMARY 1\n</summary>",
+						"assistant:a1 lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem lorem",
+						"user:q2"
+					]
+				}
+			]
+		}
+	]
+}

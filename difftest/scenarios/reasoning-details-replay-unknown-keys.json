@@ -1,0 +1,93 @@
+{
+  "name": "reasoning-details-replay-unknown-keys",
+  "note": "Upstream 4ca636c5e+b7bb00b93. A reasoning detail's base type is Record<string, JsonValue>, so members pi has no name for are part of the sequence OpenRouter wants back: they must reach the wire with their values, their nesting AND their position intact. orderSensitivePaths is what makes the position part assertable - without it the harness sorts keys before diffing and every key-order line is written but compared against nothing. Also pins id:null accepted, and that an integer-like key ('0') is hoisted to the front by JS OwnPropertyKeys, which is a property of pi's JSON.parse/JSON.stringify round trip rather than of the provider's bytes. Post-0.84.2 surface, so backend is src: REQUIRES PI_UPSTREAM_SHA >= b7bb00b93. Shipped in pi-ai 0.84.3 (release 4e58f324f); flipped to backend:\"dist\" — the published build is the stronger ground truth (README rule).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "anthropic/claude-sonnet-5",
+    "name": "Anthropic: Claude Sonnet 5",
+    "api": "openai-completions",
+    "provider": "openrouter",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 2,
+      "output": 10,
+      "cacheRead": 0.2,
+      "cacheWrite": 2.5
+    },
+    "contextWindow": 200000,
+    "maxTokens": 64000
+  },
+  "context": {
+    "systemPrompt": "You read files.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Read README.md",
+        "timestamp": 1
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "thinkingSignature": "[{\"zz_provider_meta\":{\"beta\":2,\"alpha\":1},\"type\":\"reasoning.text\",\"text\":\"if a < b && c > d then \\u00e9\\u2028ok\",\"id\":null,\"format\":\"openai-responses-v1\",\"index\":0,\"aa_extra\":[1,{\"k\":\"v\"},null,true]},{\"type\":\"reasoning.encrypted\",\"data\":\"ZW5j\",\"id\":\"call_1\",\"custom_flag\":true,\"nothing\":null,\"0\":\"numeric-key\"}]"
+          },
+          {
+            "type": "text",
+            "text": "Reading."
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "openrouter",
+        "model": "anthropic/claude-sonnet-5",
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "stopReason": "stop",
+        "timestamp": 2
+      },
+      {
+        "role": "user",
+        "content": "go on",
+        "timestamp": 3
+      }
+    ],
+    "tools": [
+      {
+        "name": "read",
+        "description": "Read a file.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "orderSensitivePaths": [
+    "$.messages[2].reasoning_details[0]",
+    "$.messages[2].reasoning_details[1]",
+    "$.messages[2].reasoning_details[0].zz_provider_meta"
+  ],
+  "options": {
+    "apiKey": "test-key",
+    "maxTokens": 1024
+  }
+}

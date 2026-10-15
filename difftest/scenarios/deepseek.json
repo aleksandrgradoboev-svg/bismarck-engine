@@ -1,0 +1,107 @@
+{
+  "name": "deepseek",
+  "note": "thinkingFormat 'deepseek' + requiresReasoningContentOnAssistantMessages: assistant turns must carry reasoning_content, and the thinkingLevelMap has explicit nulls for low levels. Upstream c185d4123 (Go b71388d) makes DeepSeek send max_tokens, so the 0.84.1 dist build can no longer be the reference for this surface: backend src until a release ships the fix, then flip back to dist (README rule). Absorbs the interim 'deepseek-fix-builtin' clone. Shipped in pi-ai 0.84.2; backend flipped to dist (README rule).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "deepseek-v4-pro",
+    "name": "DeepSeek V4 Pro",
+    "api": "openai-completions",
+    "baseUrl": "https://api.deepseek.com",
+    "provider": "deepseek",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 0.435,
+      "output": 0.87,
+      "cacheRead": 0.003625,
+      "cacheWrite": 0
+    },
+    "contextWindow": 1000000,
+    "maxTokens": 384000,
+    "compat": {
+      "supportsStore": false,
+      "supportsDeveloperRole": false,
+      "requiresReasoningContentOnAssistantMessages": true,
+      "thinkingFormat": "deepseek"
+    },
+    "thinkingLevelMap": {
+      "minimal": null,
+      "low": null,
+      "medium": null,
+      "high": "high",
+      "max": "max"
+    }
+  },
+  "context": {
+    "systemPrompt": "Reason step by step.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Sort [3,1,2].",
+        "timestamp": 1
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "compare and swap"
+          },
+          {
+            "type": "text",
+            "text": "[1,2,3]"
+          },
+          {
+            "type": "toolCall",
+            "id": "call_ds",
+            "name": "noop",
+            "arguments": {}
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "deepseek",
+        "model": "deepseek-v4-pro",
+        "usage": {
+          "input": 8,
+          "output": 6,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "stopReason": "toolUse",
+        "timestamp": 2
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_ds",
+        "toolName": "noop",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok"
+          }
+        ],
+        "isError": false,
+        "timestamp": 3
+      }
+    ],
+    "tools": [
+      {
+        "name": "noop",
+        "description": "Does nothing.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "reasoning": "max"
+  }
+}

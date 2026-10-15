@@ -1,0 +1,30 @@
+{
+  "name": "long-cache",
+  "note": "Direct OpenAI with cacheRetention 'long': prompt_cache_key + prompt_cache_retention '24h', plus the 64-char session-id clamp.",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "stream",
+  "model": {
+    "id": "gpt-4o",
+    "name": "GPT-4o",
+    "api": "openai-completions",
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "reasoning": false,
+    "input": ["text", "image"],
+    "cost": { "input": 2.5, "output": 10, "cacheRead": 1.25, "cacheWrite": 0 },
+    "contextWindow": 128000,
+    "maxTokens": 16384
+  },
+  "context": {
+    "systemPrompt": "Cache me.",
+    "messages": [
+      { "role": "user", "content": "hello", "timestamp": 1 }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "cacheRetention": "long",
+    "sessionId": "session-0123456789012345678901234567890123456789012345678901234567890123456789"
+  }
+}

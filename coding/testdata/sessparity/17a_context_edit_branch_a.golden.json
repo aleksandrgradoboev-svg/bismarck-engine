@@ -1,0 +1,39 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "text": "q"
+    },
+    {
+      "role": "assistant",
+      "text": "edited on branch A"
+    },
+    {
+      "role": "user",
+      "text": "branch A"
+    }
+  ],
+  "entries": [
+    {
+      "id": "g1",
+      "messages": 1
+    },
+    {
+      "id": "g2",
+      "messages": 1
+    },
+    {
+      "id": "g3",
+      "messages": 0
+    },
+    {
+      "id": "g4",
+      "messages": 1
+    }
+  ]
+}

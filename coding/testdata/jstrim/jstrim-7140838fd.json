@@ -1,0 +1,379 @@
+{
+	"sha": "7140838fd",
+	"pins": {
+		"ignore": {
+			"version": "7.0.8",
+			"integrity": "sha512-YYNsSlXBjMk92SKnkwvB5LOVSa6OznlFUGcsvrFgNJbJCd0M1XKeFVRc8ZByeCqz32FivYNHJVooLmdqrmvp/Q=="
+		},
+		"yaml": {
+			"version": "2.9.0",
+			"integrity": "sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA=="
+		}
+	},
+	"frontmatter": {
+		"keyTrailingNbsp": {
+			"doc": "---\nname : foo\ndescription: d\n---\nbody",
+			"frontmatter": {
+				"name ": "foo",
+				"description": "d"
+			},
+			"body": "body"
+		},
+		"keyTrailingNel": {
+			"doc": "---\nname: foo\ndescription: d\n---\nbody",
+			"frontmatter": {
+				"name": "foo",
+				"description": "d"
+			},
+			"body": "body"
+		},
+		"valueTrailingNbsp": {
+			"doc": "---\nname: foo \ndescription: d\n---\nbody",
+			"frontmatter": {
+				"name": "foo ",
+				"description": "d"
+			},
+			"body": "body"
+		},
+		"valueTrailingNel": {
+			"doc": "---\nname: foo\ndescription: d\n---\nbody",
+			"frontmatter": {
+				"name": "foo",
+				"description": "d"
+			},
+			"body": "body"
+		},
+		"valueTrailingBom": {
+			"doc": "---\nname: foo﻿\ndescription: d\n---\nbody",
+			"frontmatter": {
+				"name": "foo﻿",
+				"description": "d"
+			},
+			"body": "body"
+		},
+		"valueTrailingTab": {
+			"doc": "---\nname: foo\t\ndescription: d\n---\nbody",
+			"frontmatter": {
+				"name": "foo",
+				"description": "d"
+			},
+			"body": "body"
+		},
+		"continuationNbsp": {
+			"doc": "---\ndescription: a\n  b \n---\nbody",
+			"frontmatter": {
+				"description": "a b "
+			},
+			"body": "body"
+		},
+		"continuationNel": {
+			"doc": "---\ndescription: a\n  b\n---\nbody",
+			"frontmatter": {
+				"description": "a b"
+			},
+			"body": "body"
+		},
+		"bodyNel": {
+			"doc": "---\nname: foo\n---\nbody",
+			"frontmatter": {
+				"name": "foo"
+			},
+			"body": "body"
+		},
+		"bodyBom": {
+			"doc": "---\nname: foo\n---\n﻿body﻿",
+			"frontmatter": {
+				"name": "foo"
+			},
+			"body": "body"
+		},
+		"bodyNbsp": {
+			"doc": "---\nname: foo\n---\n body ",
+			"frontmatter": {
+				"name": "foo"
+			},
+			"body": "body"
+		},
+		"streamBomFirstKey": {
+			"doc": "---\n﻿name: foo\ndescription: d\n---\nbody",
+			"frontmatter": {
+				"name": "foo",
+				"description": "d"
+			},
+			"body": "body"
+		},
+		"streamBomAfterBlank": {
+			"doc": "---\n\n﻿name: foo\n---\nbody",
+			"frontmatter": {
+				"name": "foo"
+			},
+			"body": "body"
+		},
+		"streamBomAfterComment": {
+			"doc": "---\n# c\n﻿name: foo\n---\nbody",
+			"frontmatter": {
+				"name": "foo"
+			},
+			"body": "body"
+		},
+		"streamBomEveryLine": {
+			"doc": "---\n﻿\n﻿  \n﻿name: foo\n---\nbody",
+			"frontmatter": {
+				"name": "foo"
+			},
+			"body": "body"
+		},
+		"streamBomComment": {
+			"doc": "---\n﻿# c: x\nname: foo\n---\nbody",
+			"frontmatter": {
+				"name": "foo"
+			},
+			"body": "body"
+		},
+		"streamBomBlock": {
+			"doc": "---\n﻿description: >-\n  a\n  b\n---\nbody",
+			"frontmatter": {
+				"description": "a b"
+			},
+			"body": "body"
+		},
+		"streamBomTwice": {
+			"doc": "---\n﻿﻿name: foo\n---\nbody",
+			"frontmatter": {
+				"﻿name": "foo"
+			},
+			"body": "body"
+		},
+		"documentBom": {
+			"doc": "---\nname: foo\n﻿description: d\n---\nbody",
+			"frontmatter": {
+				"name": "foo",
+				"﻿description": "d"
+			},
+			"body": "body"
+		},
+		"documentBomAfterBlank": {
+			"doc": "---\nname: foo\n\n﻿description: d\n---\nbody",
+			"frontmatter": {
+				"name": "foo",
+				"﻿description": "d"
+			},
+			"body": "body"
+		}
+	},
+	"skills": {
+		"whitespace": {
+			"tree": {
+				".gitignore": "﻿qux\nfoo\nbar \n﻿#comment\nsp ace \n\tlead\nesc\\ 　\ndbl\\\\ \ntri\\\\\\ \ntab\t\nmix\t \nnbsp  \ncr\r\r\necr\\\r\r\nsq \r\r\nspcr\r \nanch/ \nneg\n\\!neg\n/#hash\n//slash\nlone/\\\ntwo\\\\\n",
+				"foo/SKILL.md": "---\nname: foo\ndescription: d\n---\nbody\n",
+				"bar/SKILL.md": "---\nname: bar\ndescription: d\n---\nbody\n",
+				"baz/SKILL.md": "---\nname: baz\ndescription: d\n---\nbody\n",
+				"qux/SKILL.md": "---\nname: qux\ndescription: d\n---\nbody\n",
+				"#comment/SKILL.md": "---\nname: comment\ndescription: d\n---\nbody\n",
+				"sp ace/SKILL.md": "---\nname: space\ndescription: d\n---\nbody\n",
+				"\tlead/SKILL.md": "---\nname: lead\ndescription: d\n---\nbody\n",
+				"esc /SKILL.md": "---\nname: esc\ndescription: d\n---\nbody\n",
+				"dbl\\/SKILL.md": "---\nname: dbl\ndescription: d\n---\nbody\n",
+				"dbl\\ /SKILL.md": "---\nname: dblspace\ndescription: d\n---\nbody\n",
+				"tri\\/SKILL.md": "---\nname: tri\ndescription: d\n---\nbody\n",
+				"tri\\ /SKILL.md": "---\nname: trispace\ndescription: d\n---\nbody\n",
+				"tab/SKILL.md": "---\nname: tab\ndescription: d\n---\nbody\n",
+				"tab\t/SKILL.md": "---\nname: tabtab\ndescription: d\n---\nbody\n",
+				"mix\t/SKILL.md": "---\nname: mix\ndescription: d\n---\nbody\n",
+				"nbsp /SKILL.md": "---\nname: nbsp\ndescription: d\n---\nbody\n",
+				"cr/SKILL.md": "---\nname: cr\ndescription: d\n---\nbody\n",
+				"ecr/SKILL.md": "---\nname: ecr\ndescription: d\n---\nbody\n",
+				"ecr\r/SKILL.md": "---\nname: ecrcr\ndescription: d\n---\nbody\n",
+				"sq/SKILL.md": "---\nname: sq\ndescription: d\n---\nbody\n",
+				"spcr/SKILL.md": "---\nname: spcr\ndescription: d\n---\nbody\n",
+				"spcr\r/SKILL.md": "---\nname: spcrcr\ndescription: d\n---\nbody\n",
+				"anch/SKILL.md": "---\nname: anch\ndescription: d\n---\nbody\n",
+				"nest/anch/SKILL.md": "---\nname: nestanch\ndescription: d\n---\nbody\n",
+				"neg/SKILL.md": "---\nname: neg\ndescription: d\n---\nbody\n",
+				"#hash/SKILL.md": "---\nname: hash\ndescription: d\n---\nbody\n",
+				"slash/SKILL.md": "---\nname: slash\ndescription: d\n---\nbody\n",
+				"nest/slash/SKILL.md": "---\nname: nestslash\ndescription: d\n---\nbody\n",
+				"lone/\\/SKILL.md": "---\nname: lone\ndescription: d\n---\nbody\n",
+				"two\\/SKILL.md": "---\nname: two\ndescription: d\n---\nbody\n",
+				"bomdesc.md": "---\nname: bomdesc\ndescription: \"﻿\"\n---\nbody\n",
+				"neldesc.md": "---\nname: neldesc\ndescription: \"\"\n---\nbody\n",
+				"declared/SKILL.md": "---\nname: declared\ndescription: \"﻿\"\n---\nbody\n"
+			},
+			"names": [
+				"bar",
+				"baz",
+				"comment",
+				"dblspace",
+				"ecr",
+				"esc",
+				"foo",
+				"hash",
+				"lone",
+				"neg",
+				"neldesc",
+				"nestanch",
+				"nestslash",
+				"spcr",
+				"tab",
+				"tri"
+			],
+			"descriptions": {
+				"comment": "d",
+				"hash": "d",
+				"bar": "d",
+				"baz": "d",
+				"dblspace": "d",
+				"ecr": "d",
+				"esc": "d",
+				"foo": "d",
+				"lone": "d",
+				"neg": "d",
+				"neldesc": "",
+				"nestanch": "d",
+				"nestslash": "d",
+				"spcr": "d",
+				"tab": "d",
+				"tri": "d"
+			},
+			"diagnostics": [
+				{
+					"message": "description is required",
+					"path": "declared/SKILL.md"
+				}
+			]
+		},
+		"negateAll": {
+			"tree": {
+				".gitignore": "foo\n!\n",
+				"foo/SKILL.md": "---\nname: foo\ndescription: d\n---\nbody\n",
+				"bar/SKILL.md": "---\nname: bar\ndescription: d\n---\nbody\n"
+			},
+			"names": [
+				"bar",
+				"foo"
+			],
+			"descriptions": {
+				"bar": "d",
+				"foo": "d"
+			},
+			"diagnostics": []
+		},
+		"ignoreAll": {
+			"tree": {
+				".gitignore": "/ \r\r\n",
+				"foo/SKILL.md": "---\nname: foo\ndescription: d\n---\nbody\n",
+				"root.md": "---\nname: root\ndescription: d\n---\nbody\n"
+			},
+			"names": [],
+			"descriptions": {},
+			"diagnostics": []
+		},
+		"blank": {
+			"tree": {
+				".gitignore": "/   \n",
+				"foo/SKILL.md": "---\nname: foo\ndescription: d\n---\nbody\n"
+			},
+			"names": [
+				"foo"
+			],
+			"descriptions": {
+				"foo": "d"
+			},
+			"diagnostics": []
+		}
+	},
+	"gitPaths": {
+		"bom": {
+			"tree": {
+				"main/.git/HEAD": "ref: refs/heads/main\n",
+				"main/.git/worktrees/wt/HEAD": "ref: refs/heads/wt\n",
+				"main/.git/worktrees/wt/commondir": "﻿../..\n",
+				"wt/.git": "﻿gitdir: ../main/.git/worktrees/wt\n"
+			},
+			"result": {
+				"repoDir": "wt",
+				"commonGitDir": "main/.git"
+			}
+		},
+		"nel": {
+			"tree": {
+				"main/.git/HEAD": "ref: refs/heads/main\n",
+				"main/.git/worktrees/wt/HEAD": "ref: refs/heads/wt\n",
+				"wt/.git": "gitdir: ../main/.git/worktrees/wt"
+			},
+			"result": null
+		}
+	},
+	"modelReferences": [
+		{
+			"reference": "﻿anthropic/claude-sonnet-4-5﻿",
+			"match": "anthropic/claude-sonnet-4-5"
+		},
+		{
+			"reference": "anthropic/﻿claude-sonnet-4-5",
+			"match": "anthropic/claude-sonnet-4-5"
+		},
+		{
+			"reference": "anthropic/claude-sonnet-4-5",
+			"match": null
+		},
+		{
+			"reference": "gpt-4o",
+			"match": null
+		},
+		{
+			"reference": "openai / gpt-4o　",
+			"match": "openai/gpt-4o"
+		}
+	],
+	"pngBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+	"images": [
+		{
+			"mimeType": "﻿image/png",
+			"ok": true,
+			"resultMimeType": "image/png",
+			"hints": []
+		},
+		{
+			"mimeType": "image/png",
+			"ok": true,
+			"resultMimeType": "image/png",
+			"hints": [
+				"[Image converted from image/png to image/png.]"
+			]
+		},
+		{
+			"mimeType": "image/png ",
+			"ok": true,
+			"resultMimeType": "image/png",
+			"hints": []
+		}
+	],
+	"sessions": {
+		"cwd": "/var/folders/65/ld880txs7svc2z0nmyf_fbf40000gn/T/pi-jstrim-GFCxRe/project",
+		"files": {
+			"entries.jsonl": "{\"type\":\"session\",\"version\":3,\"id\":\"entries\",\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"cwd\":\"/var/folders/65/ld880txs7svc2z0nmyf_fbf40000gn/T/pi-jstrim-GFCxRe/project\"}\n{\"type\":\"message\",\"id\":\"nbsp\",\"parentId\":null,\"timestamp\":\"2026-01-01T00:00:01.000Z\",\"message\":{\"role\":\"user\",\"content\":\"nbsp\",\"timestamp\":1}} \n{\"type\":\"message\",\"id\":\"nel\",\"parentId\":null,\"timestamp\":\"2026-01-01T00:00:01.000Z\",\"message\":{\"role\":\"user\",\"content\":\"nel\",\"timestamp\":1}}\n﻿{\"type\":\"message\",\"id\":\"bom\",\"parentId\":null,\"timestamp\":\"2026-01-01T00:00:01.000Z\",\"message\":{\"role\":\"user\",\"content\":\"bom\",\"timestamp\":1}}\n{\"type\":\"message\",\"id\":\"cr\",\"parentId\":null,\"timestamp\":\"2026-01-01T00:00:01.000Z\",\"message\":{\"role\":\"user\",\"content\":\"cr\",\"timestamp\":1}}\r\n\t{\"type\":\"message\",\"id\":\"tab\",\"parentId\":null,\"timestamp\":\"2026-01-01T00:00:01.000Z\",\"message\":{\"role\":\"user\",\"content\":\"tab\",\"timestamp\":1}} \n﻿\n\n",
+			"nbsp-header.jsonl": "{\"type\":\"session\",\"version\":3,\"id\":\"nbsp-header\",\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"cwd\":\"/var/folders/65/ld880txs7svc2z0nmyf_fbf40000gn/T/pi-jstrim-GFCxRe/project\"} \n",
+			"nel-header.jsonl": "{\"type\":\"session\",\"version\":3,\"id\":\"nel-header\",\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"cwd\":\"/var/folders/65/ld880txs7svc2z0nmyf_fbf40000gn/T/pi-jstrim-GFCxRe/project\"}\n{\"type\":\"message\",\"id\":\"after-nel\",\"parentId\":null,\"timestamp\":\"2026-01-01T00:00:01.000Z\",\"message\":{\"role\":\"user\",\"content\":\"after-nel\",\"timestamp\":1}}\n",
+			"padded-header.jsonl": "\t{\"type\":\"session\",\"version\":3,\"id\":\"padded-header\",\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"cwd\":\"/var/folders/65/ld880txs7svc2z0nmyf_fbf40000gn/T/pi-jstrim-GFCxRe/project\"}\r\n",
+			"blank-lead.jsonl": "﻿\n\n{\"type\":\"session\",\"version\":3,\"id\":\"blank-lead\",\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"cwd\":\"/var/folders/65/ld880txs7svc2z0nmyf_fbf40000gn/T/pi-jstrim-GFCxRe/project\"}\n"
+		},
+		"entries": [
+			"entries",
+			"cr",
+			"tab"
+		],
+		"messageCounts": {
+			"blank-lead.jsonl": 0,
+			"padded-header.jsonl": 0,
+			"entries.jsonl": 2
+		},
+		"found": {
+			"entries": "entries.jsonl",
+			"nbsp-header": null,
+			"nel-header": null,
+			"padded-header": "padded-header.jsonl",
+			"blank-lead": "blank-lead.jsonl"
+		}
+	}
+}

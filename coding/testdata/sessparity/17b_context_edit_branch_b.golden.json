@@ -1,0 +1,35 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "assistant",
+      "text": "original answer"
+    },
+    {
+      "role": "user",
+      "text": "branch B"
+    }
+  ],
+  "entries": [
+    {
+      "id": "g1",
+      "messages": 0
+    },
+    {
+      "id": "g2",
+      "messages": 1
+    },
+    {
+      "id": "g5",
+      "messages": 0
+    },
+    {
+      "id": "g6",
+      "messages": 1
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+[
+ {
+  "input": {
+   "s": "<a href=\"x\">&amp;</a>"
+  },
+  "json": "{\"s\":\"<a href=\\\"x\\\">&amp;</a>\"}"
+ },
+ {
+  "input": {
+   "s": "line sep para"
+  },
+  "json": "{\"s\":\"line sep para\"}"
+ },
+ {
+  "input": {
+   "s": "back\\u2028slash"
+  },
+  "json": "{\"s\":\"back\\\\u2028slash\"}"
+ },
+ {
+  "input": {
+   "s": "\\ "
+  },
+  "json": "{\"s\":\"\\\\ \"}"
+ },
+ {
+  "input": {
+   "s": "emoji 😀 and é"
+  },
+  "json": "{\"s\":\"emoji 😀 and é\"}"
+ },
+ {
+  "input": {
+   "s": "tab\tnl\ncr\rquote\"bs\\"
+  },
+  "json": "{\"s\":\"tab\\tnl\\ncr\\rquote\\\"bs\\\\\"}"
+ },
+ {
+  "input": {
+   "s": "ctl\u0001\u001f del"
+  },
+  "json": "{\"s\":\"ctl\\u0001\\u001f del\"}"
+ },
+ {
+  "input": {
+   "a": [
+    1,
+    2.5,
+    -0.25,
+    true,
+    null
+   ],
+   "n": {
+    "k": "v"
+   }
+  },
+  "json": "{\"a\":[1,2.5,-0.25,true,null],\"n\":{\"k\":\"v\"}}"
+ },
+ {
+  "input": {},
+  "json": "{}"
+ },
+ {
+  "input": [],
+  "json": "[]"
+ },
+ {
+  "input": "plain",
+  "json": "\"plain\""
+ }
+]

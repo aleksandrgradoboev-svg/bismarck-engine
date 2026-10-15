@@ -1,0 +1,78 @@
+{
+  "name": "tool-choice-with-tools-control",
+  "note": "6b36eb592: an explicitly requested tool_choice is sent whatever the tools param looks like, reverting the `options?.toolChoice && params.tools?.length` guard of fe37e9f9b. Control arm for tool-choice-without-tools-present: with tools present the key is sent, so the pair shows the tools param has stopped mattering rather than the key never being sent. Because fe37e9f9b landed and was reverted entirely after pi-ai 0.84.3 (release 4e58f324f), the published build never contained the guard and matches upstream HEAD again — so backend is back to \"dist\", the stronger reference.",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "gpt-4o-mini",
+    "name": "GPT-4o mini",
+    "api": "openai-completions",
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "reasoning": false,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 0.15,
+      "output": 0.6,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "contextWindow": 128000,
+    "maxTokens": 16384
+  },
+  "context": {
+    "systemPrompt": "You are a helpful assistant.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Summarize the conversation.",
+        "timestamp": 1
+      }
+    ],
+    "tools": [
+      {
+        "name": "read_file",
+        "description": "Read a file.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "list_dir",
+        "description": "List a directory.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "depth": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "maxTokens": 1024,
+    "toolChoice": "none"
+  }
+}

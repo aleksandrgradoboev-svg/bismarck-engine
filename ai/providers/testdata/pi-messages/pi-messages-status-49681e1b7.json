@@ -1,0 +1,12 @@
+{"sha":"49681e1b7","node":"v26.4.0","undici":"8.5.0","body":"{\"error\":{\"message\":\"nope\",\"code\":\"c\"}}","rows":[
+{"name":"theStandardReasonPhrase","statusLine":"HTTP/1.1 401 Unauthorized","errorMessage":"401 Unauthorized: nope (c)","status":401,"statusText":"Unauthorized"},
+{"name":"aReasonPhraseOfTheServersOwn","statusLine":"HTTP/1.1 401 Token Expired","errorMessage":"401 Token Expired: nope (c)","status":401,"statusText":"Token Expired"},
+{"name":"anEmptyReasonPhrase","statusLine":"HTTP/1.1 401 ","errorMessage":"401 : nope (c)","status":401,"statusText":""},
+{"name":"noReasonPhrase","statusLine":"HTTP/1.1 401","errorMessage":"401 : nope (c)","status":401,"statusText":""},
+{"name":"spacesInTheReasonPhraseAreKept","statusLine":"HTTP/1.1 401  two  spaces ","errorMessage":"401  two  spaces : nope (c)","status":401,"statusText":" two  spaces "},
+{"name":"aStatusWithNoStandardReasonPhrase","statusLine":"HTTP/1.1 599 Network Connect Timeout","errorMessage":"599 Network Connect Timeout: nope (c)","status":599,"statusText":"Network Connect Timeout"},
+{"name":"anHTTP10StatusLine","statusLine":"HTTP/1.0 503 Busy","errorMessage":"503 Busy: nope (c)","status":503,"statusText":"Busy"},
+{"name":"aTabInTheReasonPhrase","statusLine":"HTTP/1.1 500 tab\there","errorMessage":"500 tab\there: nope (c)","status":500,"statusText":"tab\there"},
+{"name":"aUTF8ReasonPhrase","statusLine":"HTTP/1.1 500 café","errorMessage":"500 café: nope (c)","status":500,"statusText":"café"},
+{"name":"aReasonPhraseThatIsNotUTF8","statusLineBase64":"SFRUUC8xLjEgNTAwIGNhZukgw78=","errorMessage":"500 caf� ÿ: nope (c)","status":500,"statusText":"caf� ÿ"}
+]}

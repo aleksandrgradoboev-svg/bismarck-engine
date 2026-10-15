@@ -1,0 +1,70 @@
+{
+  "name": "openrouter",
+  "note": "thinkingFormat 'openrouter' (reasoning object) + cacheControlFormat 'anthropic' (cache_control breakpoints injected into an OpenAI-shaped body).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "anthropic/claude-sonnet-5",
+    "name": "Anthropic: Claude Sonnet 5",
+    "api": "openai-completions",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "provider": "openrouter",
+    "reasoning": true,
+    "input": ["text", "image"],
+    "cost": { "input": 2, "output": 10, "cacheRead": 0.2, "cacheWrite": 2.5 },
+    "contextWindow": 1000000,
+    "maxTokens": 128000,
+    "compat": {
+      "thinkingFormat": "openrouter",
+      "cacheControlFormat": "anthropic"
+    },
+    "thinkingLevelMap": { "xhigh": "xhigh", "max": "max" }
+  },
+  "context": {
+    "systemPrompt": "You route.",
+    "messages": [
+      { "role": "user", "content": "first", "timestamp": 1 },
+      {
+        "role": "assistant",
+        "content": [{ "type": "text", "text": "ack" }],
+        "api": "openai-completions",
+        "provider": "openrouter",
+        "model": "anthropic/claude-sonnet-5",
+        "usage": { "input": 3, "output": 1, "cacheRead": 0, "cacheWrite": 0 },
+        "stopReason": "stop",
+        "timestamp": 2
+      },
+      { "role": "user", "content": "second", "timestamp": 3 },
+      {
+        "role": "assistant",
+        "content": [{ "type": "text", "text": "ack2" }],
+        "api": "openai-completions",
+        "provider": "openrouter",
+        "model": "anthropic/claude-sonnet-5",
+        "usage": { "input": 4, "output": 1, "cacheRead": 0, "cacheWrite": 0 },
+        "stopReason": "stop",
+        "timestamp": 4
+      },
+      { "role": "user", "content": "third", "timestamp": 5 }
+    ],
+    "tools": [
+      {
+        "name": "search",
+        "description": "Search the web.",
+        "parameters": {
+          "type": "object",
+          "properties": { "q": { "type": "string" } },
+          "required": ["q"],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "reasoning": "max",
+    "cacheRetention": "long",
+    "sessionId": "session-openrouter"
+  }
+}

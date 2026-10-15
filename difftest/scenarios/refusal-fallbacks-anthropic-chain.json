@@ -1,0 +1,91 @@
+{
+  "name": "refusal-fallbacks-anthropic-chain",
+  "note": "ed867e909: a single permitted fallback in compat.allowedFallbackModels -> fallbacks:[{model}] on the wire, with provider and cost stripped by pi's explicit .map(f => ({model: f.model})). The caller-facing refusalFallbacks option this scenario used to drive was deleted at this sha. Shipped in pi-ai 0.84.3 (release 4e58f324f), so this scenario is backend:\"dist\" — captured against the published build, the stronger ground truth (README rule).",
+  "backend": "dist",
+  "api": "anthropic-messages",
+  "entry": "streamSimple",
+  "model": {
+    "id": "claude-tc-test",
+    "name": "Claude TC Test",
+    "api": "anthropic-messages",
+    "provider": "anthropic",
+    "baseUrl": "https://api.anthropic.com",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 3,
+      "output": 15,
+      "cacheRead": 0.3,
+      "cacheWrite": 3.75
+    },
+    "contextWindow": 200000,
+    "maxTokens": 8192,
+    "compat": {
+      "allowedFallbackModels": [
+        {
+          "provider": "anthropic",
+          "model": "claude-opus-4-8",
+          "cost": {
+            "input": 5,
+            "output": 25,
+            "cacheRead": 0.5,
+            "cacheWrite": 6.25
+          }
+        }
+      ]
+    }
+  },
+  "context": {
+    "systemPrompt": "You are a helpful assistant.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Summarize the conversation.",
+        "timestamp": 1
+      }
+    ],
+    "tools": [
+      {
+        "name": "read_file",
+        "description": "Read a file.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "list_dir",
+        "description": "List a directory.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "depth": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "maxTokens": 1024
+  }
+}

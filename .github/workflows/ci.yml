@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Keep LF line endings (gofmt rejects CRLF)
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        shell: bash
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "$out"; exit 1; fi
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test -count=1 ./...
+      # codemode runs each VM, tool call and timer on its own goroutine, and the
+      # MCP client and server manager connect in the background, and tools
+      # change the session's tool loadout while the loop reads it; the race
+      # detector needs cgo, which the Linux runner has.
+      - name: race (codemode, mcp, nested tool calls, tool registry)
+        if: runner.os == 'Linux'
+        run: |
+          go test -race -count=1 ./codemode/... ./mcp/... ./coding/mcpext/... ./coding/toolsearch/...
+          # The codemode tool's time and heap-limit tests measure speed, which
+          # the race detector's slowdown breaks; the test step runs them.
+          go test -race -count=1 -skip 'TestOutputAtItemLimitIsLinear|TestMemoryLimit' ./coding/codemodetool/...
+          go test -race -count=1 -run 'Nested|Registry|SetPromptSection|ModelOnly|Orchestration|PrepareLoadout|RestoreTools|PendingTools|ToolModifiers|ExcludeTools|AllowlistKeepsMCP|RestoreSkipsUnnamed' ./agent/ ./coding/

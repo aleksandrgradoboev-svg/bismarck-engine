@@ -1,0 +1,190 @@
+{
+  "name": "kimi-k3-anchored-tool-additions",
+  "note": "Upstream 9e05370b2 (mid-conversation system messages). openai-completions Kimi K3 with compat.supportsMidConvoSystemMessages + supportsMidConvoToolAdditions (the generator's Kimi K3 flags; deferredToolsMode is gone): the transcript stays in place, body.tools carries only the leading message's tools, and a later system message that adds late_tool while the tool history is purely additive is sent as a Kimi {role:\"system\", tools} message (no content key) followed by its rendered update text (content + 'Updated system prompt section' framing) under the system instruction role. The update lands between a tool result and the next assistant turn, where transformMessages holds it until the pending calls close. npm 0.85.1 predated the transcript model; it shipped in pi-ai 0.86.1, and the backend flipped to dist at the 0.87.1 re-pin (README rule).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "kimi-k3",
+    "name": "Kimi K3",
+    "api": "openai-completions",
+    "provider": "moonshotai",
+    "baseUrl": "https://api.moonshot.ai/v1",
+    "reasoning": true,
+    "input": [
+      "text",
+      "image"
+    ],
+    "cost": {
+      "input": 3,
+      "output": 15,
+      "cacheRead": 0.3,
+      "cacheWrite": 0
+    },
+    "contextWindow": 1048576,
+    "maxTokens": 131072,
+    "compat": {
+      "supportsStore": false,
+      "supportsDeveloperRole": false,
+      "supportsReasoningEffort": true,
+      "maxTokensField": "max_tokens",
+      "supportsStrictMode": false,
+      "thinkingFormat": "openai",
+      "requiresReasoningContentOnAssistantMessages": true,
+      "supportsMidConvoSystemMessages": true,
+      "supportsMidConvoToolAdditions": true
+    },
+    "thinkingLevelMap": {
+      "off": null,
+      "minimal": null,
+      "low": "low",
+      "medium": null,
+      "high": "high",
+      "xhigh": null,
+      "max": "max"
+    }
+  },
+  "context": {
+    "systemPrompt": "You are a helpful assistant.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi",
+        "timestamp": 1
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "Look first.",
+            "thinkingSignature": "reasoning_content"
+          },
+          {
+            "type": "toolCall",
+            "id": "call_1",
+            "name": "base_tool",
+            "arguments": {
+              "q": "x"
+            }
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "moonshotai",
+        "model": "kimi-k3",
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "stopReason": "toolUse",
+        "timestamp": 2
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_1",
+        "toolName": "base_tool",
+        "content": [
+          {
+            "type": "text",
+            "text": "done"
+          }
+        ],
+        "isError": false,
+        "timestamp": 3
+      },
+      {
+        "role": "system",
+        "content": "A file tool is now available.",
+        "sections": {
+          "rules": "<rules>\nUse late_tool for paths.\n</rules>"
+        },
+        "toolsAdded": [
+          {
+            "name": "late_tool",
+            "description": "A tool introduced mid-transcript.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ],
+        "timestamp": 4
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_2",
+            "name": "late_tool",
+            "arguments": {
+              "path": "/a"
+            }
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "moonshotai",
+        "model": "kimi-k3",
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "stopReason": "toolUse",
+        "timestamp": 5
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_2",
+        "toolName": "late_tool",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok"
+          }
+        ],
+        "isError": false,
+        "timestamp": 6
+      },
+      {
+        "role": "user",
+        "content": "next",
+        "timestamp": 7
+      }
+    ],
+    "tools": [
+      {
+        "name": "base_tool",
+        "description": "Base tool.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "q": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "q"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "maxTokens": 1024,
+    "reasoning": "high"
+  }
+}

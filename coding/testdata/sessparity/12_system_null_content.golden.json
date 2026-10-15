@@ -1,0 +1,62 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "text": "",
+      "stringContent": true,
+      "message": {
+        "role": "system",
+        "content": "",
+        "sections": {
+          "preamble": "P"
+        },
+        "timestamp": 1789603201000
+      }
+    },
+    {
+      "role": "user",
+      "text": "hi"
+    },
+    {
+      "role": "system",
+      "text": "",
+      "stringContent": true,
+      "message": {
+        "role": "system",
+        "sections": {
+          "7": "seven",
+          "b": "B"
+        },
+        "timestamp": 1789603203000,
+        "content": ""
+      }
+    },
+    {
+      "role": "assistant",
+      "text": "ok"
+    }
+  ],
+  "entries": [
+    {
+      "id": "z1",
+      "messages": 1
+    },
+    {
+      "id": "z2",
+      "messages": 1
+    },
+    {
+      "id": "z3",
+      "messages": 1
+    },
+    {
+      "id": "z4",
+      "messages": 1
+    }
+  ]
+}

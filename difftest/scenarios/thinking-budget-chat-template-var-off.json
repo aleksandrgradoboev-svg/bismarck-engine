@@ -1,0 +1,53 @@
+{
+  "name": "thinking-budget-chat-template-var-off",
+  "note": "Upstream b23741269. Same chat-template model with thinking OFF: the budget resolves to pi's undefined, which DROPS the thinking_budget key entirely (never 0 and never null), leaving chat_template_kwargs = {enable_thinking: false}. backend src (post-0.84.2): REQUIRES PI_UPSTREAM_SHA >= b23741269 (at the older pin pi emits no budget key at all and this FAILs). Shipped in pi-ai 0.84.3 (release 4e58f324f); flipped to backend:\"dist\" — the published build is the stronger ground truth (README rule).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "orderSensitivePaths": [
+    "$.chat_template_kwargs"
+  ],
+  "model": {
+    "id": "custom-chat-template",
+    "name": "chat-template reasoning model",
+    "api": "openai-completions",
+    "provider": "vllm",
+    "baseUrl": "https://vllm.example.test/v1",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "contextWindow": 128000,
+    "maxTokens": 16384,
+    "compat": {
+      "thinkingFormat": "chat-template",
+      "chatTemplateKwargs": {
+        "enable_thinking": {
+          "$var": "thinking.enabled"
+        },
+        "thinking_budget": {
+          "$var": "thinking.budget"
+        }
+      }
+    }
+  },
+  "context": {
+    "systemPrompt": "sys",
+    "messages": [
+      {
+        "role": "user",
+        "content": "think",
+        "timestamp": 1
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key"
+  }
+}

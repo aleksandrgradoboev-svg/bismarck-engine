@@ -1,0 +1,2728 @@
+{
+	"sha": "9e05370b2",
+	"bodies": {
+		"anchors-additional-tools": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true,
+					"supportsAdditionalTools": true
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "system",
+						"content": "base prompt",
+						"toolsAdded": [
+							{
+								"name": "base_tool",
+								"description": "base_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 0
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "system",
+						"content": "updated guidance",
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 2
+					}
+				]
+			},
+			"body": {
+				"model": "gpt-5.4",
+				"input": [
+					{
+						"role": "developer",
+						"content": "base prompt"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "before"
+							}
+						]
+					},
+					{
+						"type": "additional_tools",
+						"role": "developer",
+						"tools": [
+							{
+								"type": "function",
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						]
+					},
+					{
+						"role": "developer",
+						"content": "updated guidance"
+					}
+				],
+				"stream": true,
+				"store": false,
+				"max_output_tokens": 1000,
+				"tools": [
+					{
+						"type": "function",
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				],
+				"reasoning": {
+					"effort": "none"
+				}
+			}
+		},
+		"tool-search": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true,
+					"supportsToolSearch": true
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "system",
+						"content": "base prompt",
+						"toolsAdded": [
+							{
+								"name": "base_tool",
+								"description": "base_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 0
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "system",
+						"content": "updated guidance",
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 2
+					}
+				]
+			},
+			"body": {
+				"model": "gpt-5.4",
+				"input": [
+					{
+						"role": "developer",
+						"content": "base prompt"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "before"
+							}
+						]
+					},
+					{
+						"type": "tool_search_call",
+						"call_id": "pi_tool_load_uz9s1ywa62uw",
+						"execution": "client",
+						"status": "completed",
+						"arguments": {
+							"query": "late_tool",
+							"limit": 1
+						}
+					},
+					{
+						"type": "tool_search_output",
+						"call_id": "pi_tool_load_uz9s1ywa62uw",
+						"execution": "client",
+						"status": "completed",
+						"tools": [
+							{
+								"type": "function",
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								},
+								"defer_loading": true
+							}
+						]
+					},
+					{
+						"role": "developer",
+						"content": "updated guidance"
+					}
+				],
+				"stream": true,
+				"store": false,
+				"max_output_tokens": 1000,
+				"tools": [
+					{
+						"type": "function",
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				],
+				"reasoning": {
+					"effort": "none"
+				}
+			}
+		},
+		"removal-fallback": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true,
+					"supportsAdditionalTools": true
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "system",
+						"content": "base prompt",
+						"sections": {
+							"rules": "<rules>\nold rules\n</rules>",
+							"docs": "<docs>\nread docs\n</docs>"
+						},
+						"toolsAdded": [
+							{
+								"name": "base_tool",
+								"description": "base_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 0
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "system",
+						"content": "updated guidance",
+						"sections": {
+							"rules": "<rules>\nnew rules\n</rules>",
+							"docs": null
+						},
+						"toolsRemoved": [
+							{
+								"name": "base_tool"
+							}
+						],
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 2
+					}
+				]
+			},
+			"body": {
+				"model": "gpt-5.4",
+				"input": [
+					{
+						"role": "developer",
+						"content": "base prompt\n\n<rules>\nold rules\n</rules>\n\n<docs>\nread docs\n</docs>"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "before"
+							}
+						]
+					},
+					{
+						"role": "developer",
+						"content": "updated guidance\n\nUpdated system prompt section \"rules\":\n\n<rules>\nnew rules\n</rules>\n\nRemoved system prompt section \"docs\"."
+					}
+				],
+				"stream": true,
+				"store": false,
+				"max_output_tokens": 1000,
+				"tools": [
+					{
+						"type": "function",
+						"name": "late_tool",
+						"description": "late_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				],
+				"reasoning": {
+					"effort": "none"
+				}
+			}
+		},
+		"without-tool-additions": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "system",
+						"content": "base prompt",
+						"toolsAdded": [
+							{
+								"name": "base_tool",
+								"description": "base_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 0
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "system",
+						"content": "updated guidance",
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 2
+					}
+				]
+			},
+			"body": {
+				"model": "gpt-5.4",
+				"input": [
+					{
+						"role": "developer",
+						"content": "base prompt"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "before"
+							}
+						]
+					},
+					{
+						"role": "developer",
+						"content": "updated guidance"
+					}
+				],
+				"stream": true,
+				"store": false,
+				"max_output_tokens": 1000,
+				"tools": [
+					{
+						"type": "function",
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					},
+					{
+						"type": "function",
+						"name": "late_tool",
+						"description": "late_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				],
+				"reasoning": {
+					"effort": "none"
+				}
+			}
+		},
+		"additional-tools-over-tool-search": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true,
+					"supportsAdditionalTools": true,
+					"supportsToolSearch": true
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "system",
+						"content": "base prompt",
+						"toolsAdded": [
+							{
+								"name": "base_tool",
+								"description": "base_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 0
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "system",
+						"content": "updated guidance",
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 2
+					}
+				]
+			},
+			"body": {
+				"model": "gpt-5.4",
+				"input": [
+					{
+						"role": "developer",
+						"content": "base prompt"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "before"
+							}
+						]
+					},
+					{
+						"type": "additional_tools",
+						"role": "developer",
+						"tools": [
+							{
+								"type": "function",
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						]
+					},
+					{
+						"role": "developer",
+						"content": "updated guidance"
+					}
+				],
+				"stream": true,
+				"store": false,
+				"max_output_tokens": 1000,
+				"tools": [
+					{
+						"type": "function",
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				],
+				"reasoning": {
+					"effort": "none"
+				}
+			}
+		},
+		"system-instruction-role": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true,
+					"supportsDeveloperRole": false
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "system",
+						"content": "base prompt",
+						"sections": {
+							"rules": "<rules>\nold rules\n</rules>",
+							"docs": "<docs>\nread docs\n</docs>"
+						},
+						"toolsAdded": [
+							{
+								"name": "base_tool",
+								"description": "base_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 0
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "system",
+						"content": "updated guidance",
+						"sections": {
+							"rules": "<rules>\nnew rules\n</rules>",
+							"docs": null
+						},
+						"toolsRemoved": [
+							{
+								"name": "base_tool"
+							}
+						],
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 2
+					}
+				]
+			},
+			"body": {
+				"model": "gpt-5.4",
+				"input": [
+					{
+						"role": "system",
+						"content": "base prompt\n\n<rules>\nold rules\n</rules>\n\n<docs>\nread docs\n</docs>"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "before"
+							}
+						]
+					},
+					{
+						"role": "system",
+						"content": "updated guidance\n\nUpdated system prompt section \"rules\":\n\n<rules>\nnew rules\n</rules>\n\nRemoved system prompt section \"docs\"."
+					}
+				],
+				"stream": true,
+				"store": false,
+				"max_output_tokens": 1000,
+				"tools": [
+					{
+						"type": "function",
+						"name": "late_tool",
+						"description": "late_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				],
+				"reasoning": {
+					"effort": "none"
+				}
+			}
+		},
+		"tool-search-seeds": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true,
+					"supportsToolSearch": true,
+					"supportsStrictMode": true,
+					"supportsOpenAIGrammarTools": true
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "system",
+						"content": "",
+						"sections": {
+							"rules": "<rules>\nr1\n</rules>"
+						},
+						"toolsAdded": [
+							{
+								"name": "base_tool",
+								"description": "base_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 0
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "first"
+							},
+							{
+								"type": "text",
+								"text": "second"
+							}
+						],
+						"api": "openai-responses",
+						"provider": "openai",
+						"model": "gpt-5.4",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 2
+					},
+					{
+						"role": "system",
+						"content": "use grammar_tool",
+						"sections": {
+							"rules": "<rules>\nr2\n</rules>",
+							"docs": null
+						},
+						"toolsAdded": [
+							{
+								"name": "grammar_tool",
+								"description": "grammar_tool tool",
+								"parameters": {
+									"type": "object",
+									"required": [
+										"query"
+									],
+									"properties": {
+										"query": {
+											"type": "string"
+										}
+									}
+								},
+								"constrainedSampling": {
+									"type": "grammar",
+									"variants": {
+										"openai_lark": "start: /.+/"
+									}
+								}
+							},
+							{
+								"name": "strict_tool",
+								"description": "strict_tool tool",
+								"parameters": {
+									"type": "object",
+									"required": [
+										"path"
+									],
+									"properties": {
+										"path": {
+											"type": "string"
+										}
+									}
+								},
+								"constrainedSampling": {
+									"type": "json_schema",
+									"strict": "require"
+								}
+							}
+						],
+						"timestamp": 3
+					},
+					{
+						"role": "assistant",
+						"content": [
+							{
+								"type": "toolCall",
+								"id": "call_g|ctc_g",
+								"name": "grammar_tool",
+								"arguments": {
+									"query": "abc"
+								}
+							}
+						],
+						"api": "openai-responses",
+						"provider": "openai",
+						"model": "gpt-5.4",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "toolUse",
+						"timestamp": 4
+					},
+					{
+						"role": "system",
+						"content": "",
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 5
+					},
+					{
+						"role": "toolResult",
+						"toolCallId": "call_g|ctc_g",
+						"toolName": "grammar_tool",
+						"content": [
+							{
+								"type": "text",
+								"text": "done"
+							}
+						],
+						"isError": false,
+						"timestamp": 6
+					},
+					{
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "third"
+							}
+						],
+						"api": "openai-responses",
+						"provider": "openai",
+						"model": "gpt-5.4",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 7
+					},
+					{
+						"role": "user",
+						"content": "next",
+						"timestamp": 8
+					}
+				]
+			},
+			"body": {
+				"model": "gpt-5.4",
+				"input": [
+					{
+						"role": "developer",
+						"content": "<rules>\nr1\n</rules>"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "before"
+							}
+						]
+					},
+					{
+						"type": "message",
+						"role": "assistant",
+						"content": [
+							{
+								"type": "output_text",
+								"text": "first",
+								"annotations": []
+							}
+						],
+						"status": "completed",
+						"id": "msg_pi_1"
+					},
+					{
+						"type": "message",
+						"role": "assistant",
+						"content": [
+							{
+								"type": "output_text",
+								"text": "second",
+								"annotations": []
+							}
+						],
+						"status": "completed",
+						"id": "msg_pi_1_1"
+					},
+					{
+						"type": "tool_search_call",
+						"call_id": "pi_tool_load_14dwdxeajkhta",
+						"execution": "client",
+						"status": "completed",
+						"arguments": {
+							"query": "grammar_tool strict_tool",
+							"limit": 2
+						}
+					},
+					{
+						"type": "tool_search_output",
+						"call_id": "pi_tool_load_14dwdxeajkhta",
+						"execution": "client",
+						"status": "completed",
+						"tools": [
+							{
+								"type": "custom",
+								"name": "grammar_tool",
+								"description": "grammar_tool tool",
+								"format": {
+									"type": "grammar",
+									"syntax": "lark",
+									"definition": "start: /.+/"
+								},
+								"defer_loading": true
+							},
+							{
+								"type": "function",
+								"name": "strict_tool",
+								"description": "strict_tool tool",
+								"parameters": {
+									"type": "object",
+									"required": [
+										"path"
+									],
+									"properties": {
+										"path": {
+											"type": "string"
+										}
+									},
+									"additionalProperties": false
+								},
+								"defer_loading": true,
+								"strict": true
+							}
+						]
+					},
+					{
+						"role": "developer",
+						"content": "use grammar_tool\n\nUpdated system prompt section \"rules\":\n\n<rules>\nr2\n</rules>\n\nRemoved system prompt section \"docs\"."
+					},
+					{
+						"type": "custom_tool_call",
+						"id": "ctc_g",
+						"call_id": "call_g",
+						"name": "grammar_tool",
+						"input": "abc"
+					},
+					{
+						"type": "custom_tool_call_output",
+						"call_id": "call_g",
+						"output": "done"
+					},
+					{
+						"type": "tool_search_call",
+						"call_id": "pi_tool_load_f7wr66te6eoc",
+						"execution": "client",
+						"status": "completed",
+						"arguments": {
+							"query": "late_tool",
+							"limit": 1
+						}
+					},
+					{
+						"type": "tool_search_output",
+						"call_id": "pi_tool_load_f7wr66te6eoc",
+						"execution": "client",
+						"status": "completed",
+						"tools": [
+							{
+								"type": "function",
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								},
+								"defer_loading": true,
+								"strict": false
+							}
+						]
+					},
+					{
+						"type": "message",
+						"role": "assistant",
+						"content": [
+							{
+								"type": "output_text",
+								"text": "third",
+								"annotations": []
+							}
+						],
+						"status": "completed",
+						"id": "msg_pi_6"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "next"
+							}
+						]
+					}
+				],
+				"stream": true,
+				"store": false,
+				"max_output_tokens": 1000,
+				"tools": [
+					{
+						"type": "function",
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						},
+						"strict": false
+					}
+				],
+				"reasoning": {
+					"effort": "none"
+				}
+			}
+		},
+		"additional-tools-seeds": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true,
+					"supportsAdditionalTools": true,
+					"supportsStrictMode": true,
+					"supportsOpenAIGrammarTools": true
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "system",
+						"content": "",
+						"sections": {
+							"rules": "<rules>\nr1\n</rules>"
+						},
+						"toolsAdded": [
+							{
+								"name": "base_tool",
+								"description": "base_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 0
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "first"
+							},
+							{
+								"type": "text",
+								"text": "second"
+							}
+						],
+						"api": "openai-responses",
+						"provider": "openai",
+						"model": "gpt-5.4",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 2
+					},
+					{
+						"role": "system",
+						"content": "use grammar_tool",
+						"sections": {
+							"rules": "<rules>\nr2\n</rules>",
+							"docs": null
+						},
+						"toolsAdded": [
+							{
+								"name": "grammar_tool",
+								"description": "grammar_tool tool",
+								"parameters": {
+									"type": "object",
+									"required": [
+										"query"
+									],
+									"properties": {
+										"query": {
+											"type": "string"
+										}
+									}
+								},
+								"constrainedSampling": {
+									"type": "grammar",
+									"variants": {
+										"openai_lark": "start: /.+/"
+									}
+								}
+							},
+							{
+								"name": "strict_tool",
+								"description": "strict_tool tool",
+								"parameters": {
+									"type": "object",
+									"required": [
+										"path"
+									],
+									"properties": {
+										"path": {
+											"type": "string"
+										}
+									}
+								},
+								"constrainedSampling": {
+									"type": "json_schema",
+									"strict": "require"
+								}
+							}
+						],
+						"timestamp": 3
+					},
+					{
+						"role": "assistant",
+						"content": [
+							{
+								"type": "toolCall",
+								"id": "call_g|ctc_g",
+								"name": "grammar_tool",
+								"arguments": {
+									"query": "abc"
+								}
+							}
+						],
+						"api": "openai-responses",
+						"provider": "openai",
+						"model": "gpt-5.4",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "toolUse",
+						"timestamp": 4
+					},
+					{
+						"role": "system",
+						"content": "",
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 5
+					},
+					{
+						"role": "toolResult",
+						"toolCallId": "call_g|ctc_g",
+						"toolName": "grammar_tool",
+						"content": [
+							{
+								"type": "text",
+								"text": "done"
+							}
+						],
+						"isError": false,
+						"timestamp": 6
+					},
+					{
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "third"
+							}
+						],
+						"api": "openai-responses",
+						"provider": "openai",
+						"model": "gpt-5.4",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 7
+					},
+					{
+						"role": "user",
+						"content": "next",
+						"timestamp": 8
+					}
+				]
+			},
+			"body": {
+				"model": "gpt-5.4",
+				"input": [
+					{
+						"role": "developer",
+						"content": "<rules>\nr1\n</rules>"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "before"
+							}
+						]
+					},
+					{
+						"type": "message",
+						"role": "assistant",
+						"content": [
+							{
+								"type": "output_text",
+								"text": "first",
+								"annotations": []
+							}
+						],
+						"status": "completed",
+						"id": "msg_pi_1"
+					},
+					{
+						"type": "message",
+						"role": "assistant",
+						"content": [
+							{
+								"type": "output_text",
+								"text": "second",
+								"annotations": []
+							}
+						],
+						"status": "completed",
+						"id": "msg_pi_1_1"
+					},
+					{
+						"type": "additional_tools",
+						"role": "developer",
+						"tools": [
+							{
+								"type": "custom",
+								"name": "grammar_tool",
+								"description": "grammar_tool tool",
+								"format": {
+									"type": "grammar",
+									"syntax": "lark",
+									"definition": "start: /.+/"
+								}
+							},
+							{
+								"type": "function",
+								"name": "strict_tool",
+								"description": "strict_tool tool",
+								"parameters": {
+									"type": "object",
+									"required": [
+										"path"
+									],
+									"properties": {
+										"path": {
+											"type": "string"
+										}
+									},
+									"additionalProperties": false
+								},
+								"strict": true
+							}
+						]
+					},
+					{
+						"role": "developer",
+						"content": "use grammar_tool\n\nUpdated system prompt section \"rules\":\n\n<rules>\nr2\n</rules>\n\nRemoved system prompt section \"docs\"."
+					},
+					{
+						"type": "custom_tool_call",
+						"id": "ctc_g",
+						"call_id": "call_g",
+						"name": "grammar_tool",
+						"input": "abc"
+					},
+					{
+						"type": "custom_tool_call_output",
+						"call_id": "call_g",
+						"output": "done"
+					},
+					{
+						"type": "additional_tools",
+						"role": "developer",
+						"tools": [
+							{
+								"type": "function",
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								},
+								"strict": false
+							}
+						]
+					},
+					{
+						"type": "message",
+						"role": "assistant",
+						"content": [
+							{
+								"type": "output_text",
+								"text": "third",
+								"annotations": []
+							}
+						],
+						"status": "completed",
+						"id": "msg_pi_6"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "next"
+							}
+						]
+					}
+				],
+				"stream": true,
+				"store": false,
+				"max_output_tokens": 1000,
+				"tools": [
+					{
+						"type": "function",
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						},
+						"strict": false
+					}
+				],
+				"reasoning": {
+					"effort": "none"
+				}
+			}
+		},
+		"without-leading-system-message": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true,
+					"supportsToolSearch": true
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "system",
+						"content": "",
+						"sections": {
+							"rules": "<rules>\nr1\n</rules>"
+						},
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 2
+					},
+					{
+						"role": "user",
+						"content": "after",
+						"timestamp": 3
+					}
+				]
+			},
+			"body": {
+				"model": "gpt-5.4",
+				"input": [
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "before"
+							}
+						]
+					},
+					{
+						"type": "tool_search_call",
+						"call_id": "pi_tool_load_uz9s1ywa62uw",
+						"execution": "client",
+						"status": "completed",
+						"arguments": {
+							"query": "late_tool",
+							"limit": 1
+						}
+					},
+					{
+						"type": "tool_search_output",
+						"call_id": "pi_tool_load_uz9s1ywa62uw",
+						"execution": "client",
+						"status": "completed",
+						"tools": [
+							{
+								"type": "function",
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								},
+								"defer_loading": true
+							}
+						]
+					},
+					{
+						"role": "developer",
+						"content": "Updated system prompt section \"rules\":\n\n<rules>\nr1\n</rules>"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "after"
+							}
+						]
+					}
+				],
+				"stream": true,
+				"store": false,
+				"max_output_tokens": 1000,
+				"reasoning": {
+					"effort": "none"
+				}
+			}
+		},
+		"removed-grammar-tool-replay": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true,
+					"supportsAdditionalTools": true,
+					"supportsOpenAIGrammarTools": true
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "system",
+						"content": "base prompt",
+						"toolsAdded": [
+							{
+								"name": "grammar_tool",
+								"description": "grammar_tool tool",
+								"parameters": {
+									"type": "object",
+									"required": [
+										"query"
+									],
+									"properties": {
+										"query": {
+											"type": "string"
+										}
+									}
+								},
+								"constrainedSampling": {
+									"type": "grammar",
+									"variants": {
+										"openai_lark": "start: /.+/"
+									}
+								}
+							}
+						],
+						"timestamp": 0
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "assistant",
+						"content": [
+							{
+								"type": "toolCall",
+								"id": "call_g|ctc_g",
+								"name": "grammar_tool",
+								"arguments": {
+									"query": "abc"
+								}
+							}
+						],
+						"api": "openai-responses",
+						"provider": "openai",
+						"model": "gpt-5.4",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "toolUse",
+						"timestamp": 2
+					},
+					{
+						"role": "toolResult",
+						"toolCallId": "call_g|ctc_g",
+						"toolName": "grammar_tool",
+						"content": [
+							{
+								"type": "text",
+								"text": "done"
+							}
+						],
+						"isError": false,
+						"timestamp": 3
+					},
+					{
+						"role": "system",
+						"content": "",
+						"toolsRemoved": [
+							{
+								"name": "grammar_tool"
+							}
+						],
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 4
+					},
+					{
+						"role": "user",
+						"content": "after",
+						"timestamp": 5
+					}
+				]
+			},
+			"body": {
+				"model": "gpt-5.4",
+				"input": [
+					{
+						"role": "developer",
+						"content": "base prompt"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "before"
+							}
+						]
+					},
+					{
+						"type": "custom_tool_call",
+						"id": "ctc_g",
+						"call_id": "call_g",
+						"name": "grammar_tool",
+						"input": "abc"
+					},
+					{
+						"type": "custom_tool_call_output",
+						"call_id": "call_g",
+						"output": "done"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "after"
+							}
+						]
+					}
+				],
+				"stream": true,
+				"store": false,
+				"max_output_tokens": 1000,
+				"tools": [
+					{
+						"type": "function",
+						"name": "late_tool",
+						"description": "late_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				],
+				"reasoning": {
+					"effort": "none"
+				}
+			}
+		},
+		"additional-tools-tools-free-updates": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true,
+					"supportsAdditionalTools": true,
+					"supportsDeveloperRole": false
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "system",
+						"content": "base prompt",
+						"toolsAdded": [
+							{
+								"name": "base_tool",
+								"description": "base_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 0
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "first"
+							}
+						],
+						"api": "openai-responses",
+						"provider": "openai",
+						"model": "gpt-5.4",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 2
+					},
+					{
+						"role": "system",
+						"content": "no new tools",
+						"timestamp": 3
+					},
+					{
+						"role": "user",
+						"content": "middle",
+						"timestamp": 4
+					},
+					{
+						"role": "system",
+						"content": "",
+						"sections": {
+							"rules": "<rules>\nr1\n</rules>"
+						},
+						"timestamp": 5
+					},
+					{
+						"role": "system",
+						"content": "",
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 6
+					},
+					{
+						"role": "user",
+						"content": "after",
+						"timestamp": 7
+					}
+				]
+			},
+			"body": {
+				"model": "gpt-5.4",
+				"input": [
+					{
+						"role": "system",
+						"content": "base prompt"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "before"
+							}
+						]
+					},
+					{
+						"type": "message",
+						"role": "assistant",
+						"content": [
+							{
+								"type": "output_text",
+								"text": "first",
+								"annotations": []
+							}
+						],
+						"status": "completed",
+						"id": "msg_pi_1"
+					},
+					{
+						"role": "system",
+						"content": "no new tools"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "middle"
+							}
+						]
+					},
+					{
+						"role": "system",
+						"content": "Updated system prompt section \"rules\":\n\n<rules>\nr1\n</rules>"
+					},
+					{
+						"type": "additional_tools",
+						"role": "developer",
+						"tools": [
+							{
+								"type": "function",
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						]
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "after"
+							}
+						]
+					}
+				],
+				"stream": true,
+				"store": false,
+				"max_output_tokens": 1000,
+				"tools": [
+					{
+						"type": "function",
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				],
+				"reasoning": {
+					"effort": "none"
+				}
+			}
+		},
+		"tool-search-tools-free-updates": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true,
+					"supportsToolSearch": true
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "system",
+						"content": "base prompt",
+						"toolsAdded": [
+							{
+								"name": "base_tool",
+								"description": "base_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 0
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "first"
+							}
+						],
+						"api": "openai-responses",
+						"provider": "openai",
+						"model": "gpt-5.4",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 2
+					},
+					{
+						"role": "system",
+						"content": "no new tools",
+						"timestamp": 3
+					},
+					{
+						"role": "user",
+						"content": "middle",
+						"timestamp": 4
+					},
+					{
+						"role": "system",
+						"content": "",
+						"sections": {
+							"rules": "<rules>\nr1\n</rules>"
+						},
+						"timestamp": 5
+					},
+					{
+						"role": "system",
+						"content": "",
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 6
+					},
+					{
+						"role": "user",
+						"content": "after",
+						"timestamp": 7
+					}
+				]
+			},
+			"body": {
+				"model": "gpt-5.4",
+				"input": [
+					{
+						"role": "developer",
+						"content": "base prompt"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "before"
+							}
+						]
+					},
+					{
+						"type": "message",
+						"role": "assistant",
+						"content": [
+							{
+								"type": "output_text",
+								"text": "first",
+								"annotations": []
+							}
+						],
+						"status": "completed",
+						"id": "msg_pi_1"
+					},
+					{
+						"role": "developer",
+						"content": "no new tools"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "middle"
+							}
+						]
+					},
+					{
+						"role": "developer",
+						"content": "Updated system prompt section \"rules\":\n\n<rules>\nr1\n</rules>"
+					},
+					{
+						"type": "tool_search_call",
+						"call_id": "pi_tool_load_f7wr66te6eoc",
+						"execution": "client",
+						"status": "completed",
+						"arguments": {
+							"query": "late_tool",
+							"limit": 1
+						}
+					},
+					{
+						"type": "tool_search_output",
+						"call_id": "pi_tool_load_f7wr66te6eoc",
+						"execution": "client",
+						"status": "completed",
+						"tools": [
+							{
+								"type": "function",
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								},
+								"defer_loading": true
+							}
+						]
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "after"
+							}
+						]
+					}
+				],
+				"stream": true,
+				"store": false,
+				"max_output_tokens": 1000,
+				"tools": [
+					{
+						"type": "function",
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				],
+				"reasoning": {
+					"effort": "none"
+				}
+			}
+		},
+		"aborted-first-assistant": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true,
+					"supportsToolSearch": true
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "partial"
+							}
+						],
+						"api": "openai-responses",
+						"provider": "openai",
+						"model": "gpt-5.4",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "aborted",
+						"timestamp": 0
+					},
+					{
+						"role": "system",
+						"content": "guidance",
+						"sections": {
+							"rules": "<rules>\nr1\n</rules>"
+						},
+						"toolsAdded": [
+							{
+								"name": "base_tool",
+								"description": "base_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 1
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 2
+					},
+					{
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "reply"
+							}
+						],
+						"api": "openai-responses",
+						"provider": "openai",
+						"model": "gpt-5.4",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 3
+					},
+					{
+						"role": "system",
+						"content": "more guidance",
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 4
+					},
+					{
+						"role": "user",
+						"content": "after",
+						"timestamp": 5
+					}
+				]
+			},
+			"body": {
+				"model": "gpt-5.4",
+				"input": [
+					{
+						"role": "developer",
+						"content": "guidance\n\n<rules>\nr1\n</rules>"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "before"
+							}
+						]
+					},
+					{
+						"type": "message",
+						"role": "assistant",
+						"content": [
+							{
+								"type": "output_text",
+								"text": "reply",
+								"annotations": []
+							}
+						],
+						"status": "completed",
+						"id": "msg_pi_1"
+					},
+					{
+						"type": "tool_search_call",
+						"call_id": "pi_tool_load_1x3ncrr1tyw2uk",
+						"execution": "client",
+						"status": "completed",
+						"arguments": {
+							"query": "late_tool",
+							"limit": 1
+						}
+					},
+					{
+						"type": "tool_search_output",
+						"call_id": "pi_tool_load_1x3ncrr1tyw2uk",
+						"execution": "client",
+						"status": "completed",
+						"tools": [
+							{
+								"type": "function",
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								},
+								"defer_loading": true
+							}
+						]
+					},
+					{
+						"role": "developer",
+						"content": "more guidance"
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "after"
+							}
+						]
+					}
+				],
+				"stream": true,
+				"store": false,
+				"max_output_tokens": 1000,
+				"reasoning": {
+					"effort": "none"
+				}
+			}
+		}
+	},
+	"loneSurrogates": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "gpt-5.4",
+			"name": "GPT-5.4",
+			"api": "openai-responses",
+			"provider": "openai",
+			"compat": {
+				"supportsMidConvoSystemMessages": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base \ud83d prompt 🙈",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "system",
+					"content": "updated \ude48 guidance",
+					"sections": {
+						"rules": "<rules>\nr\ud83d\n</rules>"
+					},
+					"timestamp": 2
+				}
+			]
+		},
+		"body": {
+			"model": "gpt-5.4",
+			"input": [
+				{
+					"role": "developer",
+					"content": "base  prompt 🙈"
+				},
+				{
+					"role": "user",
+					"content": [
+						{
+							"type": "input_text",
+							"text": "before"
+						}
+					]
+				},
+				{
+					"role": "developer",
+					"content": "updated  guidance\n\nUpdated system prompt section \"rules\":\n\n<rules>\nr\n</rules>"
+				}
+			],
+			"stream": true,
+			"store": false,
+			"max_output_tokens": 1000,
+			"tools": [
+				{
+					"type": "function",
+					"name": "base_tool",
+					"description": "base_tool tool",
+					"parameters": {
+						"type": "object",
+						"properties": {}
+					}
+				}
+			],
+			"reasoning": {
+				"effort": "none"
+			}
+		}
+	},
+	"streams": {
+		"removed-grammar-tool-native": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsMidConvoSystemMessages": true,
+					"supportsOpenAIGrammarTools": true
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "system",
+						"content": "base prompt",
+						"toolsAdded": [
+							{
+								"name": "grammar_tool",
+								"description": "grammar_tool tool",
+								"parameters": {
+									"type": "object",
+									"required": [
+										"query"
+									],
+									"properties": {
+										"query": {
+											"type": "string"
+										}
+									}
+								},
+								"constrainedSampling": {
+									"type": "grammar",
+									"variants": {
+										"openai_lark": "start: /.+/"
+									}
+								}
+							}
+						],
+						"timestamp": 0
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "system",
+						"content": "",
+						"toolsRemoved": [
+							{
+								"name": "grammar_tool"
+							}
+						],
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 2
+					},
+					{
+						"role": "user",
+						"content": "after",
+						"timestamp": 3
+					}
+				]
+			},
+			"sse": "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\"}}\n\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"custom_tool_call\",\"id\":\"ctc_1\",\"call_id\":\"call_1\",\"name\":\"grammar_tool\",\"input\":\"\"}}\n\ndata: {\"type\":\"response.custom_tool_call_input.delta\",\"output_index\":0,\"delta\":\"abc\"}\n\ndata: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"custom_tool_call\",\"id\":\"ctc_1\",\"call_id\":\"call_1\",\"name\":\"grammar_tool\",\"input\":\"abc\"}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\ndata: [DONE]\n\n",
+			"stopReason": "toolUse",
+			"toolCalls": [
+				{
+					"name": "grammar_tool",
+					"arguments": {
+						"query": "abc"
+					}
+				}
+			]
+		},
+		"removed-grammar-tool-collapsed": {
+			"model": {
+				"baseUrl": "http://127.0.0.1:9",
+				"reasoning": true,
+				"input": [
+					"text"
+				],
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0
+				},
+				"contextWindow": 100000,
+				"maxTokens": 1000,
+				"id": "gpt-5.4",
+				"name": "GPT-5.4",
+				"api": "openai-responses",
+				"provider": "openai",
+				"compat": {
+					"supportsOpenAIGrammarTools": true
+				}
+			},
+			"context": {
+				"messages": [
+					{
+						"role": "system",
+						"content": "base prompt",
+						"toolsAdded": [
+							{
+								"name": "grammar_tool",
+								"description": "grammar_tool tool",
+								"parameters": {
+									"type": "object",
+									"required": [
+										"query"
+									],
+									"properties": {
+										"query": {
+											"type": "string"
+										}
+									}
+								},
+								"constrainedSampling": {
+									"type": "grammar",
+									"variants": {
+										"openai_lark": "start: /.+/"
+									}
+								}
+							}
+						],
+						"timestamp": 0
+					},
+					{
+						"role": "user",
+						"content": "before",
+						"timestamp": 1
+					},
+					{
+						"role": "system",
+						"content": "",
+						"toolsRemoved": [
+							{
+								"name": "grammar_tool"
+							}
+						],
+						"toolsAdded": [
+							{
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						],
+						"timestamp": 2
+					},
+					{
+						"role": "user",
+						"content": "after",
+						"timestamp": 3
+					}
+				]
+			},
+			"sse": "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\"}}\n\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"custom_tool_call\",\"id\":\"ctc_1\",\"call_id\":\"call_1\",\"name\":\"grammar_tool\",\"input\":\"\"}}\n\ndata: {\"type\":\"response.custom_tool_call_input.delta\",\"output_index\":0,\"delta\":\"abc\"}\n\ndata: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"custom_tool_call\",\"id\":\"ctc_1\",\"call_id\":\"call_1\",\"name\":\"grammar_tool\",\"input\":\"abc\"}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\ndata: [DONE]\n\n",
+			"stopReason": "toolUse",
+			"toolCalls": [
+				{
+					"name": "grammar_tool",
+					"arguments": {
+						"input": "abc"
+					}
+				}
+			]
+		}
+	}
+}

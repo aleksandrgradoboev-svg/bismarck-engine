@@ -1,0 +1,39 @@
+{
+	"sha": "7140838fd",
+	"env": [
+		{
+			"value": "﻿",
+			"result": null
+		},
+		{
+			"value": "",
+			"result": ""
+		},
+		{
+			"value": " ",
+			"result": null
+		},
+		{
+			"value": " key ",
+			"result": " key "
+		}
+	],
+	"explicitKey": [
+		{
+			"apiKey": "﻿",
+			"explicit": false
+		},
+		{
+			"apiKey": "",
+			"explicit": true
+		},
+		{
+			"apiKey": " ",
+			"explicit": false
+		},
+		{
+			"apiKey": " key ",
+			"explicit": true
+		}
+	]
+}

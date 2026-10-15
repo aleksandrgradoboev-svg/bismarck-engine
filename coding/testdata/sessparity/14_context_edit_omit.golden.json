@@ -1,0 +1,59 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "text": "one"
+    },
+    {
+      "role": "user",
+      "text": "two"
+    },
+    {
+      "role": "assistant",
+      "text": "answer two"
+    }
+  ],
+  "entries": [
+    {
+      "id": "c1",
+      "messages": 1
+    },
+    {
+      "id": "c2",
+      "messages": 0
+    },
+    {
+      "id": "c3",
+      "messages": 0
+    },
+    {
+      "id": "c4",
+      "messages": 0
+    },
+    {
+      "id": "c5",
+      "messages": 1
+    },
+    {
+      "id": "c6",
+      "messages": 0
+    },
+    {
+      "id": "c7",
+      "messages": 0
+    },
+    {
+      "id": "c8",
+      "messages": 0
+    },
+    {
+      "id": "c9",
+      "messages": 1
+    }
+  ]
+}

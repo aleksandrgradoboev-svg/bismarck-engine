@@ -1,0 +1,243 @@
+[
+  {
+    "message": {
+      "role": "system",
+      "content": "You are pi. ✨ Follow AGENTS.md.",
+      "sections": {
+        "preamble": "Be brief 🙂",
+        "empty": "",
+        "removed": null,
+        "env": "cwd: /tmp/<p>"
+      },
+      "toolsAdded": [
+        {
+          "name": "edit",
+          "description": "Replace <old> with <new> & keep the rest   intact 🙂",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "File path, e.g. src/a&b.ts"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 1
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "exact",
+                  "fuzzy"
+                ]
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "read",
+          "description": "Read a file",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        }
+      ],
+      "toolsRemoved": [
+        {
+          "name": "gone-and-not-counted"
+        }
+      ],
+      "timestamp": 1
+    },
+    "tokens": 135
+  },
+  {
+    "message": {
+      "role": "system",
+      "content": [
+        {
+          "type": "text",
+          "text": "block prompt 😀"
+        },
+        {
+          "type": "image",
+          "data": "aGk=",
+          "mimeType": "image/png"
+        }
+      ],
+      "timestamp": 2
+    },
+    "tokens": 1204
+  },
+  {
+    "message": {
+      "role": "system",
+      "content": "",
+      "toolsAdded": [],
+      "timestamp": 3
+    },
+    "tokens": 1
+  },
+  {
+    "message": {
+      "role": "system",
+      "content": "",
+      "sections": {
+        "only": "x"
+      },
+      "timestamp": 4
+    },
+    "tokens": 1
+  },
+  {
+    "message": {
+      "role": "user",
+      "content": "héllo 😀 wörld",
+      "timestamp": 5
+    },
+    "tokens": 4
+  },
+  {
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "日本語のテキスト"
+        },
+        {
+          "type": "image",
+          "data": "aGk=",
+          "mimeType": "image/png"
+        }
+      ],
+      "timestamp": 6
+    },
+    "tokens": 1202
+  },
+  {
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Sure 🚀"
+        },
+        {
+          "type": "thinking",
+          "thinking": "consider <a> & ü"
+        },
+        {
+          "type": "toolCall",
+          "id": "c1",
+          "name": "edit",
+          "arguments": {
+            "path": "a<b>&c.ts",
+            "note": "😀 "
+          }
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "p",
+      "model": "m",
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "stopReason": "toolUse",
+      "timestamp": 7
+    },
+    "tokens": 15
+  },
+  {
+    "message": {
+      "role": "toolResult",
+      "toolCallId": "c1",
+      "toolName": "edit",
+      "content": [
+        {
+          "type": "text",
+          "text": "done ✓ 😀"
+        }
+      ],
+      "isError": false,
+      "timestamp": 8
+    },
+    "tokens": 3
+  },
+  {
+    "message": {
+      "role": "system",
+      "content": "",
+      "toolsAdded": [
+        {
+          "name": "😀",
+          "description": "dd",
+          "parameters": {
+            "type": "object"
+          }
+        }
+      ],
+      "timestamp": 9
+    },
+    "tokens": 17
+  },
+  {
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "c2",
+          "name": "tcx",
+          "arguments": {
+            "e": "😀"
+          }
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "p",
+      "model": "m",
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "stopReason": "toolUse",
+      "timestamp": 10
+    },
+    "tokens": 4
+  }
+]

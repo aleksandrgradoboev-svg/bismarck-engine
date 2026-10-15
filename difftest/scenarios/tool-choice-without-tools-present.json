@@ -1,0 +1,41 @@
+{
+  "name": "tool-choice-without-tools-present",
+  "note": "6b36eb592: an explicitly requested tool_choice IS sent even when the request carries no tools. The commit reverts fe37e9f9b, whose `options?.toolChoice && params.tools?.length` guard this scenario used to pin in the opposite direction. Because fe37e9f9b landed and was reverted entirely after pi-ai 0.84.3 (release 4e58f324f), the published build never contained the guard and matches upstream HEAD again — so backend is back to \"dist\", the stronger reference. This is the no-tools arm.",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "gpt-4o-mini",
+    "name": "GPT-4o mini",
+    "api": "openai-completions",
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "reasoning": false,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 0.15,
+      "output": 0.6,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "contextWindow": 128000,
+    "maxTokens": 16384
+  },
+  "context": {
+    "systemPrompt": "You are a helpful assistant.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Summarize the conversation.",
+        "timestamp": 1
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "maxTokens": 1024,
+    "toolChoice": "none"
+  }
+}

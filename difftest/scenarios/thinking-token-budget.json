@@ -1,0 +1,32 @@
+{
+  "name": "thinking-token-budget",
+  "note": "Upstream d07889da0 (Go 2392e66). vLLM-style server: compat.supportsThinkingTokenBudget emits top-level thinking_token_budget capping reasoning tokens, clamped to always leave MIN_ANSWER_TOKENS (1024) for the answer. No caller maxTokens, model maxTokens 16384, reasoning high -> min(16384, 16384-1024) = 15360. Also exercises the zai thinking-object interplay on the same request. Shipped in pi-ai 0.84.2; backend flipped to dist (README rule).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "custom-vllm-zai",
+    "name": "vLLM zai reasoning model",
+    "api": "openai-completions",
+    "provider": "vllm",
+    "baseUrl": "https://vllm.example.test/v1",
+    "reasoning": true,
+    "input": ["text"],
+    "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+    "contextWindow": 128000,
+    "maxTokens": 16384,
+    "compat": {
+      "thinkingFormat": "zai",
+      "supportsReasoningEffort": true,
+      "supportsThinkingTokenBudget": true
+    }
+  },
+  "context": {
+    "systemPrompt": "sys",
+    "messages": [{ "role": "user", "content": "think", "timestamp": 1 }]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "reasoning": "high"
+  }
+}

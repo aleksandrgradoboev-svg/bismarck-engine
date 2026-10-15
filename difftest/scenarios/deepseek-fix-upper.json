@@ -1,0 +1,40 @@
+{
+  "name": "deepseek-fix-upper",
+  "note": "Upstream b647d1879 (Go: openai_compat.go isDeepSeek hoist + ToLower): custom model whose baseUrl carries UPPERCASE 'API.DeepSeek.COM', hitting the now case-folded baseUrl route into isDeepSeek \u2014 mirrors the upstream test's customUppercaseModel case. Three independent observables ride on it: max_tokens (not max_completion_tokens) = useMaxTokens; the thinking key = thinkingFormat 'deepseek'; the ABSENCE of store:false = isNonStandard, which is precisely the hoist's effect. A systemPrompt is included so the system-vs-developer role pins supportsDeveloperRole too (it is unobservable without one). Pin 536eb7179 contains the fix sha, so the default PI_UPSTREAM_SHA reference carries it. Sibling of deepseek-fix-custom, which pins the lowercase route. Shipped in pi-ai 0.84.2; backend flipped to dist (README rule).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "custom-uppercase-deepseek-model",
+    "name": "Custom Uppercase DeepSeek Model",
+    "api": "openai-completions",
+    "provider": "custom-deepseek-upper",
+    "baseUrl": "https://API.DeepSeek.COM",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "contextWindow": 128000,
+    "maxTokens": 8192
+  },
+  "context": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hi",
+        "timestamp": 1
+      }
+    ],
+    "systemPrompt": "Reason step by step."
+  },
+  "options": {
+    "apiKey": "test",
+    "maxTokens": 123
+  }
+}

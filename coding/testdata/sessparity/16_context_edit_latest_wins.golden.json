@@ -1,0 +1,55 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "text": "q"
+    },
+    {
+      "role": "user",
+      "text": "second rewrite wins"
+    },
+    {
+      "role": "assistant",
+      "text": "done"
+    }
+  ],
+  "entries": [
+    {
+      "id": "f1",
+      "messages": 1
+    },
+    {
+      "id": "f2",
+      "messages": 0
+    },
+    {
+      "id": "f3",
+      "messages": 1
+    },
+    {
+      "id": "f4",
+      "messages": 0
+    },
+    {
+      "id": "f5",
+      "messages": 0
+    },
+    {
+      "id": "f6",
+      "messages": 0
+    },
+    {
+      "id": "f7",
+      "messages": 0
+    },
+    {
+      "id": "f8",
+      "messages": 1
+    }
+  ]
+}

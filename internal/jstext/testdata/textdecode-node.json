@@ -1,0 +1,405 @@
+{
+	"node": "v26.4.0",
+	"rows": [
+		{
+			"input": "",
+			"stream": false,
+			"text": ""
+		},
+		{
+			"input": "",
+			"stream": true,
+			"text": ""
+		},
+		{
+			"input": "61",
+			"stream": false,
+			"text": "a"
+		},
+		{
+			"input": "61",
+			"stream": true,
+			"text": "a"
+		},
+		{
+			"input": "efbbbf",
+			"stream": false,
+			"text": ""
+		},
+		{
+			"input": "efbbbf",
+			"stream": true,
+			"text": ""
+		},
+		{
+			"input": "efbbbf61",
+			"stream": false,
+			"text": "a"
+		},
+		{
+			"input": "efbbbf61",
+			"stream": true,
+			"text": "a"
+		},
+		{
+			"input": "efbbbfefbbbf61",
+			"stream": false,
+			"text": "﻿a"
+		},
+		{
+			"input": "efbbbfefbbbf61",
+			"stream": true,
+			"text": "﻿a"
+		},
+		{
+			"input": "61efbbbf",
+			"stream": false,
+			"text": "a﻿"
+		},
+		{
+			"input": "61efbbbf",
+			"stream": true,
+			"text": "a﻿"
+		},
+		{
+			"input": "efbb",
+			"stream": false,
+			"text": "�"
+		},
+		{
+			"input": "efbb",
+			"stream": true,
+			"text": ""
+		},
+		{
+			"input": "ef",
+			"stream": false,
+			"text": "�"
+		},
+		{
+			"input": "ef",
+			"stream": true,
+			"text": ""
+		},
+		{
+			"input": "efbbbfc3",
+			"stream": false,
+			"text": "�"
+		},
+		{
+			"input": "efbbbfc3",
+			"stream": true,
+			"text": ""
+		},
+		{
+			"input": "c3",
+			"stream": false,
+			"text": "�"
+		},
+		{
+			"input": "c3",
+			"stream": true,
+			"text": ""
+		},
+		{
+			"input": "c3a9",
+			"stream": false,
+			"text": "é"
+		},
+		{
+			"input": "c3a9",
+			"stream": true,
+			"text": "é"
+		},
+		{
+			"input": "61c3",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "61c3",
+			"stream": true,
+			"text": "a"
+		},
+		{
+			"input": "61e2",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "61e2",
+			"stream": true,
+			"text": "a"
+		},
+		{
+			"input": "61e282",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "61e282",
+			"stream": true,
+			"text": "a"
+		},
+		{
+			"input": "61e282ac",
+			"stream": false,
+			"text": "a€"
+		},
+		{
+			"input": "61e282ac",
+			"stream": true,
+			"text": "a€"
+		},
+		{
+			"input": "61f0",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "61f0",
+			"stream": true,
+			"text": "a"
+		},
+		{
+			"input": "61f09f",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "61f09f",
+			"stream": true,
+			"text": "a"
+		},
+		{
+			"input": "61f09f98",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "61f09f98",
+			"stream": true,
+			"text": "a"
+		},
+		{
+			"input": "61f09f9880",
+			"stream": false,
+			"text": "a😀"
+		},
+		{
+			"input": "61f09f9880",
+			"stream": true,
+			"text": "a😀"
+		},
+		{
+			"input": "61e080",
+			"stream": false,
+			"text": "a��"
+		},
+		{
+			"input": "61e080",
+			"stream": true,
+			"text": "a��"
+		},
+		{
+			"input": "61e0",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "61e0",
+			"stream": true,
+			"text": "a"
+		},
+		{
+			"input": "61eda0",
+			"stream": false,
+			"text": "a��"
+		},
+		{
+			"input": "61eda0",
+			"stream": true,
+			"text": "a��"
+		},
+		{
+			"input": "61ed",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "61ed",
+			"stream": true,
+			"text": "a"
+		},
+		{
+			"input": "61f490",
+			"stream": false,
+			"text": "a��"
+		},
+		{
+			"input": "61f490",
+			"stream": true,
+			"text": "a��"
+		},
+		{
+			"input": "61f4",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "61f4",
+			"stream": true,
+			"text": "a"
+		},
+		{
+			"input": "61f5",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "61f5",
+			"stream": true,
+			"text": "a�"
+		},
+		{
+			"input": "61ff",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "61ff",
+			"stream": true,
+			"text": "a�"
+		},
+		{
+			"input": "6180",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "6180",
+			"stream": true,
+			"text": "a�"
+		},
+		{
+			"input": "61c0",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "61c0",
+			"stream": true,
+			"text": "a�"
+		},
+		{
+			"input": "61c1",
+			"stream": false,
+			"text": "a�"
+		},
+		{
+			"input": "61c1",
+			"stream": true,
+			"text": "a�"
+		},
+		{
+			"input": "80",
+			"stream": false,
+			"text": "�"
+		},
+		{
+			"input": "80",
+			"stream": true,
+			"text": "�"
+		},
+		{
+			"input": "bfbf",
+			"stream": false,
+			"text": "��"
+		},
+		{
+			"input": "bfbf",
+			"stream": true,
+			"text": "��"
+		},
+		{
+			"input": "c3a9c3",
+			"stream": false,
+			"text": "é�"
+		},
+		{
+			"input": "c3a9c3",
+			"stream": true,
+			"text": "é"
+		},
+		{
+			"input": "e282ace2",
+			"stream": false,
+			"text": "€�"
+		},
+		{
+			"input": "e282ace2",
+			"stream": true,
+			"text": "€"
+		},
+		{
+			"input": "f09f9880f09f",
+			"stream": false,
+			"text": "😀�"
+		},
+		{
+			"input": "f09f9880f09f",
+			"stream": true,
+			"text": "😀"
+		},
+		{
+			"input": "61ff62e282",
+			"stream": false,
+			"text": "a�b�"
+		},
+		{
+			"input": "61ff62e282",
+			"stream": true,
+			"text": "a�b"
+		},
+		{
+			"input": "efbbbfe282",
+			"stream": false,
+			"text": "�"
+		},
+		{
+			"input": "efbbbfe282",
+			"stream": true,
+			"text": ""
+		},
+		{
+			"input": "efbbbf80",
+			"stream": false,
+			"text": "�"
+		},
+		{
+			"input": "efbbbf80",
+			"stream": true,
+			"text": "�"
+		},
+		{
+			"input": "e282acefbbbf",
+			"stream": false,
+			"text": "€﻿"
+		},
+		{
+			"input": "e282acefbbbf",
+			"stream": true,
+			"text": "€﻿"
+		},
+		{
+			"input": "0a0a0a",
+			"stream": false,
+			"text": "\n\n\n"
+		},
+		{
+			"input": "0a0a0a",
+			"stream": true,
+			"text": "\n\n\n"
+		}
+	]
+}

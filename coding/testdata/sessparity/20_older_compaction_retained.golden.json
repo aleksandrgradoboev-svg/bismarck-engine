@@ -1,0 +1,55 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "text": "The conversation history before this point was compacted into the following summary:\n\n<summary>\nS-late\n</summary>"
+    },
+    {
+      "role": "assistant",
+      "text": "answer one"
+    },
+    {
+      "role": "user",
+      "text": "two"
+    },
+    {
+      "role": "assistant",
+      "text": "answer two"
+    },
+    {
+      "role": "user",
+      "text": "three"
+    }
+  ],
+  "entries": [
+    {
+      "id": "j6",
+      "messages": 1
+    },
+    {
+      "id": "j2",
+      "messages": 1
+    },
+    {
+      "id": "j3",
+      "messages": 0
+    },
+    {
+      "id": "j4",
+      "messages": 1
+    },
+    {
+      "id": "j5",
+      "messages": 1
+    },
+    {
+      "id": "j7",
+      "messages": 1
+    }
+  ]
+}

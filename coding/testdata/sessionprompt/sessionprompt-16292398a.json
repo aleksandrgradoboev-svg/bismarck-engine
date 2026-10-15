@@ -1,0 +1,1563 @@
+{
+	"sha": "16292398a",
+	"sessions": [
+		{
+			"name": "continue-without-system-message",
+			"loadoutChange": false,
+			"steps": [
+				{
+					"kind": "load",
+					"messages": [
+						{
+							"role": "user",
+							"content": [
+								{
+									"type": "text",
+									"text": "list files"
+								}
+							],
+							"timestamp": 1
+						}
+					]
+				},
+				{
+					"kind": "continue",
+					"replies": [
+						{
+							"toolCall": {
+								"id": "call-1",
+								"name": "read",
+								"arguments": {
+									"path": "missing.txt"
+								}
+							}
+						},
+						{
+							"text": "done"
+						}
+					]
+				}
+			],
+			"requests": [
+				[
+					{
+						"role": "user"
+					},
+					{
+						"role": "system",
+						"sections": [],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					}
+				],
+				[
+					{
+						"role": "user"
+					},
+					{
+						"role": "system",
+						"sections": [],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "toolResult"
+					},
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						]
+					}
+				]
+			],
+			"requestState": [
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				}
+			],
+			"transcript": [
+				{
+					"role": "user"
+				},
+				{
+					"role": "system",
+					"sections": [],
+					"toolsAdded": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "toolResult"
+				},
+				{
+					"role": "system",
+					"sections": [
+						"preamble",
+						"tools",
+						"rules",
+						"docs",
+						"cwd"
+					]
+				},
+				{
+					"role": "assistant"
+				}
+			],
+			"replayedPromptIsSystemPrompt": true
+		},
+		{
+			"name": "continue-with-declared-prompt",
+			"loadoutChange": false,
+			"steps": [
+				{
+					"kind": "prompt",
+					"text": "one",
+					"replies": [
+						{
+							"text": "first"
+						}
+					]
+				},
+				{
+					"kind": "load",
+					"messages": [
+						{
+							"role": "user",
+							"content": [
+								{
+									"type": "text",
+									"text": "two"
+								}
+							],
+							"timestamp": 2
+						}
+					],
+					"append": true
+				},
+				{
+					"kind": "continue",
+					"replies": [
+						{
+							"toolCall": {
+								"id": "call-1",
+								"name": "read",
+								"arguments": {
+									"path": "missing.txt"
+								}
+							}
+						},
+						{
+							"text": "done"
+						}
+					]
+				}
+			],
+			"requests": [
+				[
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					}
+				],
+				[
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "user"
+					}
+				],
+				[
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "toolResult"
+					}
+				]
+			],
+			"requestState": [
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				}
+			],
+			"transcript": [
+				{
+					"role": "system",
+					"sections": [
+						"preamble",
+						"tools",
+						"rules",
+						"docs",
+						"cwd"
+					],
+					"toolsAdded": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "toolResult"
+				},
+				{
+					"role": "assistant"
+				}
+			],
+			"replayedPromptIsSystemPrompt": true
+		},
+		{
+			"name": "continue-follows-live-agent-state",
+			"loadoutChange": true,
+			"steps": [
+				{
+					"kind": "prompt",
+					"text": "one",
+					"replies": [
+						{
+							"text": "first"
+						}
+					]
+				},
+				{
+					"kind": "load",
+					"messages": [
+						{
+							"role": "user",
+							"content": [
+								{
+									"type": "text",
+									"text": "two"
+								}
+							],
+							"timestamp": 2
+						}
+					],
+					"append": true
+				},
+				{
+					"kind": "continue",
+					"replies": [
+						{
+							"toolCall": {
+								"id": "call-1",
+								"name": "read",
+								"arguments": {
+									"path": "missing.txt"
+								}
+							},
+							"then": {
+								"model": "faux-2",
+								"thinkingLevel": "high",
+								"tools": [
+									"read"
+								]
+							}
+						},
+						{
+							"text": "done"
+						}
+					]
+				}
+			],
+			"requests": [
+				[
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					}
+				],
+				[
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "user"
+					}
+				],
+				[
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "toolResult"
+					},
+					{
+						"role": "system",
+						"sections": [
+							"tools",
+							"rules"
+						],
+						"toolsRemoved": [
+							"bash",
+							"edit",
+							"write"
+						]
+					}
+				]
+			],
+			"requestState": [
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"model": "faux-2",
+					"reasoning": "high",
+					"tools": [
+						"read"
+					]
+				}
+			],
+			"transcript": [
+				{
+					"role": "system",
+					"sections": [
+						"preamble",
+						"tools",
+						"rules",
+						"docs",
+						"cwd"
+					],
+					"toolsAdded": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "toolResult"
+				},
+				{
+					"role": "system",
+					"sections": [
+						"tools",
+						"rules"
+					],
+					"toolsRemoved": [
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"role": "assistant"
+				}
+			],
+			"replayedPromptIsSystemPrompt": true
+		},
+		{
+			"name": "prompt-tool-turn",
+			"loadoutChange": false,
+			"steps": [
+				{
+					"kind": "prompt",
+					"text": "one",
+					"replies": [
+						{
+							"toolCall": {
+								"id": "call-1",
+								"name": "read",
+								"arguments": {
+									"path": "missing.txt"
+								}
+							}
+						},
+						{
+							"text": "done"
+						}
+					]
+				}
+			],
+			"requests": [
+				[
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					}
+				],
+				[
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "toolResult"
+					}
+				]
+			],
+			"requestState": [
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				}
+			],
+			"transcript": [
+				{
+					"role": "system",
+					"sections": [
+						"preamble",
+						"tools",
+						"rules",
+						"docs",
+						"cwd"
+					],
+					"toolsAdded": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "toolResult"
+				},
+				{
+					"role": "assistant"
+				}
+			],
+			"replayedPromptIsSystemPrompt": true
+		},
+		{
+			"name": "prompt-twice-without-system-message",
+			"loadoutChange": false,
+			"steps": [
+				{
+					"kind": "load",
+					"messages": [
+						{
+							"role": "user",
+							"content": [
+								{
+									"type": "text",
+									"text": "existing"
+								}
+							],
+							"timestamp": 1
+						},
+						{
+							"role": "assistant",
+							"content": [
+								{
+									"type": "text",
+									"text": "old"
+								}
+							],
+							"api": "faux",
+							"provider": "faux",
+							"model": "faux-1",
+							"usage": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"totalTokens": 0,
+								"cost": {
+									"input": 0,
+									"output": 0,
+									"cacheRead": 0,
+									"cacheWrite": 0,
+									"total": 0
+								}
+							},
+							"stopReason": "stop",
+							"timestamp": 2
+						}
+					]
+				},
+				{
+					"kind": "prompt",
+					"text": "one",
+					"replies": [
+						{
+							"text": "first"
+						}
+					]
+				},
+				{
+					"kind": "prompt",
+					"text": "two",
+					"replies": [
+						{
+							"text": "second"
+						}
+					]
+				}
+			],
+			"requests": [
+				[
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					}
+				],
+				[
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "user"
+					}
+				]
+			],
+			"requestState": [
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				}
+			],
+			"transcript": [
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "system",
+					"sections": [
+						"preamble",
+						"tools",
+						"rules",
+						"docs",
+						"cwd"
+					],
+					"toolsAdded": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				}
+			],
+			"replayedPromptIsSystemPrompt": true
+		},
+		{
+			"name": "forced-prompt-projects-and-is-not-recorded",
+			"loadoutChange": false,
+			"steps": [
+				{
+					"kind": "prompt",
+					"text": "one",
+					"replies": [
+						{
+							"text": "one"
+						}
+					]
+				},
+				{
+					"kind": "prompt",
+					"text": "two",
+					"force": "Exact prompt.",
+					"replies": [
+						{
+							"text": "two"
+						}
+					]
+				},
+				{
+					"kind": "prompt",
+					"text": "three",
+					"force": "Exact prompt.",
+					"replies": [
+						{
+							"text": "three"
+						}
+					]
+				},
+				{
+					"kind": "prompt",
+					"text": "four",
+					"replies": [
+						{
+							"text": "four"
+						}
+					]
+				}
+			],
+			"requests": [
+				[
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					}
+				],
+				[
+					{
+						"role": "system",
+						"content": "Exact prompt.",
+						"sections": [],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "user"
+					}
+				],
+				[
+					{
+						"role": "system",
+						"content": "Exact prompt.",
+						"sections": [],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "user"
+					}
+				],
+				[
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "user"
+					}
+				]
+			],
+			"requestState": [
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				}
+			],
+			"transcript": [
+				{
+					"role": "system",
+					"sections": [
+						"preamble",
+						"tools",
+						"rules",
+						"docs",
+						"cwd"
+					],
+					"toolsAdded": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				}
+			],
+			"replayedPromptIsSystemPrompt": true
+		},
+		{
+			"name": "forced-prompt-changes-and-refreshes",
+			"loadoutChange": false,
+			"steps": [
+				{
+					"kind": "prompt",
+					"text": "one",
+					"force": "Prompt A.",
+					"replies": [
+						{
+							"toolCall": {
+								"id": "call-1",
+								"name": "read",
+								"arguments": {
+									"path": "missing.txt"
+								}
+							}
+						},
+						{
+							"text": "done"
+						}
+					]
+				},
+				{
+					"kind": "prompt",
+					"text": "two",
+					"force": "Prompt B.",
+					"replies": [
+						{
+							"text": "second"
+						}
+					]
+				}
+			],
+			"requests": [
+				[
+					{
+						"role": "system",
+						"content": "Prompt A.",
+						"sections": [],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					}
+				],
+				[
+					{
+						"role": "system",
+						"content": "Prompt A.",
+						"sections": [],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "toolResult"
+					}
+				],
+				[
+					{
+						"role": "system",
+						"content": "Prompt B.",
+						"sections": [],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "toolResult"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "user"
+					}
+				]
+			],
+			"requestState": [
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				}
+			],
+			"transcript": [
+				{
+					"role": "system",
+					"sections": [
+						"preamble",
+						"tools",
+						"rules",
+						"docs",
+						"cwd"
+					],
+					"toolsAdded": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "toolResult"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				}
+			],
+			"replayedPromptIsSystemPrompt": true
+		},
+		{
+			"name": "prompt-over-an-opaque-system-message",
+			"loadoutChange": false,
+			"steps": [
+				{
+					"kind": "load",
+					"messages": [
+						{
+							"role": "system",
+							"content": "Legacy prompt.",
+							"timestamp": 0
+						},
+						{
+							"role": "user",
+							"content": [
+								{
+									"type": "text",
+									"text": "existing"
+								}
+							],
+							"timestamp": 1
+						},
+						{
+							"role": "assistant",
+							"content": [
+								{
+									"type": "text",
+									"text": "old"
+								}
+							],
+							"api": "faux",
+							"provider": "faux",
+							"model": "faux-1",
+							"usage": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"totalTokens": 0,
+								"cost": {
+									"input": 0,
+									"output": 0,
+									"cacheRead": 0,
+									"cacheWrite": 0,
+									"total": 0
+								}
+							},
+							"stopReason": "stop",
+							"timestamp": 2
+						}
+					]
+				},
+				{
+					"kind": "prompt",
+					"text": "one",
+					"replies": [
+						{
+							"text": "first"
+						}
+					]
+				},
+				{
+					"kind": "prompt",
+					"text": "two",
+					"replies": [
+						{
+							"text": "second"
+						}
+					]
+				}
+			],
+			"requests": [
+				[
+					{
+						"role": "system",
+						"content": "Legacy prompt.",
+						"sections": []
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					}
+				],
+				[
+					{
+						"role": "system",
+						"content": "Legacy prompt.",
+						"sections": []
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "system",
+						"sections": [
+							"preamble",
+							"tools",
+							"rules",
+							"docs",
+							"cwd"
+						],
+						"toolsAdded": [
+							"read",
+							"bash",
+							"edit",
+							"write"
+						]
+					},
+					{
+						"role": "user"
+					},
+					{
+						"role": "assistant"
+					},
+					{
+						"role": "user"
+					}
+				]
+			],
+			"requestState": [
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"model": "faux-1",
+					"reasoning": "medium",
+					"tools": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				}
+			],
+			"transcript": [
+				{
+					"role": "system",
+					"content": "Legacy prompt.",
+					"sections": []
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "system",
+					"sections": [
+						"preamble",
+						"tools",
+						"rules",
+						"docs",
+						"cwd"
+					],
+					"toolsAdded": [
+						"read",
+						"bash",
+						"edit",
+						"write"
+					]
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				},
+				{
+					"role": "user"
+				},
+				{
+					"role": "assistant"
+				}
+			],
+			"replayedPromptIsSystemPrompt": false
+		}
+	],
+	"promptGuidelines": {
+		"tools": [
+			{
+				"name": "custom",
+				"promptGuidelines": [
+					"nel rule",
+					"nel tail",
+					"  shared rule  ",
+					"shared rule",
+					"﻿bom rule﻿",
+					" nbsp rule ",
+					"᠎mvs rule᠎",
+					"​zwsp rule​",
+					"　ideographic rule　",
+					"\u000bvt rule\f",
+					"",
+					"   "
+				]
+			},
+			{
+				"name": "blank",
+				"promptGuidelines": [
+					"",
+					" \t\n "
+				]
+			},
+			{
+				"name": "none"
+			},
+			{
+				"name": "empty",
+				"promptGuidelines": []
+			}
+		],
+		"normalized": [
+			[
+				"custom",
+				[
+					"nel rule",
+					"nel tail",
+					"shared rule",
+					"bom rule",
+					"nbsp rule",
+					"᠎mvs rule᠎",
+					"​zwsp rule​",
+					"ideographic rule",
+					"vt rule"
+				]
+			]
+		]
+	}
+}

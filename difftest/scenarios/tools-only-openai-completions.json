@@ -1,0 +1,57 @@
+{
+  "name": "tools-only-openai-completions",
+  "note": "Upstream 9e05370b2: a context with tools and no systemPrompt normalizes to a leading {role:\"system\", content:\"\", toolsAdded} message, and openai-completions must send the tools without an empty system message. The published build predates the transcript model and takes the raw context, which renders identically (no system message, the same tools), so backend is dist.",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "gpt-4o-mini",
+    "name": "GPT-4o mini",
+    "api": "openai-completions",
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "reasoning": false,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 0.15,
+      "output": 0.6,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "contextWindow": 128000,
+    "maxTokens": 16384
+  },
+  "context": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "List the directory.",
+        "timestamp": 1
+      }
+    ],
+    "tools": [
+      {
+        "name": "list_dir",
+        "description": "List a directory.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "maxTokens": 1024
+  }
+}

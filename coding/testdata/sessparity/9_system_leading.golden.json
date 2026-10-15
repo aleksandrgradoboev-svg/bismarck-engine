@@ -1,0 +1,68 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "text": "",
+      "stringContent": true,
+      "message": {
+        "role": "system",
+        "content": "",
+        "sections": {
+          "preamble": "You are pi.",
+          "tools": "<tools>\n- read: Read file contents\n</tools>",
+          "rules": "<rules>\n- Be concise\n</rules>",
+          "docs": "<docs>\nd\n</docs>",
+          "cwd": "<cwd>\n/proj\n</cwd>"
+        },
+        "timestamp": 1789603201000,
+        "toolsAdded": [
+          {
+            "name": "read",
+            "description": "Read a file",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "offset": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "role": "user",
+      "text": "hi"
+    },
+    {
+      "role": "assistant",
+      "text": "hello"
+    }
+  ],
+  "entries": [
+    {
+      "id": "s1",
+      "messages": 1
+    },
+    {
+      "id": "s2",
+      "messages": 1
+    },
+    {
+      "id": "s3",
+      "messages": 1
+    }
+  ]
+}

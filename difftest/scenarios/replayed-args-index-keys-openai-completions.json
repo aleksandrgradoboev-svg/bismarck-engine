@@ -1,0 +1,113 @@
+{
+  "name": "replayed-args-index-keys-openai-completions",
+  "note": "A replayed tool call's arguments string is JSON.stringify of the object JSON.parse built from the session, which lists array-index keys first, ascending, whatever order the model wrote them in. Behaviour predates the 0.87.0 build, so backend is dist.",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "gpt-4o-mini",
+    "name": "GPT-4o mini",
+    "api": "openai-completions",
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "reasoning": false,
+    "input": [
+      "text",
+      "image"
+    ],
+    "cost": {
+      "input": 0.15,
+      "output": 0.6,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "contextWindow": 128000,
+    "maxTokens": 16384
+  },
+  "context": {
+    "systemPrompt": "You are helpful.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Build it.",
+        "timestamp": 1
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_1",
+            "name": "bash",
+            "arguments": {
+              "command": "ls",
+              "2": "x",
+              "1": "y",
+              "01": "z",
+              "nested": {
+                "b": 1,
+                "10": 2,
+                "9": 3
+              }
+            }
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "usage": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 0,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        },
+        "stopReason": "toolUse",
+        "timestamp": 2
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_1",
+        "toolName": "bash",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok"
+          }
+        ],
+        "isError": false,
+        "timestamp": 3
+      }
+    ],
+    "tools": [
+      {
+        "name": "bash",
+        "description": "Run a command.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "command"
+          ]
+        }
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key"
+  }
+}

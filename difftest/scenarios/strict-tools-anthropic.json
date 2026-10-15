@@ -1,0 +1,79 @@
+{
+  "name": "strict-tools-anthropic",
+  "note": "Upstream 7915cdac6 (Go d3978d3): strict tool schema conversion. Requires PI_UPSTREAM_SHA >= 7915cdac6 (feature absent at earlier shas -> false FAIL). Anthropic wire: strict tool spreads the CONVERTED schema under the legacy {type,properties,required} overlay and carries strict:true; the inconvertible strict-prefer tool falls back to the legacy shape from its ORIGINAL parameters with no strict flag; the plain tool is untouched. conv exercises: required = every property in insertion order, anyOf-null widening of non-nullable optionals, no-rewrap of anyOf-null and type-array-null properties, nested object closing, array items conversion, zero-property object, title passthrough. Shipped in pi-ai 0.84.2; backend flipped to dist (README rule).",
+  "backend": "dist",
+  "api": "anthropic-messages",
+  "entry": "streamSimple",
+  "model": {
+    "id": "claude-strict-test",
+    "name": "Claude Strict Test",
+    "api": "anthropic-messages",
+    "provider": "anthropic",
+    "baseUrl": "https://api.anthropic.com",
+    "reasoning": false,
+    "input": ["text"],
+    "cost": { "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75 },
+    "contextWindow": 200000,
+    "maxTokens": 8192,
+    "compat": { "supportsStrictTools": true }
+  },
+  "context": {
+    "systemPrompt": "You call tools.",
+    "messages": [{ "role": "user", "content": "Call conv.", "timestamp": 1 }],
+    "tools": [
+      {
+        "name": "conv",
+        "description": "Convertible tool.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "value": { "type": "string", "description": "Required string." },
+            "optional": { "type": "number" },
+            "metadata": {
+              "type": "object",
+              "properties": { "enabled": { "type": "boolean" } }
+            },
+            "nullable": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+            "nullish": { "type": ["integer", "null"] },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": { "k": { "type": "string" } },
+                "required": ["k"]
+              }
+            },
+            "empty": { "type": "object" }
+          },
+          "required": ["value", "metadata"],
+          "title": "ConvInput"
+        },
+        "constrainedSampling": { "type": "json_schema", "strict": "prefer" }
+      },
+      {
+        "name": "fallback",
+        "description": "Falls back.",
+        "parameters": {
+          "type": "object",
+          "properties": { "child": { "$ref": "https://example.com/child.json" } },
+          "required": ["child"]
+        },
+        "constrainedSampling": { "type": "json_schema", "strict": "prefer" }
+      },
+      {
+        "name": "plain",
+        "description": "No constrained sampling.",
+        "parameters": {
+          "type": "object",
+          "properties": { "q": { "type": "string" } },
+          "required": ["q"],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "maxTokens": 1024
+  }
+}

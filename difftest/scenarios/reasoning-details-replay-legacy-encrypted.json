@@ -1,0 +1,194 @@
+{
+  "name": "reasoning-details-replay-legacy-encrypted",
+  "note": "Upstream b7bb00b93. With no thinking block carrying a sequence, the legacy path replays the tool calls' thoughtSignatures — but ONLY well-formed reasoning.encrypted details with a non-empty id and non-empty data, in tool-call order. The three other signatures here (a reasoning.text detail, an encrypted one with an empty id, and a bare JSON number) all parsed before b7bb00b93 and were replayed as reasoning_details entries; they must now be dropped. Post-0.84.2 surface, so backend is src: REQUIRES PI_UPSTREAM_SHA >= b7bb00b93 (at an older pin pi still replays the pre-b7bb00b93 shape and this FAILs). Shipped in pi-ai 0.84.3 (release 4e58f324f); flipped to backend:\"dist\" — the published build is the stronger ground truth (README rule).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "anthropic/claude-sonnet-5",
+    "name": "Anthropic: Claude Sonnet 5",
+    "api": "openai-completions",
+    "provider": "openrouter",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 2,
+      "output": 10,
+      "cacheRead": 0.2,
+      "cacheWrite": 2.5
+    },
+    "contextWindow": 200000,
+    "maxTokens": 64000
+  },
+  "context": {
+    "systemPrompt": "You read files.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Read both files",
+        "timestamp": 1
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "Two files to read.",
+            "thinkingSignature": "reasoning"
+          },
+          {
+            "type": "toolCall",
+            "id": "call_1",
+            "name": "read",
+            "arguments": {
+              "path": "a.md"
+            },
+            "thoughtSignature": "{\"type\":\"reasoning.encrypted\",\"id\":\"call_1\",\"data\":\"ENCRYPTED-1\"}"
+          },
+          {
+            "type": "toolCall",
+            "id": "call_2",
+            "name": "read",
+            "arguments": {
+              "path": "b.md"
+            },
+            "thoughtSignature": "{\"type\":\"reasoning.text\",\"text\":\"not encrypted\"}"
+          },
+          {
+            "type": "toolCall",
+            "id": "call_3",
+            "name": "read",
+            "arguments": {
+              "path": "c.md"
+            },
+            "thoughtSignature": "{\"type\":\"reasoning.encrypted\",\"id\":\"\",\"data\":\"ENCRYPTED-3\"}"
+          },
+          {
+            "type": "toolCall",
+            "id": "call_4",
+            "name": "read",
+            "arguments": {
+              "path": "d.md"
+            },
+            "thoughtSignature": "123"
+          },
+          {
+            "type": "toolCall",
+            "id": "call_5",
+            "name": "read",
+            "arguments": {
+              "path": "e.md"
+            },
+            "thoughtSignature": "{\"type\":\"reasoning.encrypted\",\"id\":\"call_5\",\"data\":\"ENCRYPTED-5\"}"
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "openrouter",
+        "model": "anthropic/claude-sonnet-5",
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "stopReason": "toolUse",
+        "timestamp": 2
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_1",
+        "toolName": "read",
+        "content": [
+          {
+            "type": "text",
+            "text": "a"
+          }
+        ],
+        "isError": false,
+        "timestamp": 3
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_2",
+        "toolName": "read",
+        "content": [
+          {
+            "type": "text",
+            "text": "b"
+          }
+        ],
+        "isError": false,
+        "timestamp": 4
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_3",
+        "toolName": "read",
+        "content": [
+          {
+            "type": "text",
+            "text": "c"
+          }
+        ],
+        "isError": false,
+        "timestamp": 5
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_4",
+        "toolName": "read",
+        "content": [
+          {
+            "type": "text",
+            "text": "d"
+          }
+        ],
+        "isError": false,
+        "timestamp": 6
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call_5",
+        "toolName": "read",
+        "content": [
+          {
+            "type": "text",
+            "text": "e"
+          }
+        ],
+        "isError": false,
+        "timestamp": 7
+      },
+      {
+        "role": "user",
+        "content": "Now summarize.",
+        "timestamp": 8
+      }
+    ],
+    "tools": [
+      {
+        "name": "read",
+        "description": "Read a file.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "maxTokens": 1024
+  }
+}

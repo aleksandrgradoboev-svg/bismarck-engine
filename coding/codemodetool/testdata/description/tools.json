@@ -1,0 +1,49 @@
+{
+  "tools": [
+    {"name": "read_notes", "description": "Read notes.", "parameters": {"type": "object", "properties": {}}},
+    {"name": "mcp__github__a", "description": "GitHub a.", "parameters": {"type": "object", "properties": {}}},
+    {"name": "mcp__github__b", "description": "GitHub b.", "parameters": {"type": "object", "properties": {}}},
+    {"name": "mcp__github__c", "description": "GitHub c.", "parameters": {"type": "object", "properties": {}}},
+    {"name": "mcp__docs__search", "description": "Search docs.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "What to find"}, "limit": {"type": "number"}}, "required": ["query"]}},
+    {"name": "mcp__docs__long", "description": "Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long ", "parameters": {"type": "object", "properties": {}}},
+    {"name": "shell", "description": "Run a shell command.\nSecond line.", "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]},
+     "outputSchema": {"type": "object", "properties": {"output": {"type": "string"}, "exit_code": {"type": "number"}, "meta": {"type": "object", "properties": {"took": {"type": "number"}, "host": {"type": "string"}}, "required": ["took"]}}, "required": ["output", "exit_code"]}},
+    {"name": "my-tool", "description": "A tool with a dash.", "parameters": {"type": "object", "properties": {"x": {"type": "string"}}}, "outputSchema": {"type": "array", "items": {"type": "string"}}},
+    {"name": "codemode", "description": "placeholder", "parameters": {"type": "object", "properties": {"code": {"type": "string"}}}}
+  ],
+  "namespaces": {
+    "mcp__github__a": {"name": "mcp__github", "description": "GitHub server", "instructions": "Long usage guide."},
+    "mcp__github__b": {"name": "mcp__github", "description": "GitHub server", "instructions": "Long usage guide."},
+    "mcp__github__c": {"name": "mcp__github", "description": "GitHub server", "instructions": "Long usage guide."},
+    "mcp__docs__search": {"name": "mcp__docs"},
+    "mcp__docs__long": {"name": "mcp__docs"}
+  },
+  "guidelines": {
+    "mcp__docs__search": ["  Prefer exact phrases. ", "", "Quote names."],
+    "shell": ["Use for builds."]
+  },
+  "exposures": {
+    "read_notes": "direct",
+    "shell": "direct",
+    "my-tool": "direct",
+    "mcp__github__a": "deferred",
+    "mcp__github__b": "deferred",
+    "mcp__github__c": "deferred",
+    "mcp__docs__search": "codemode",
+    "mcp__docs__long": "codemode",
+    "codemode": "model-only"
+  },
+  "descriptionCases": [
+    {"name": "all", "tools": ["read_notes", "mcp__github__a", "mcp__github__b", "mcp__github__c", "mcp__docs__search", "mcp__docs__long"]},
+    {"name": "budget170", "tools": ["read_notes", "mcp__github__a", "mcp__github__b", "mcp__github__c", "mcp__docs__search", "mcp__docs__long"], "budget": 170},
+    {"name": "deferredGithub", "tools": ["read_notes", "mcp__github__a", "mcp__github__b", "mcp__github__c", "mcp__docs__search", "mcp__docs__long"], "deferred": ["mcp__github__a", "mcp__github__b", "mcp__github__c"]},
+    {"name": "budget0", "tools": ["read_notes", "mcp__github__a", "mcp__github__b", "mcp__github__c", "mcp__docs__search", "mcp__docs__long"], "budget": 0},
+    {"name": "guidelinesAndOutputs", "tools": ["shell", "my-tool", "mcp__docs__search", "codemode"], "guidelines": true},
+    {"name": "empty", "tools": []}
+  ],
+  "loadoutCases": [
+    {"name": "on", "mode": "on", "declared": ["codemode", "read_notes", "shell", "my-tool"], "callable": ["read_notes", "shell", "my-tool", "mcp__github__a", "mcp__docs__search", "mcp__docs__long"]},
+    {"name": "only", "mode": "only", "declared": ["codemode", "read_notes", "shell", "my-tool"], "callable": ["read_notes", "shell", "my-tool", "mcp__github__a", "mcp__docs__search", "mcp__docs__long"]},
+    {"name": "onSmallBudget", "mode": "on", "budget": 60, "declared": ["codemode", "read_notes"], "callable": ["read_notes", "mcp__docs__search", "mcp__docs__long"]}
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "name": "strict-tools-responses",
+  "note": "Upstream 7915cdac6 (Go d3978d3): strict tool schema conversion. Requires PI_UPSTREAM_SHA >= 7915cdac6 (feature absent at earlier shas -> false FAIL). Responses wire: strict tool sends parameters = CONVERTED schema with strict:true; inconvertible strict-prefer tool falls back to ORIGINAL parameters with strict:false; plain tool sends original parameters with strict:false. Shipped in pi-ai 0.84.2; backend flipped to dist (README rule).",
+  "backend": "dist",
+  "api": "openai-responses",
+  "entry": "streamSimple",
+  "model": {
+    "id": "gpt-5.6-sol",
+    "name": "GPT-5.6 Sol",
+    "api": "openai-responses",
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 1.25,
+      "output": 10,
+      "cacheRead": 0.125,
+      "cacheWrite": 0
+    },
+    "contextWindow": 400000,
+    "maxTokens": 128000,
+    "compat": {
+      "supportsStrictMode": true
+    }
+  },
+  "context": {
+    "systemPrompt": "You call tools.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Call conv.",
+        "timestamp": 1
+      }
+    ],
+    "tools": [
+      {
+        "name": "conv",
+        "description": "Convertible tool.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "description": "Required string."
+            },
+            "optional": {
+              "type": "number"
+            },
+            "metadata": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "nullable": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "nullish": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "k": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "k"
+                ]
+              }
+            },
+            "empty": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "value",
+            "metadata"
+          ],
+          "title": "ConvInput"
+        },
+        "constrainedSampling": {
+          "type": "json_schema",
+          "strict": "prefer"
+        }
+      },
+      {
+        "name": "fallback",
+        "description": "Falls back.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "child": {
+              "$ref": "https://example.com/child.json"
+            }
+          },
+          "required": [
+            "child"
+          ]
+        },
+        "constrainedSampling": {
+          "type": "json_schema",
+          "strict": "prefer"
+        }
+      },
+      {
+        "name": "plain",
+        "description": "No constrained sampling.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "q": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "q"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "sk-test-key",
+    "maxTokens": 1024
+  }
+}

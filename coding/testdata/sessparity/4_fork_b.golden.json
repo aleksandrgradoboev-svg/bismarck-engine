@@ -1,0 +1,43 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "text": "question"
+    },
+    {
+      "role": "assistant",
+      "text": "trunk"
+    },
+    {
+      "role": "user",
+      "text": "follow B"
+    },
+    {
+      "role": "assistant",
+      "text": "answer B"
+    }
+  ],
+  "entries": [
+    {
+      "id": "f1",
+      "messages": 1
+    },
+    {
+      "id": "f2",
+      "messages": 1
+    },
+    {
+      "id": "fb3",
+      "messages": 1
+    },
+    {
+      "id": "fb4",
+      "messages": 1
+    }
+  ]
+}

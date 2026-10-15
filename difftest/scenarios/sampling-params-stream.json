@@ -1,0 +1,54 @@
+{
+  "name": "sampling-params-stream",
+  "note": "Upstream c01f687e5 (Go 433fcdd): the samplingParams merge moved from buildBaseOptions into the adapters' buildParams, Object.assign(params, model.samplingParams, options.samplingParams), so a direct stream() gets the model's defaults too (pi #9506), request keys winning per key and both applied after the named request fields. Same inputs as sampling-params, through stream() instead of streamSimple. dist since the 0.99.1 re-pin: 0.99.1 is the first build that ships c01f687e5 (0.87.1 merged only in streamSimple).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "stream",
+  "model": {
+    "id": "custom-model",
+    "name": "Custom llama.cpp model",
+    "api": "openai-completions",
+    "provider": "custom-provider",
+    "baseUrl": "http://127.0.0.1:9/v1",
+    "reasoning": false,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "contextWindow": 32768,
+    "maxTokens": 4096,
+    "samplingParams": {
+      "top_k": 40,
+      "min_p": 0.05,
+      "repetition_penalty": 1.1,
+      "temperature": 0.9,
+      "mirostat": null
+    }
+  },
+  "context": {
+    "systemPrompt": "sys",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi",
+        "timestamp": 1
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "temperature": 0.2,
+    "maxTokens": 512,
+    "samplingParams": {
+      "top_p": 0.95,
+      "top_k": 0,
+      "temperature": 1.5,
+      "max_tokens": 77
+    }
+  }
+}

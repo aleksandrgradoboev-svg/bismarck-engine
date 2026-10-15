@@ -1,0 +1,51 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "text": "The conversation history before this point was compacted into the following summary:\n\n<summary>\nearlier stuff\n</summary>"
+    },
+    {
+      "role": "assistant",
+      "text": "hi"
+    },
+    {
+      "role": "user",
+      "text": "follow up"
+    },
+    {
+      "role": "user",
+      "text": "a custom note"
+    },
+    {
+      "role": "assistant",
+      "text": "answer"
+    }
+  ],
+  "entries": [
+    {
+      "id": "e3",
+      "messages": 1
+    },
+    {
+      "id": "e2",
+      "messages": 1
+    },
+    {
+      "id": "e4",
+      "messages": 1
+    },
+    {
+      "id": "e5",
+      "messages": 1
+    },
+    {
+      "id": "e6",
+      "messages": 1
+    }
+  ]
+}

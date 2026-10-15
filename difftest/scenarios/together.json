@@ -1,0 +1,54 @@
+{
+  "name": "together",
+  "note": "thinkingFormat 'together' on a real catalog model (MiniMax-M3): thinking is expressed in the body, not via reasoning_effort (supportsReasoningEffort false).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "MiniMaxAI/MiniMax-M3",
+    "name": "MiniMax-M3",
+    "api": "openai-completions",
+    "provider": "together",
+    "baseUrl": "https://api.together.ai/v1",
+    "reasoning": true,
+    "thinkingLevelMap": { "minimal": null, "low": null, "medium": null },
+    "input": ["text", "image"],
+    "cost": { "input": 0.3, "output": 1.2, "cacheRead": 0.06, "cacheWrite": 0 },
+    "compat": {
+      "supportsStore": false,
+      "supportsDeveloperRole": false,
+      "supportsReasoningEffort": false,
+      "maxTokensField": "max_tokens",
+      "thinkingFormat": "together",
+      "supportsStrictMode": false,
+      "supportsLongCacheRetention": false
+    },
+    "contextWindow": 524288,
+    "maxTokens": 250000
+  },
+  "context": {
+    "systemPrompt": "You are terse.",
+    "messages": [
+      { "role": "user", "content": "2+2?", "timestamp": 1 },
+      {
+        "role": "assistant",
+        "content": [
+          { "type": "thinking", "thinking": "trivial" },
+          { "type": "text", "text": "4" }
+        ],
+        "api": "openai-completions",
+        "provider": "together",
+        "model": "MiniMaxAI/MiniMax-M3",
+        "usage": { "input": 5, "output": 3, "cacheRead": 0, "cacheWrite": 0 },
+        "stopReason": "stop",
+        "timestamp": 2
+      },
+      { "role": "user", "content": "and 3+3?", "timestamp": 3 }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "reasoning": "high",
+    "sessionId": "session-together"
+  }
+}

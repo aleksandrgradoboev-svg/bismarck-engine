@@ -1,0 +1,83 @@
+{
+  "name": "reasoning",
+  "note": "OpenAI reasoning model via streamSimple: unified thinking level -> reasoning_effort, thinking blocks in the transcript. Its thinkingSignature is \"sig-abc\", which pre-b7bb00b93 became a literal request key (\"sig-abc\": \"Assume p/q...\") and now does not — only reasoning/reasoning_content/reasoning_text name a field. Shipped in pi-ai 0.84.3 (release 4e58f324f), so this scenario is backend:\"dist\" — captured against the published build, the stronger ground truth (README rule).",
+  "backend": "dist",
+  "api": "openai-completions",
+  "entry": "streamSimple",
+  "model": {
+    "id": "o4-mini",
+    "name": "o4-mini",
+    "api": "openai-completions",
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "reasoning": true,
+    "input": [
+      "text",
+      "image"
+    ],
+    "cost": {
+      "input": 1.1,
+      "output": 4.4,
+      "cacheRead": 0.275,
+      "cacheWrite": 0
+    },
+    "contextWindow": 200000,
+    "maxTokens": 100000,
+    "compat": {
+      "supportsReasoningEffort": true,
+      "maxTokensField": "max_completion_tokens",
+      "thinkingFormat": "openai"
+    },
+    "thinkingLevelMap": {
+      "minimal": "minimal",
+      "low": "low",
+      "medium": "medium",
+      "high": "high"
+    }
+  },
+  "context": {
+    "systemPrompt": "Think carefully.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Prove that sqrt(2) is irrational.",
+        "timestamp": 1
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "Assume p/q in lowest terms.",
+            "thinkingSignature": "sig-abc"
+          },
+          {
+            "type": "text",
+            "text": "Suppose sqrt(2) = p/q..."
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "openai",
+        "model": "o4-mini",
+        "usage": {
+          "input": 20,
+          "output": 40,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "stopReason": "stop",
+        "timestamp": 2
+      },
+      {
+        "role": "user",
+        "content": "Now do it by infinite descent.",
+        "timestamp": 3
+      }
+    ]
+  },
+  "options": {
+    "apiKey": "test-key",
+    "reasoning": "high",
+    "maxTokens": 4096
+  }
+}

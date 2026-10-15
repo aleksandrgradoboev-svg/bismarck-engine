@@ -1,0 +1,47 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "text": "run it"
+    },
+    {
+      "role": "user",
+      "text": "Ran `ls -la`\n```\ntotal 0\ndrwxr-xr-x  2 u  w   64 Jun  8 00:00 .\n```\n\nCommand exited with code 2\n\n[Output truncated. Full output: /tmp/pi-bash-abc.log]"
+    },
+    {
+      "role": "user",
+      "text": "extension note"
+    },
+    {
+      "role": "assistant",
+      "text": "done"
+    }
+  ],
+  "entries": [
+    {
+      "id": "b1",
+      "messages": 1
+    },
+    {
+      "id": "b2",
+      "messages": 1
+    },
+    {
+      "id": "b3",
+      "messages": 0
+    },
+    {
+      "id": "b4",
+      "messages": 1
+    },
+    {
+      "id": "b5",
+      "messages": 1
+    }
+  ]
+}

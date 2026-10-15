@@ -1,0 +1,506 @@
+{
+	"sha": "16235fd93",
+	"cases": [
+		{
+			"name": "upstream/omitted uses the lowest supported level",
+			"id": "gemini-3.8-flash",
+			"thinkingLevelMap": {
+				"off": null,
+				"minimal": null,
+				"low": "low",
+				"medium": "medium",
+				"high": "high",
+				"xhigh": null,
+				"max": null
+			},
+			"thinkingConfig": {
+				"thinkingLevel": "LOW"
+			}
+		},
+		{
+			"name": "upstream/native medium on Gemini 3.1 Pro",
+			"id": "gemini-3.1-pro-preview",
+			"thinkingLevelMap": {
+				"off": null,
+				"minimal": null,
+				"low": "low",
+				"medium": "medium",
+				"high": "high",
+				"xhigh": null,
+				"max": null
+			},
+			"reasoning": "medium",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "MEDIUM"
+			}
+		},
+		{
+			"name": "upstream/omitted disables Gemini 2.5",
+			"id": "gemini-2.5-flash",
+			"thinkingLevelMap": {},
+			"thinkingConfig": {
+				"thinkingBudget": 0
+			}
+		},
+		{
+			"name": "upstream/xhigh maps",
+			"id": "gemini-3.7-flash",
+			"thinkingLevelMap": {
+				"xhigh": "high",
+				"max": "high"
+			},
+			"reasoning": "xhigh",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "HIGH"
+			}
+		},
+		{
+			"name": "upstream/max maps",
+			"id": "gemini-3.7-flash",
+			"thinkingLevelMap": {
+				"xhigh": "high",
+				"max": "high"
+			},
+			"reasoning": "max",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "HIGH"
+			}
+		},
+		{
+			"name": "upstream/uppercase provider value",
+			"id": "gemini-3.7-flash",
+			"thinkingLevelMap": {
+				"high": "LOW"
+			},
+			"reasoning": "high",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "LOW"
+			}
+		},
+		{
+			"name": "upstream/mapped level keys the token budget",
+			"id": "gemini-2.5-flash",
+			"thinkingLevelMap": {
+				"xhigh": "high"
+			},
+			"reasoning": "xhigh",
+			"thinkingBudgets": {
+				"high": 1234
+			},
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingBudget": 1234
+			}
+		},
+		{
+			"name": "upstream/unmappable level throws",
+			"id": "gemini-3.7-flash",
+			"thinkingLevelMap": {
+				"xhigh": "extreme"
+			},
+			"reasoning": "xhigh",
+			"thrown": "Unsupported Google thinking level mapping for test-google/gemini-3.7-flash: xhigh -> extreme"
+		},
+		{
+			"name": "disabled/pro catalog map",
+			"id": "gemini-3.1-pro-preview",
+			"thinkingLevelMap": {
+				"off": null,
+				"minimal": null,
+				"low": "LOW",
+				"medium": null,
+				"high": "HIGH"
+			},
+			"thinkingConfig": {
+				"thinkingLevel": "LOW"
+			}
+		},
+		{
+			"name": "disabled/flash catalog map",
+			"id": "gemini-3-flash-preview",
+			"thinkingLevelMap": {
+				"off": null
+			},
+			"thinkingConfig": {
+				"thinkingLevel": "MINIMAL"
+			}
+		},
+		{
+			"name": "disabled/gemma catalog map",
+			"id": "gemma-4-31b-it",
+			"thinkingLevelMap": {
+				"off": null,
+				"minimal": "MINIMAL",
+				"low": null,
+				"medium": null,
+				"high": "HIGH"
+			},
+			"thinkingConfig": {
+				"thinkingLevel": "MINIMAL"
+			}
+		},
+		{
+			"name": "disabled/flash-latest catalog map",
+			"id": "gemini-flash-latest",
+			"thinkingLevelMap": {
+				"off": null
+			},
+			"thinkingConfig": {
+				"thinkingLevel": "MINIMAL"
+			}
+		},
+		{
+			"name": "disabled/flash-lite-latest catalog map",
+			"id": "gemini-flash-lite-latest",
+			"thinkingLevelMap": {
+				"off": null
+			},
+			"thinkingConfig": {
+				"thinkingLevel": "MINIMAL"
+			}
+		},
+		{
+			"name": "disabled/gemini 2.5 no map",
+			"id": "gemini-2.5-flash",
+			"thinkingConfig": {
+				"thinkingBudget": 0
+			}
+		},
+		{
+			"name": "disabled/pro no map",
+			"id": "gemini-3-pro-preview",
+			"thinkingConfig": {
+				"thinkingBudget": 0
+			}
+		},
+		{
+			"name": "disabled/flash no map",
+			"id": "gemini-3-flash-preview",
+			"thinkingConfig": {
+				"thinkingBudget": 0
+			}
+		},
+		{
+			"name": "disabled/gemma4 no dash no map",
+			"id": "gemma4-26b",
+			"thinkingConfig": {
+				"thinkingBudget": 0
+			}
+		},
+		{
+			"name": "disabled/budget model ignores an unsupported off",
+			"id": "gemini-2.5-flash",
+			"thinkingLevelMap": {
+				"off": null
+			},
+			"thinkingConfig": {
+				"thinkingBudget": 0
+			}
+		},
+		{
+			"name": "disabled/fallback clamps up to xhigh",
+			"id": "gemini-3.8-flash",
+			"thinkingLevelMap": {
+				"off": null,
+				"minimal": null,
+				"low": null,
+				"medium": null,
+				"high": null,
+				"xhigh": "high"
+			},
+			"thinkingConfig": {
+				"thinkingLevel": "HIGH"
+			}
+		},
+		{
+			"name": "disabled/unmappable fallback fails",
+			"id": "gemini-3.8-flash",
+			"thinkingLevelMap": {
+				"off": null,
+				"minimal": "extreme"
+			},
+			"error": "Unsupported Google thinking level mapping for test-google/gemini-3.8-flash: minimal -> extreme"
+		},
+		{
+			"name": "disabled/unmappable fallback keeps the mapped value's case",
+			"id": "gemma-4-31b-it",
+			"thinkingLevelMap": {
+				"off": null,
+				"minimal": "MAX"
+			},
+			"error": "Unsupported Google thinking level mapping for test-google/gemma-4-31b-it: minimal -> MAX"
+		},
+		{
+			"name": "disabled/tool error precedes unmappable fallback",
+			"id": "gemma-4-31b-it",
+			"thinkingLevelMap": {
+				"off": null,
+				"minimal": "extreme"
+			},
+			"strictRequiredTool": true,
+			"error": "Tool \"strict_tool\" requires JSON-schema constrained sampling, but strict tools are unsupported."
+		},
+		{
+			"name": "disabled/non-reasoning model sends none",
+			"id": "gemini-3-flash-preview",
+			"modelReasoning": false,
+			"thinkingConfig": null
+		},
+		{
+			"name": "off/explicit on gemini 2.5",
+			"id": "gemini-2.5-flash",
+			"reasoning": "off",
+			"thinkingConfig": {
+				"thinkingBudget": 0
+			}
+		},
+		{
+			"name": "off/explicit on flash no map",
+			"id": "gemini-3-flash-preview",
+			"reasoning": "off",
+			"thinkingConfig": {
+				"thinkingBudget": 0
+			}
+		},
+		{
+			"name": "off/clamped when only off is supported",
+			"id": "gemini-3.8-flash",
+			"thinkingLevelMap": {
+				"minimal": null,
+				"low": null,
+				"medium": null,
+				"high": null
+			},
+			"reasoning": "high",
+			"thinkingConfig": {
+				"thinkingBudget": 0
+			}
+		},
+		{
+			"name": "off/explicit on pro catalog map clamps up",
+			"id": "gemini-3.1-pro-preview",
+			"thinkingLevelMap": {
+				"off": null,
+				"minimal": null,
+				"low": "LOW",
+				"medium": null,
+				"high": "HIGH"
+			},
+			"reasoning": "off",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "LOW"
+			}
+		},
+		{
+			"name": "level/pro catalog map minimal",
+			"id": "gemini-3.1-pro-preview",
+			"thinkingLevelMap": {
+				"off": null,
+				"minimal": null,
+				"low": "LOW",
+				"medium": null,
+				"high": "HIGH"
+			},
+			"reasoning": "minimal",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "LOW"
+			}
+		},
+		{
+			"name": "level/pro catalog map medium",
+			"id": "gemini-3.1-pro-preview",
+			"thinkingLevelMap": {
+				"off": null,
+				"minimal": null,
+				"low": "LOW",
+				"medium": null,
+				"high": "HIGH"
+			},
+			"reasoning": "medium",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "HIGH"
+			}
+		},
+		{
+			"name": "level/pro no map medium",
+			"id": "gemini-3.1-pro-preview",
+			"reasoning": "medium",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "MEDIUM"
+			}
+		},
+		{
+			"name": "level/pro no map minimal",
+			"id": "gemini-3-pro-preview",
+			"reasoning": "minimal",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "MINIMAL"
+			}
+		},
+		{
+			"name": "level/gemma catalog map low",
+			"id": "gemma-4-31b-it",
+			"thinkingLevelMap": {
+				"off": null,
+				"minimal": "MINIMAL",
+				"low": null,
+				"medium": null,
+				"high": "HIGH"
+			},
+			"reasoning": "low",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "HIGH"
+			}
+		},
+		{
+			"name": "level/gemma no map low",
+			"id": "gemma-4-31b-it",
+			"reasoning": "low",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "LOW"
+			}
+		},
+		{
+			"name": "level/gemma4 no dash no map low",
+			"id": "gemma4-26b",
+			"reasoning": "low",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "LOW"
+			}
+		},
+		{
+			"name": "level/mixed-case pro id",
+			"id": "Gemini-3.1-Pro-Preview",
+			"reasoning": "medium",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "MEDIUM"
+			}
+		},
+		{
+			"name": "level/flash-lite-latest no map minimal",
+			"id": "gemini-flash-lite-latest",
+			"reasoning": "minimal",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "MINIMAL"
+			}
+		},
+		{
+			"name": "level/flash catalog map minimal",
+			"id": "gemini-3.8-flash",
+			"thinkingLevelMap": {
+				"off": null
+			},
+			"reasoning": "minimal",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "MINIMAL"
+			}
+		},
+		{
+			"name": "level/unmappable value keeps its case",
+			"id": "gemini-3.7-flash",
+			"thinkingLevelMap": {
+				"high": "XHIGH"
+			},
+			"reasoning": "high",
+			"thrown": "Unsupported Google thinking level mapping for test-google/gemini-3.7-flash: high -> XHIGH"
+		},
+		{
+			"name": "id/flash-latest with a suffix uses budgets",
+			"id": "gemini-flash-latest-001",
+			"reasoning": "low",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingBudget": -1
+			}
+		},
+		{
+			"name": "id/flash-latest with a prefix uses budgets",
+			"id": "models/gemini-flash-latest",
+			"thinkingLevelMap": {
+				"off": null
+			},
+			"thinkingConfig": {
+				"thinkingBudget": 0
+			}
+		},
+		{
+			"name": "id/flash-lite-latest with a suffix uses budgets",
+			"id": "gemini-flash-lite-latest-001",
+			"reasoning": "low",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingBudget": -1
+			}
+		},
+		{
+			"name": "id/flash-lite-latest with a prefix uses budgets",
+			"id": "models/gemini-flash-lite-latest",
+			"thinkingLevelMap": {
+				"off": null
+			},
+			"thinkingConfig": {
+				"thinkingBudget": 0
+			}
+		},
+		{
+			"name": "id/gemini 3 after a path prefix uses levels",
+			"id": "models/gemini-3-pro-preview",
+			"reasoning": "low",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "LOW"
+			}
+		},
+		{
+			"name": "id/gemini 3 two-digit minor uses levels",
+			"id": "gemini-3.10-flash-lite",
+			"reasoning": "low",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "LOW"
+			}
+		},
+		{
+			"name": "id/gemini 3 non-digit minor uses budgets",
+			"id": "gemini-3.x-pro",
+			"reasoning": "low",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingBudget": -1
+			}
+		},
+		{
+			"name": "id/gemini 4 uses budgets",
+			"id": "gemini-4-pro",
+			"reasoning": "low",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingBudget": -1
+			}
+		},
+		{
+			"name": "id/gemma 4 inside a longer name uses levels",
+			"id": "codegemma4",
+			"reasoning": "low",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "LOW"
+			}
+		}
+	]
+}

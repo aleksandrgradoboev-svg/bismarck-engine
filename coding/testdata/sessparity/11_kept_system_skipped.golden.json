@@ -1,0 +1,69 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "text": "The conversation history before this point was compacted into the following summary:\n\n<summary>\nkept everything\n</summary>"
+    },
+    {
+      "role": "user",
+      "text": "one"
+    },
+    {
+      "role": "assistant",
+      "text": "first"
+    },
+    {
+      "role": "user",
+      "text": "two"
+    },
+    {
+      "role": "system",
+      "text": "Array prompt.",
+      "message": {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "Array prompt."
+          }
+        ],
+        "timestamp": 1789603206000
+      }
+    },
+    {
+      "role": "assistant",
+      "text": "answer"
+    }
+  ],
+  "entries": [
+    {
+      "id": "k5",
+      "messages": 1
+    },
+    {
+      "id": "k2",
+      "messages": 1
+    },
+    {
+      "id": "k3",
+      "messages": 1
+    },
+    {
+      "id": "k4",
+      "messages": 1
+    },
+    {
+      "id": "k6",
+      "messages": 1
+    },
+    {
+      "id": "k7",
+      "messages": 1
+    }
+  ]
+}

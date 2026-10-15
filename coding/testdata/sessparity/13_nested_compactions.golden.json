@@ -1,0 +1,86 @@
+{
+  "thinkingLevel": "off",
+  "model": {
+    "provider": "p",
+    "modelId": "m"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "text": "",
+      "stringContent": true,
+      "message": {
+        "role": "system",
+        "content": "",
+        "sections": {
+          "preamble": "v2",
+          "b": "<b>\n1\n</b>"
+        },
+        "timestamp": 1789603208000,
+        "toolsAdded": [
+          {
+            "name": "read",
+            "description": "Read a file",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "role": "user",
+      "text": "The conversation history before this point was compacted into the following summary:\n\n<summary>\nS-late\n</summary>"
+    },
+    {
+      "role": "assistant",
+      "text": "first"
+    },
+    {
+      "role": "user",
+      "text": "two"
+    },
+    {
+      "role": "assistant",
+      "text": "second"
+    },
+    {
+      "role": "user",
+      "text": "three"
+    }
+  ],
+  "entries": [
+    {
+      "id": "e8",
+      "messages": 2
+    },
+    {
+      "id": "e3",
+      "messages": 1
+    },
+    {
+      "id": "e4",
+      "messages": 0
+    },
+    {
+      "id": "e6",
+      "messages": 1
+    },
+    {
+      "id": "e7",
+      "messages": 1
+    },
+    {
+      "id": "e9",
+      "messages": 1
+    }
+  ]
+}
