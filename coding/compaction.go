@@ -969,6 +969,12 @@ func (s *Session) completeSummarization(ctx context.Context, promptText string, 
 // model treats it as content to summarize, not a conversation to continue (port
 // of utils.ts serializeConversation). Tool results are truncated to
 // toolResultMaxChars.
+//
+// Thinking is omitted (upstream 15e7bdc1). Providers return summaries of the
+// real reasoning, and replayed thinking is often not part of the model's live
+// context: a block that does not match its request is dropped. Including it can
+// make the summarization request larger than the context it summarizes. Visible
+// text, tool calls, and tool results record what happened.
 func serializeConversation(messages []ai.Message) string {
 	var parts []string
 	for _, m := range messages {
@@ -1012,13 +1018,11 @@ func orderedArguments(tc ai.ToolCall) ai.OrderedObject {
 }
 
 func serializeAssistant(a *ai.AssistantMessage) []string {
-	var textParts, thinkingParts, toolCalls []string
+	var textParts, toolCalls []string
 	for _, c := range a.Content {
 		switch b := c.(type) {
 		case ai.TextContent:
 			textParts = append(textParts, b.Text)
-		case ai.ThinkingContent:
-			thinkingParts = append(thinkingParts, b.Thinking)
 		case ai.ToolCall:
 			var entries []string
 			// pi's Object.entries walks the arguments in the order the model
@@ -1032,9 +1036,6 @@ func serializeAssistant(a *ai.AssistantMessage) []string {
 		}
 	}
 	var parts []string
-	if len(thinkingParts) > 0 {
-		parts = append(parts, "[Assistant thinking]: "+strings.Join(thinkingParts, "\n"))
-	}
 	if len(textParts) > 0 {
 		parts = append(parts, "[Assistant]: "+strings.Join(textParts, "\n"))
 	}
