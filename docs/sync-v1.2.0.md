@@ -96,7 +96,21 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
 2. **`models.json`** (pi `core/model-config.ts`, `core/model-registry.ts`): custom models and
    providers for `cmd/pi`. Library users can already build an `ai.Model` directly.
 3. **`durable`**: 82 files, 25.2k lines, changing almost daily upstream; ported from the newest
-   snapshot when this step starts, after measuring what changed since v1.2.0.
+   snapshot when this step starts, after measuring what changed since v1.2.0. Measured on 2026-10-16
+   at `d05a73fb`: `--shortstat v1.2.0..HEAD -- packages/durable/src` changed or removed 565 of the
+   snapshot's 25,159 lines (2.2%). The port follows that snapshot in stages.
+
+   **Stage 0, chord prerequisites** (at `d05a73fb`): `chord/output` (pi `chord/src/output.ts`:
+   `BoundOutput`, `OutputBuffer`, `Progress`) and replicated state in `chord` (pi `state.ts`:
+   `NewReplicatedState`, `AttachReplicatedState`), with pi's tests (`output`, `output-skip`,
+   `replicated-state`, `replicated-state-delivery`). Go-only: pi's overloaded `replicatedState` is
+   two constructors; a listener that goes on in the background returns a channel where pi's returns
+   a promise, and a panic is its throw; failures nothing receives go to `chord.ReportError`, which
+   logs, where pi rethrows them in a microtask; text arrives as UTF-8, its malformed bytes read as the
+   WHATWG decoder reads them (pi's lone surrogates encode the same way), and byte chunks decode with
+   a WHATWG decoder rather than Go's `utf8`, which replaces malformed input differently. Context,
+   `BACKGROUND_CONTEXT` and the abort-signal helpers are Go's `context`. A change callback that panics
+   leaves the state usable, as pi's `finally` does; a test beyond pi's pins it.
 
 ## 5. Bookkeeping
 
