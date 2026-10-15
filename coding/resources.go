@@ -355,6 +355,52 @@ func sessionSkills(cwd string, projectTrusted bool) []Skill {
 	return skills
 }
 
+// sessionContextFiles is the session's AGENTS.md/CLAUDE.md set: none when
+// noContextFiles is set (pi resource loader noContextFiles).
+func sessionContextFiles(cwd string, noContextFiles bool) []ContextFile {
+	if noContextFiles {
+		return nil
+	}
+	return LoadProjectContextFiles(cwd)
+}
+
+// sessionSkillsWithPaths is the session's skill set with pi's resource-loader
+// switches: default discovery unless noSkills, then each of paths (a skill
+// directory or a SKILL.md file), the first skill of a name winning.
+func sessionSkillsWithPaths(cwd string, projectTrusted, noSkills bool, paths []string) []Skill {
+	var skills []Skill
+	if !noSkills {
+		skills = sessionSkills(cwd, projectTrusted)
+	}
+	if len(paths) == 0 {
+		return skills
+	}
+	seen := map[string]bool{}
+	for _, s := range skills {
+		seen[s.Name] = true
+	}
+	for _, p := range paths {
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(cwd, p)
+		}
+		var found []Skill
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+			if s, _ := loadSkillFromFile(p); s != nil {
+				found = []Skill{*s}
+			}
+		} else {
+			found, _ = loadSkillsFromDir(p)
+		}
+		for _, s := range found {
+			if !seen[s.Name] {
+				seen[s.Name] = true
+				skills = append(skills, s)
+			}
+		}
+	}
+	return skills
+}
+
 // LoadSkillsWithTrust is LoadSkillsWithDiagnostics with the project-trust
 // decision supplied by the caller. Passing true scans <cwd>/.pi/skills, which
 // is what pi does once isProjectTrusted() holds; passing false is pi's
