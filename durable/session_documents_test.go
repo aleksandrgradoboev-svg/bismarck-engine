@@ -380,17 +380,17 @@ func TestDocumentRejectsASucceedingCallbackWithAPendingAcquisition(t *testing.T)
 	g := ts.storage.holdFindDocument()
 	commits := ts.storage.commitCount()
 	var pending <-chan error
-	var captured *durable.Tx
+	var captured atomic.Pointer[durable.Tx]
 	result := async(func() error {
 		return ts.session.Commit(bg, func(tx *durable.Tx) error {
 			pending = async(func() error { _, err := tx.Doc(ref); return err })
-			captured = tx
+			captured.Store(tx)
 			<-g.entered // the acquisition is registered and waits on Storage
 			return nil
 		})
 	})
 	g.Entered(t)
-	eventually(t, func() bool { return durable.TxSealed(captured) })
+	eventually(t, func() bool { return durable.TxSealed(captured.Load()) })
 	select {
 	case <-result:
 		t.Fatal("the commit settled while its acquisition was pending")
@@ -418,17 +418,17 @@ func TestDocumentLateAbsentAcquisitionNeitherInitializesNorMints(t *testing.T) {
 	g := ts.storage.holdFindDocument()
 	mints := ts.storage.mints()
 	var pending <-chan error
-	var captured *durable.Tx
+	var captured atomic.Pointer[durable.Tx]
 	result := async(func() error {
 		return ts.session.Commit(bg, func(tx *durable.Tx) error {
 			pending = async(func() error { _, err := tx.Doc(lateDoc.Session()); return err })
-			captured = tx
+			captured.Store(tx)
 			<-g.entered // the acquisition is registered and waits on Storage
 			return nil
 		})
 	})
 	g.Entered(t)
-	eventually(t, func() bool { return durable.TxSealed(captured) })
+	eventually(t, func() bool { return durable.TxSealed(captured.Load()) })
 	g.Release()
 	errorContains(t, wait(t, result), "pending Tx operations")
 	errorContains(t, wait(t, pending), "Transaction has settled")
@@ -442,17 +442,17 @@ func TestDocumentFailingCallbackWithAPendingAcquisitionReturnsItsError(t *testin
 	must(ts.session.UnloadDocuments())
 	g := ts.storage.holdFindDocument()
 	var pending <-chan error
-	var captured *durable.Tx
+	var captured atomic.Pointer[durable.Tx]
 	result := async(func() error {
 		return ts.session.Commit(bg, func(tx *durable.Tx) error {
 			pending = async(func() error { _, err := tx.Doc(LiveDoc.Conversation(conversationID)); return err })
-			captured = tx
+			captured.Store(tx)
 			<-g.entered // the acquisition is registered and waits on Storage
 			return errors.New("callback failed")
 		})
 	})
 	g.Entered(t)
-	eventually(t, func() bool { return durable.TxSealed(captured) })
+	eventually(t, func() bool { return durable.TxSealed(captured.Load()) })
 	g.Release()
 	errorContains(t, wait(t, result), "callback failed")
 	errorContains(t, wait(t, pending), "Transaction has settled")
