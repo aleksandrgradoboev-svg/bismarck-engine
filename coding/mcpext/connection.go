@@ -10,11 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
+	engine "github.com/aleksandrgradoboev-svg/bismarck-engine"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/coding"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/mcp"
 )
@@ -58,15 +58,7 @@ type TransportFactory func(entry ServerEntry, cwd string, auth mcp.AuthProvider)
 // DefaultClientInfo names this engine to servers: the module and its version
 // from the build information.
 func DefaultClientInfo() mcp.Implementation {
-	version := "0.0.0"
-	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, dep := range append([]*debug.Module{&info.Main}, info.Deps...) {
-			if dep != nil && dep.Path == "github.com/aleksandrgradoboev-svg/bismarck-engine" && dep.Version != "" && dep.Version != "(devel)" {
-				version = strings.TrimPrefix(dep.Version, "v")
-			}
-		}
-	}
-	return mcp.Implementation{Name: "bismarck-engine", Version: version}
+	return mcp.Implementation{Name: "bismarck-engine", Version: engine.Version()}
 }
 
 // expandHome expands "~" and "~/…" (also "~\…" on Windows), like a shell.
