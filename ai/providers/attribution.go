@@ -65,16 +65,15 @@ func isCloudflareAttributionModel(model *ai.Model) bool {
 		matchesAttributionHost(model.BaseURL, attrCloudflareAIGatewayHost)
 }
 
-// isInstallTelemetryEnabled mirrors pi telemetry.ts isInstallTelemetryEnabled.
-// pi reads PI_TELEMETRY (env overrides settings) and otherwise falls back to
-// SettingsManager.getEnableInstallTelemetry(), which defaults to true. The Go
-// port has no settings manager, so the faithful default is enabled; the
-// PI_TELEMETRY env override is honored so the headers can be suppressed.
+// isInstallTelemetryEnabled reports whether provider attribution headers are
+// sent. DIVERGENCE (bismarck-engine): pi enables them by default
+// (getEnableInstallTelemetry() ?? true); here they are opt-in — only a truthy
+// PI_TELEMETRY turns them on. A product embedding the engine does not announce
+// itself to model providers as pi unless its owner asks for that.
 func isInstallTelemetryEnabled() bool {
 	value, ok := os.LookupEnv("PI_TELEMETRY")
 	if !ok {
-		// No env override: settings default (getEnableInstallTelemetry() ?? true).
-		return true
+		return false
 	}
 	return isTruthyEnvFlag(value)
 }
@@ -117,8 +116,11 @@ func getDefaultAttributionHeaders(model *ai.Model) map[string]string {
 // getSessionAttributionHeaders returns the OpenCode session headers when a
 // session id is present and the model targets OpenCode. Ported from
 // provider-attribution.ts getSessionHeaders.
+//
+// DIVERGENCE (bismarck-engine): pi sends these regardless of install telemetry;
+// here they share its opt-in gate.
 func getSessionAttributionHeaders(model *ai.Model, sessionID string) map[string]string {
-	if sessionID == "" {
+	if sessionID == "" || !isInstallTelemetryEnabled() {
 		return nil
 	}
 	if model.Provider != "opencode" &&

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/sky-valley/pi/ai"
@@ -320,6 +321,7 @@ func TestAttributionNvidiaModelThroughGateways(t *testing.T) {
 
 // pi getSessionHeaders only fires for OpenCode targets, regardless of session id.
 func TestAttributionSessionHeadersGatedToOpenCode(t *testing.T) {
+	t.Setenv("PI_TELEMETRY", "1") // attribution is opt-in in bismarck-engine
 	if getSessionAttributionHeaders(&ai.Model{Provider: "openai"}, "sess") != nil {
 		t.Fatalf("session headers must be absent for non-opencode providers")
 	}
@@ -328,5 +330,24 @@ func TestAttributionSessionHeadersGatedToOpenCode(t *testing.T) {
 	}
 	if getSessionAttributionHeaders(&ai.Model{Provider: "custom", BaseURL: "https://opencode.ai/zen/v1"}, "sess")["x-opencode-session"] != "sess" {
 		t.Fatalf("opencode.ai host must receive session headers")
+	}
+}
+
+// bismarck-engine: attribution is opt-in. With PI_TELEMETRY unset no provider
+// receives the default or the OpenCode session headers.
+func TestAttributionOffByDefault(t *testing.T) {
+	t.Setenv("PI_TELEMETRY", "")
+	os.Unsetenv("PI_TELEMETRY")
+	for _, m := range []*ai.Model{
+		{Provider: "openrouter", BaseURL: "https://openrouter.ai/api/v1"},
+		{Provider: "nvidia"},
+		{Provider: "cloudflare-workers-ai"},
+	} {
+		if h := getDefaultAttributionHeaders(m); h != nil {
+			t.Fatalf("%s: default attribution must be off, got %v", m.Provider, h)
+		}
+	}
+	if h := getSessionAttributionHeaders(&ai.Model{Provider: "opencode"}, "sess"); h != nil {
+		t.Fatalf("opencode session headers must be off, got %v", h)
 	}
 }

@@ -84,6 +84,7 @@ func opencodeOptions(sessionID string, retention ai.CacheRetention, headers ai.P
 // header is independent of cacheRetention, which gates only the separate
 // prompt-cache and session-affinity headers.
 func TestOpenCodeSessionHeaderWithoutCacheRetention(t *testing.T) {
+	t.Setenv("PI_TELEMETRY", "1") // attribution is opt-in in bismarck-engine
 	for _, adapter := range opencodeAdapters() {
 		for _, provider := range adapter.providers {
 			t.Run(string(adapter.api)+"/"+string(provider), func(t *testing.T) {
@@ -102,6 +103,7 @@ func TestOpenCodeSessionHeaderWithoutCacheRetention(t *testing.T) {
 // test runs both entry points because pi's wrapper really does wrap two
 // functions; one case here records that the port cannot diverge between them.
 func TestOpenCodeSessionHeaderOnStreamSimple(t *testing.T) {
+	t.Setenv("PI_TELEMETRY", "1") // attribution is opt-in in bismarck-engine
 	h := captureOpenAISimpleHeaders(t, opencodeModel(ai.APIOpenAICompletions, "opencode"),
 		opencodeOptions("conversation-1", ai.CacheNone, nil))
 	if got := h.Get("x-opencode-session"); got != "conversation-1" {
