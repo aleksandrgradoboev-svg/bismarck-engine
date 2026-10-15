@@ -1139,11 +1139,13 @@ const bashStructuredOutputMaxBytes = 1024 * 1024
 
 // bashOutputSchema is the shell tools' OutputSchema (pi bashOutputSchema),
 // built per tool like Parameters, since a Schema can be modified in place.
+// The descriptions are pi's shortened ones (upstream 6f1072cc): scripts see
+// them in the bash declaration codemode renders.
 func bashOutputSchema() *ai.Schema {
 	return ai.Object(
-		ai.Prop("output", ai.String("Combined stdout and stderr, up to 1 MiB. Longer output keeps its first and last 512 KiB around an omission marker.")),
-		ai.Prop("truncated", ai.Boolean("Whether `output` omits part of the command output")),
-		ai.Opt("full_output_path", ai.String("Temp file with the full output, when truncated")),
+		ai.Prop("output", ai.String("Combined stdout and stderr, possibly truncated")),
+		ai.Prop("truncated", ai.Boolean()),
+		ai.Opt("full_output_path", ai.String("Full output, when truncated")),
 		ai.Prop("exit_code", ai.Number()),
 		ai.Prop("wall_time_seconds", ai.Number()),
 	)
