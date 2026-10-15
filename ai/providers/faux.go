@@ -132,7 +132,7 @@ type FauxProviderRegistration struct {
 	minTokenSize int
 	maxTokenSize int
 	tps          float64
-	promptCache  map[string]string
+	promptCache  map[string][]string
 	provider     string
 	deferredCfg  FauxDeferredOptions
 	deferred     map[string]*fauxDeferredEntry
@@ -264,7 +264,7 @@ func RegisterFauxProvider(options RegisterFauxProviderOptions) *FauxProviderRegi
 		minTokenSize: minT,
 		maxTokenSize: maxT,
 		tps:          options.TokensPerSecond,
-		promptCache:  map[string]string{},
+		promptCache:  map[string][]string{},
 		provider:     provider,
 		deferred:     map[string]*fauxDeferredEntry{},
 	}
@@ -564,8 +564,11 @@ func (r *FauxProviderRegistration) scheduleChunk(chunk string) {
 }
 
 func (r *FauxProviderRegistration) withUsageEstimate(message *ai.AssistantMessage, req ai.TranscriptContext, opts *ai.SimpleStreamOptions) *ai.AssistantMessage {
-	promptText := serializeContext(req)
-	promptTokens := estimateTokens(promptText)
+	// One text per message; the whole prompt joins them with blank lines (pi
+	// fe11328b compares cached prompts message by message).
+	prompt := promptMessages(req)
+	promptLength := joinedLength(prompt, len(prompt))
+	promptTokens := estimateCodeUnitTokens(promptLength)
 	outputTokens := estimateTokens(assistantContentToText(message.Content))
 	input := promptTokens
 	cacheRead := 0
@@ -579,14 +582,11 @@ func (r *FauxProviderRegistration) withUsageEstimate(message *ai.AssistantMessag
 	}
 	if sessionID != "" && retention != ai.CacheNone {
 		r.mu.Lock()
-		prev := r.promptCache[sessionID]
-		if prev != "" {
-			// JS string indices count UTF-16 code units, so the shared prefix and
-			// both token counts are measured in them too.
-			promptUnits := utf16.Encode([]rune(promptText))
-			cachedChars := commonPrefixLength(utf16.Encode([]rune(prev)), promptUnits)
+		// pi tests the cached array, which is truthy even when empty.
+		if prev, ok := r.promptCache[sessionID]; ok {
+			cachedChars := commonPromptPrefixLength(prev, prompt)
 			cacheRead = estimateCodeUnitTokens(cachedChars)
-			cacheWrite = estimateCodeUnitTokens(len(promptUnits) - cachedChars)
+			cacheWrite = estimateCodeUnitTokens(promptLength - cachedChars)
 			input = promptTokens - cacheRead
 			if input < 0 {
 				input = 0
@@ -594,7 +594,7 @@ func (r *FauxProviderRegistration) withUsageEstimate(message *ai.AssistantMessag
 		} else {
 			cacheWrite = promptTokens
 		}
-		r.promptCache[sessionID] = promptText
+		r.promptCache[sessionID] = prompt
 		r.mu.Unlock()
 	}
 
@@ -755,9 +755,48 @@ func messageToText(m ai.Message) string {
 // per message, joined by a blank line (the prompt and tools ride the system
 // messages, upstream 9e05370b2).
 func serializeContext(req ai.TranscriptContext) string {
+	return strings.Join(promptMessages(req), "\n\n")
+}
+
+// promptMessages is the faux prompt one text per message, `role:text`.
+func promptMessages(req ai.TranscriptContext) []string {
 	parts := make([]string, len(req.Messages))
 	for i, m := range req.Messages {
 		parts[i] = string(m.MessageRole()) + ":" + messageToText(m)
 	}
-	return strings.Join(parts, "\n\n")
+	return parts
+}
+
+// joinedLength is the length, in UTF-16 code units as JS counts it, of the
+// first count messages joined with blank lines (pi joinedLength).
+func joinedLength(messages []string, count int) int {
+	length := 0
+	if count > 0 {
+		length = (count - 1) * 2
+	}
+	for _, m := range messages[:count] {
+		length += utf16Length(m)
+	}
+	return length
+}
+
+// commonPromptPrefixLength is the length of the common prefix of the two
+// joined prompts (pi commonPromptPrefixLength): equal messages are compared
+// whole, and code units only from the first message that differs.
+func commonPromptPrefixLength(previous, current []string) int {
+	i := 0
+	for i < len(previous) && i < len(current) && previous[i] == current[i] {
+		i++
+	}
+	rest := func(messages []string) []uint16 {
+		if i == len(messages) {
+			return nil
+		}
+		text := strings.Join(messages[i:], "\n\n")
+		if i > 0 {
+			text = "\n\n" + text
+		}
+		return utf16.Encode([]rune(text))
+	}
+	return joinedLength(previous, i) + commonPrefixLength(rest(previous), rest(current))
 }

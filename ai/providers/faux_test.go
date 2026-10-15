@@ -155,6 +155,38 @@ func TestFauxProviderCachePrefix(t *testing.T) {
 	}
 }
 
+// pi faux-provider.test.ts "counts cached characters up to the first
+// difference in the joined prompt" (fe11328b).
+func TestFauxProviderCachedCharactersUpToFirstDifference(t *testing.T) {
+	reg := RegisterFauxProvider(RegisterFauxProviderOptions{})
+	defer reg.Unregister()
+	reg.SetResponses([]FauxResponseStep{
+		FauxStatic(FauxAssistantMessage(ai.ContentList{FauxText("a")}, ai.StopStop)),
+		FauxStatic(FauxAssistantMessage(ai.ContentList{FauxText("b")}, ai.StopStop)),
+		FauxStatic(FauxAssistantMessage(ai.ContentList{FauxText("c")}, ai.StopStop)),
+	})
+	model := reg.GetModel()
+	opts := &ai.SimpleStreamOptions{StreamOptions: ai.StreamOptions{SessionID: "session-1", CacheRetention: ai.CacheShort}}
+	complete := func(texts ...string) ai.Usage {
+		var messages []ai.Message
+		for _, text := range texts {
+			messages = append(messages, ai.NewUserText(text, 1))
+		}
+		return ai.StreamSimple(context.Background(), model, ai.Context{Messages: messages}, opts).Result().Usage
+	}
+	usage := func(u ai.Usage) [3]int { return [3]int{u.Input, u.CacheRead, u.CacheWrite} }
+
+	// Prompt texts: "user:hello world" (16 characters), then 16 + 2 + "user:next" (9) = 27.
+	complete("hello world")
+	if got := usage(complete("hello world", "next")); got != [3]int{3, 4, 3} {
+		t.Fatalf("extended: input, cacheRead, cacheWrite = %v, want [3 4 3]", got)
+	}
+	// The first message now differs after "user:hello w" (12 characters): "user:hello wide" + 2 + 9 = 26.
+	if got := usage(complete("hello wide", "next")); got != [3]int{4, 3, 4} {
+		t.Fatalf("edited: input, cacheRead, cacheWrite = %v, want [4 3 4]", got)
+	}
+}
+
 // TestFauxProviderDeferredResponses locks pi 382aa641c's faux half: a
 // submission that asks for deferral streams an empty "deferred" message
 // carrying a handle, fetches answer with that same handle while the script

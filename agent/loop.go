@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
@@ -667,6 +669,7 @@ func executeToolCallsParallel(ctx context.Context, current *AgentContext, msg *a
 					ToolName:   fo.ToolCall.Name,
 					Result:     fo.Result,
 					IsError:    fo.IsError,
+					DurationMs: fo.DurationMs,
 				})
 			}()
 			if emitErr != nil {
@@ -752,6 +755,8 @@ func executeToolCallsParallel(ctx context.Context, current *AgentContext, msg *a
 type immediateOutcome struct {
 	result  AgentToolResult
 	isError bool
+	// durationMs is how long Execute took; nil for calls that did not run.
+	durationMs *int64
 }
 
 type preparedToolCall struct {
@@ -957,21 +962,29 @@ func executePreparedToolCall(ctx context.Context, prepared preparedToolCall, onU
 	// createErrorToolResult) and the loop CONTINUES. An emitPanic (listener
 	// error) must still unwind to the run boundary, like the recovers in
 	// prepareToolCall/finalizeExecutedToolCall.
+	// pi 36a686ee: execute() is timed with a monotonic clock, up to the moment
+	// it settles — before the buffered updates are awaited.
+	started := time.Now()
+	elapsed := func() *int64 {
+		ms := int64(math.Round(float64(time.Since(started)) / float64(time.Millisecond)))
+		return &ms
+	}
 	outcome := func() (out immediateOutcome) {
 		defer func() {
 			if r := recover(); r != nil {
 				if ep, ok := r.(emitPanic); ok {
 					panic(ep)
 				}
-				out = immediateOutcome{result: errorToolResult(panicMessage(r)), isError: true}
+				out = immediateOutcome{result: errorToolResult(panicMessage(r)), isError: true, durationMs: elapsed()}
 			}
 		}()
 		result, err := prepared.tool.Execute(ctx, prepared.toolCall.ID, prepared.args, update)
+		durationMs := elapsed()
 		if err != nil {
-			return immediateOutcome{result: errorToolResult(err.Error()), isError: true}
+			return immediateOutcome{result: errorToolResult(err.Error()), isError: true, durationMs: durationMs}
 		}
 		// Upstream 8562bcf66: a tool can report a failure without throwing.
-		return immediateOutcome{result: result, isError: result.IsError}
+		return immediateOutcome{result: result, isError: result.IsError, durationMs: durationMs}
 	}()
 
 	// pi daab056a (#5573): stop accepting updates the moment execute() settles
@@ -1048,7 +1061,7 @@ func finalizeExecutedToolCall(ctx context.Context, current *AgentContext, msg *a
 		}()
 	}
 
-	return AgentToolCallOutcome{ToolCall: prepared.toolCall, Result: result, IsError: isError}
+	return AgentToolCallOutcome{ToolCall: prepared.toolCall, Result: result, IsError: isError, DurationMs: executed.durationMs}
 }
 
 func errorToolResult(message string) AgentToolResult {
@@ -1062,6 +1075,7 @@ func emitToolExecutionEnd(fo AgentToolCallOutcome, emit EventSink) {
 		ToolName:   fo.ToolCall.Name,
 		Result:     fo.Result,
 		IsError:    fo.IsError,
+		DurationMs: fo.DurationMs,
 	})
 }
 
@@ -1073,6 +1087,7 @@ func createToolResultMessage(fo AgentToolCallOutcome) ai.ToolResultMessage {
 		Details:    fo.Result.Details,
 		Usage:      fo.Result.Usage,
 		IsError:    fo.IsError,
+		DurationMs: fo.DurationMs,
 		Timestamp:  nowMillis(),
 	}
 }

@@ -124,7 +124,9 @@ func streamAnthropicResponseModel(t *testing.T, model *ai.Model, sse string) (ai
 }
 
 // responseModelJSON is a message as plain JSON values, with a streamed
-// assistant message's wall-clock timestamp dropped as the capture drops it.
+// assistant message's wall-clock timestamp dropped as the capture drops it,
+// and its durationMs, which is measured and which the capture predates
+// (d86654abb; pi 36a686ee added it).
 func responseModelJSON(t *testing.T, message ai.Message) any {
 	t.Helper()
 	raw, err := json.Marshal(message)
@@ -137,6 +139,10 @@ func responseModelJSON(t *testing.T, message ai.Message) any {
 	}
 	if am, ok := asAssistantMsg(message); ok {
 		delete(out, "timestamp")
+		if am.DurationMs == nil {
+			t.Errorf("streamed assistant message has no durationMs")
+		}
+		delete(out, "durationMs")
 		if am.Usage.CacheWrite1h != 0 {
 			t.Errorf("usage.cacheWrite1h = %d, want 0", am.Usage.CacheWrite1h)
 		}
