@@ -885,3 +885,20 @@ func TestSerializeAssistantWritesArgumentsAsJSONStringify(t *testing.T) {
 		t.Fatalf("serialized tool call:\n got %s\nwant %s", got, want)
 	}
 }
+
+// Mirrors pi compaction-serialization.test.ts "should omit thinking" (upstream
+// 15e7bdc1): thinking never reaches the summarization request.
+func TestSerializeConversationOmitsThinking(t *testing.T) {
+	got := serializeConversation([]ai.Message{ai.AssistantMessage{
+		Content: ai.ContentList{
+			ai.ThinkingContent{Thinking: "private reasoning", ThinkingSignature: "sig"},
+			ai.TextContent{Text: "visible reply"},
+			ai.ToolCall{ID: "tc1", Name: "read", Arguments: map[string]any{"path": "a.ts"}},
+		},
+		StopReason: ai.StopToolUse,
+	}})
+	want := "[Assistant]: visible reply\n\n[Assistant tool calls]: read(path=\"a.ts\")"
+	if got != want {
+		t.Fatalf("serializeConversation = %q, want %q", got, want)
+	}
+}

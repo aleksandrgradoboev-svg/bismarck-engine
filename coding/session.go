@@ -64,6 +64,17 @@ type SessionOptions struct {
 	// of the prompt. See LoadSkillsWithTrust.
 	TrustProject bool
 
+	// NoContextFiles disables AGENTS.md and CLAUDE.md discovery and loading
+	// (pi resource loader noContextFiles, CLI --no-context-files). A server must
+	// set it: discovery walks every ancestor of Cwd and the user's home.
+	NoContextFiles bool
+	// NoSkills disables default skill discovery (the user's and project skill
+	// directories); SkillPaths still load (pi noSkills).
+	NoSkills bool
+	// SkillPaths are extra skill directories or SKILL.md files, loaded after
+	// the defaults; a name seen earlier wins (pi additionalSkillPaths).
+	SkillPaths []string
+
 	// Models, when set, is the model runtime used to resolve request auth for
 	// summarization requests (pi AgentSession's _modelRuntime). It is needed
 	// only for providers that carry their endpoint in the credential rather
@@ -502,8 +513,8 @@ func NewSession(opts SessionOptions) *Session {
 		ToolSnippets:   ToolSnippets,
 		ToolGuidelines: toolPromptGuidelines(tools),
 		Cwd:            cwd,
-		ContextFiles:   LoadProjectContextFiles(cwd),
-		Skills:         sessionSkills(cwd, opts.TrustProject),
+		ContextFiles:   sessionContextFiles(cwd, opts.NoContextFiles),
+		Skills:         sessionSkillsWithPaths(cwd, opts.TrustProject, opts.NoSkills, opts.SkillPaths),
 	})
 	thinking := opts.ThinkingLevel
 	if thinking == "" {

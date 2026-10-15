@@ -264,11 +264,11 @@ func TestOpenAICompatDeepSeekReasoningContent(t *testing.T) {
 // (09f10595): streamSimple now sends a context-clamped default maxTokens.
 func TestOpenAICompatStreamSimpleSendsClampedDefaultMaxTokens(t *testing.T) {
 	model := &ai.Model{ID: "gpt-4o-mini", Api: ai.APIOpenAICompletions, Provider: "openai", MaxTokens: 8000, ContextWindow: 10000}
-	// 8000 'x' user chars -> estimate ceil(8000/4)=2000; available = 10000-2000-4096 = 3904.
+	// 8000 'x' user chars -> estimate ceil(8000/3.5)=2286; available = 10000-2286-4096 = 3618.
 	body := captureOpenAIBody(t, model,
 		ai.Context{Messages: []ai.Message{ai.NewUserText(strings.Repeat("x", 8000), 1)}}, nil)
-	if v, _ := body["max_completion_tokens"].(float64); v != 3904 {
-		t.Fatalf("default max_completion_tokens = %v, want 3904", body["max_completion_tokens"])
+	if v, _ := body["max_completion_tokens"].(float64); v != 3618 {
+		t.Fatalf("default max_completion_tokens = %v, want 3618", body["max_completion_tokens"])
 	}
 	if _, ok := body["max_tokens"]; ok {
 		t.Fatalf("OpenAI must not send max_tokens")
@@ -281,8 +281,8 @@ func TestOpenAICompatStreamSimpleClampsExplicitMaxTokens(t *testing.T) {
 	body := captureOpenAIBody(t, model,
 		ai.Context{Messages: []ai.Message{ai.NewUserText(strings.Repeat("x", 8000), 1)}},
 		&ai.SimpleStreamOptions{StreamOptions: ai.StreamOptions{MaxTokens: &mt}})
-	if v, _ := body["max_completion_tokens"].(float64); v != 3904 {
-		t.Fatalf("explicit clamped max_completion_tokens = %v, want 3904", body["max_completion_tokens"])
+	if v, _ := body["max_completion_tokens"].(float64); v != 3618 {
+		t.Fatalf("explicit clamped max_completion_tokens = %v, want 3618", body["max_completion_tokens"])
 	}
 }
 
@@ -368,5 +368,36 @@ func TestOpenAICompatCerebrasOmitsStrict(t *testing.T) {
 		if has(fn, "strict") {
 			t.Fatalf("%s/%s: cerebras must not be sent strict, got %v", model.Provider, model.ID, fn["strict"])
 		}
+	}
+}
+
+// Mirrors pi sampling-options.test.ts (upstream 76dfb88f, #9776): sampling
+// parameters for the effective thinking level apply over model defaults, and
+// the "off" entry applies when reasoning is disabled.
+func TestOpenAICompatSamplingParamsByThinkingLevel(t *testing.T) {
+	ctx := ai.Context{Messages: []ai.Message{ai.NewUserText("hi", 1)}}
+
+	// low and medium are unsupported, so "low" clamps to high.
+	model := &ai.Model{
+		ID: "m", Api: ai.APIOpenAICompletions, Provider: "openai", MaxTokens: 1000, ContextWindow: 100000,
+		Reasoning:                     true,
+		ThinkingLevelMap:              ai.ThinkingLevelMap{"low": nil, "medium": nil},
+		SamplingParams:                map[string]any{"temperature": 1, "top_p": 0.95},
+		SamplingParamsByThinkingLevel: map[ai.ModelThinkingLevel]map[string]any{"high": {"temperature": 0.8, "top_k": 64}},
+	}
+	body := captureOpenAIBody(t, model, ctx, &ai.SimpleStreamOptions{Reasoning: "low"})
+	if body["temperature"] != 0.8 || body["top_p"] != 0.95 || body["top_k"] != float64(64) {
+		t.Fatalf("effective-level sampling = temperature %v, top_p %v, top_k %v; want 0.8, 0.95, 64",
+			body["temperature"], body["top_p"], body["top_k"])
+	}
+
+	off := &ai.Model{
+		ID: "m", Api: ai.APIOpenAICompletions, Provider: "openai", MaxTokens: 1000, ContextWindow: 100000,
+		Reasoning:                     true,
+		SamplingParamsByThinkingLevel: map[ai.ModelThinkingLevel]map[string]any{"off": {"temperature": 0.2}},
+	}
+	body = captureOpenAIBody(t, off, ctx, nil)
+	if body["temperature"] != 0.2 {
+		t.Fatalf("off sampling temperature = %v, want 0.2", body["temperature"])
 	}
 }

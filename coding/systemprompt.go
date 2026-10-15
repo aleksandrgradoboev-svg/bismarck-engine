@@ -39,6 +39,11 @@ type BuildSystemPromptOptions struct {
 	// SelectedTools are the active tool names. Nil means pi's default
 	// [read, bash, edit, write]; an empty, non-nil slice means no tools.
 	SelectedTools []string
+	// HiddenTools are selected tools whose declarations requests leave out
+	// (pi's prepareLoadout hidden declarations). They are reachable only through
+	// another tool, so the tool list and rules leave them out too (upstream
+	// c30840c2).
+	HiddenTools []string
 	// ToolSnippets are optional one-line tool snippets keyed by tool name. A
 	// selected tool appears in the tools section only when it has one.
 	ToolSnippets map[string]string
@@ -89,6 +94,7 @@ func NormalizeBuildSystemPromptOptions(opts BuildSystemPromptOptions) BuildSyste
 	} else {
 		out.SelectedTools = slices.Clone(opts.SelectedTools)
 	}
+	out.HiddenTools = append([]string{}, opts.HiddenTools...)
 	out.ToolSnippets = maps.Clone(opts.ToolSnippets)
 	if out.ToolSnippets == nil {
 		out.ToolSnippets = map[string]string{}
@@ -203,12 +209,18 @@ func BuildSystemPromptSections(input BuildSystemPromptOptions) (ai.SystemSection
 	// slot, which is how a custom section replaces a built-in one in place.
 	promptSections := ai.SystemSections{}
 	set := func(name, content string) { promptSections.Set(name, &content) }
+	var declaredTools []string
+	for _, name := range opts.SelectedTools {
+		if !slices.Contains(opts.HiddenTools, name) {
+			declaredTools = append(declaredTools, name)
+		}
+	}
 	if opts.CustomPrompt != "" {
 		set("preamble", opts.CustomPrompt)
 	} else {
 		set("preamble", defaultPromptPreamble)
 		var visible []string
-		for _, name := range opts.SelectedTools {
+		for _, name := range declaredTools {
 			if snippet := opts.ToolSnippets[name]; snippet != "" {
 				visible = append(visible, "- "+name+": "+snippet)
 			}
@@ -218,7 +230,7 @@ func BuildSystemPromptSections(input BuildSystemPromptOptions) (ai.SystemSection
 			tools = strings.Join(visible, "\n")
 		}
 		set("tools", tools+"\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.")
-		set("rules", buildRules(opts.SelectedTools, opts.ToolGuidelines, opts.PromptGuidelines))
+		set("rules", buildRules(declaredTools, opts.ToolGuidelines, opts.PromptGuidelines))
 		set("docs", docsSection(opts))
 	}
 
@@ -230,13 +242,16 @@ func BuildSystemPromptSections(input BuildSystemPromptOptions) (ai.SystemSection
 	}
 	// Skills are offered as soon as some tool can load their files, and the
 	// block names that tool: the first of read and bash that is selected
-	// (upstream 1d6dbf9e3).
+	// (upstream 1d6dbf9e3). A hidden reader is still reachable through another
+	// tool, so skills stay but the hint names no tool (upstream c30840c2).
 	skillFileReadTool := SkillFileReadTool("")
 	switch {
-	case slices.Contains(opts.SelectedTools, "read"):
+	case slices.Contains(declaredTools, "read"):
 		skillFileReadTool = SkillFileReadToolRead
-	case slices.Contains(opts.SelectedTools, "bash"):
+	case slices.Contains(declaredTools, "bash"):
 		skillFileReadTool = SkillFileReadToolBash
+	case slices.Contains(opts.SelectedTools, "read"), slices.Contains(opts.SelectedTools, "bash"):
+		skillFileReadTool = SkillFileReadToolIndirect
 	}
 	if skillFileReadTool != "" && len(opts.Skills) > 0 {
 		if skills := jstext.Trim(FormatSkillsForPromptWithTool(opts.Skills, skillFileReadTool)); skills != "" {

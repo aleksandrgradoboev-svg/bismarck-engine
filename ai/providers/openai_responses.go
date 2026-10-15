@@ -1122,10 +1122,10 @@ func buildResponsesParams(model *ai.Model, req ai.TranscriptContext, opts *OpenA
 		}
 	}
 
-	// Last so custom keys override the named request fields (upstream 25a2c8dc).
-	// Per-request keys override model defaults (upstream c01f687e5).
-	maps.Copy(params, model.SamplingParams)
-	maps.Copy(params, opts.SamplingParams)
+	// Last so model and request sampling parameters override the named request
+	// fields (upstream 25a2c8dc). Per-request keys override the thinking level's,
+	// which override model defaults (upstream c01f687e5, 76dfb88f).
+	maps.Copy(params, ai.ResolveSamplingParams(model, ai.ModelThinkingLevel(opts.ReasoningEffort), opts.SamplingParams))
 
 	return params, nil
 }
@@ -1361,13 +1361,18 @@ func responsesInput(model *ai.Model, req ai.TranscriptContext) ([]any, error) {
 					// id here without further touching it (shared :201-217).
 					callID, itemID := splitToolCallID(v.ID)
 					property, isGrammar := grammarProps[v.Name]
-					// For different-model messages, drop the fc_ item id to avoid
-					// pairing validation against reasoning items. Replaying a
-					// custom-tool call as a function_call also drops any non-fc_*
-					// id (e.g. a ctc_* custom-tool id), which function_call items
-					// cannot carry (upstream 24bace27).
-					if (isDifferentModel && strings.HasPrefix(itemID, "fc_")) ||
-						(!isGrammar && !strings.HasPrefix(itemID, "fc_")) {
+					// For different-model messages, drop the item id to avoid
+					// pairing validation against reasoning items. Also drop ids
+					// that do not match the replayed item type: function_call ids
+					// must be fc_* and custom_tool_call ids must be ctc_*. Foreign
+					// tool call ids are normalized to fc_*, and a call can switch
+					// between the two types when grammar tool support differs
+					// (upstream 24bace27, bc2d8dc1).
+					itemIDPrefix := "fc_"
+					if isGrammar {
+						itemIDPrefix = "ctc_"
+					}
+					if isDifferentModel || !strings.HasPrefix(itemID, itemIDPrefix) {
 						itemID = ""
 					}
 					var item map[string]any

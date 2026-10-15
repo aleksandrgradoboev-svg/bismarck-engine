@@ -93,3 +93,30 @@ func TestResolveModelFromCatalog(t *testing.T) {
 }
 
 var _ = agent.ThinkOff
+
+// pi resource loader noContextFiles / noSkills / additionalSkillPaths: a
+// session can skip AGENTS.md discovery and default skill discovery and still
+// load skills from explicit paths.
+func TestSessionNoContextFilesNoSkillsSkillPaths(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	cwd := t.TempDir()
+	writeFile(t, filepath.Join(cwd, "AGENTS.md"), "project rules")
+	skillsDir := t.TempDir()
+	writeFile(t, filepath.Join(skillsDir, "data-1c", "SKILL.md"), "---\nname: data-1c\ndescription: Work with 1C data.\n---\nbody")
+
+	sess := NewSession(SessionOptions{
+		Model:          &ai.Model{ID: "m", Api: ai.APIOpenAICompletions, Provider: "openai", ContextWindow: 1000, MaxTokens: 100},
+		Cwd:            cwd,
+		ToolNames:      []string{"read"},
+		NoContextFiles: true,
+		NoSkills:       true,
+		SkillPaths:     []string{skillsDir},
+	})
+	opts := sess.systemPromptOptions
+	if len(opts.ContextFiles) != 0 {
+		t.Fatalf("NoContextFiles: context files = %v, want none", opts.ContextFiles)
+	}
+	if len(opts.Skills) != 1 || opts.Skills[0].Name != "data-1c" {
+		t.Fatalf("skills = %v, want only data-1c from SkillPaths", opts.Skills)
+	}
+}

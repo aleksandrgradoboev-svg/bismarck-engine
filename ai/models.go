@@ -1,6 +1,9 @@
 package ai
 
-import "sync"
+import (
+	"maps"
+	"sync"
+)
 
 var (
 	modelRegMu sync.RWMutex
@@ -170,4 +173,23 @@ func ModelsAreEqual(a, b *Model) bool {
 		return false
 	}
 	return GetModelType(a) == GetModelType(b) && a.ID == b.ID && a.Provider == b.Provider
+}
+
+// ResolveSamplingParams merges a model's sampling parameters, the overrides for
+// the effective (clamped) thinking level, and the request's, later keys winning
+// (pi simple-options.ts resolveSamplingParams, upstream 76dfb88f). It returns
+// nil when none of the three is set.
+func ResolveSamplingParams(model *Model, thinkingLevel ModelThinkingLevel, requestParams map[string]any) map[string]any {
+	if thinkingLevel == "" {
+		thinkingLevel = "off"
+	}
+	levelParams := model.SamplingParamsByThinkingLevel[ClampThinkingLevel(model, thinkingLevel)]
+	if model.SamplingParams == nil && levelParams == nil && requestParams == nil {
+		return nil
+	}
+	out := map[string]any{}
+	maps.Copy(out, model.SamplingParams)
+	maps.Copy(out, levelParams)
+	maps.Copy(out, requestParams)
+	return out
 }

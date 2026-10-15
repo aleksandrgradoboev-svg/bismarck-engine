@@ -241,8 +241,11 @@ func LoadProjectContextFiles(cwd string) []ContextFile {
 	var ancestors []ContextFile
 	current := cwd
 	for {
+		// Compare the directory's real path, not the file's: a worktree AGENTS.md
+		// that symlinks to the main repo's file resolves to the shadowed path
+		// itself (upstream f1b2e77f, #10681).
 		if cf, ok := loadContextFileFromDir(current); ok &&
-			!(hasShadowed && canonicalizePath(cf.Path) == shadowed) &&
+			!(hasShadowed && filepath.Join(canonicalizePath(current), filepath.Base(cf.Path)) == shadowed) &&
 			!seen[cf.Path] {
 			ancestors = append([]ContextFile{cf}, ancestors...)
 			seen[cf.Path] = true
@@ -349,6 +352,52 @@ func LoadSkillsWithDiagnostics(cwd string) ([]Skill, []SkillDiagnostic) {
 // them through its resource UI, which is host surface and unported).
 func sessionSkills(cwd string, projectTrusted bool) []Skill {
 	skills, _ := LoadSkillsWithTrust(cwd, projectTrusted)
+	return skills
+}
+
+// sessionContextFiles is the session's AGENTS.md/CLAUDE.md set: none when
+// noContextFiles is set (pi resource loader noContextFiles).
+func sessionContextFiles(cwd string, noContextFiles bool) []ContextFile {
+	if noContextFiles {
+		return nil
+	}
+	return LoadProjectContextFiles(cwd)
+}
+
+// sessionSkillsWithPaths is the session's skill set with pi's resource-loader
+// switches: default discovery unless noSkills, then each of paths (a skill
+// directory or a SKILL.md file), the first skill of a name winning.
+func sessionSkillsWithPaths(cwd string, projectTrusted, noSkills bool, paths []string) []Skill {
+	var skills []Skill
+	if !noSkills {
+		skills = sessionSkills(cwd, projectTrusted)
+	}
+	if len(paths) == 0 {
+		return skills
+	}
+	seen := map[string]bool{}
+	for _, s := range skills {
+		seen[s.Name] = true
+	}
+	for _, p := range paths {
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(cwd, p)
+		}
+		var found []Skill
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+			if s, _ := loadSkillFromFile(p); s != nil {
+				found = []Skill{*s}
+			}
+		} else {
+			found, _ = loadSkillsFromDir(p)
+		}
+		for _, s := range found {
+			if !seen[s.Name] {
+				seen[s.Name] = true
+				skills = append(skills, s)
+			}
+		}
+	}
 	return skills
 }
 
@@ -1137,6 +1186,9 @@ const (
 	// SkillFileReadToolBash points the model at bash, for tool sets that have
 	// no read tool (upstream 1d6dbf9e3).
 	SkillFileReadToolBash SkillFileReadTool = "bash"
+	// SkillFileReadToolIndirect names no tool, for a reader that is reachable
+	// only through another tool (upstream c30840c2).
+	SkillFileReadToolIndirect SkillFileReadTool = "indirect"
 )
 
 // FormatSkillsForPrompt renders visible skills as the Agent Skills XML block,
@@ -1147,9 +1199,9 @@ func FormatSkillsForPrompt(skills []Skill) string {
 }
 
 // FormatSkillsForPromptWithTool renders visible skills as the Agent Skills XML
-// block, naming fileReadTool as the way to load a skill's file. Any value
-// other than SkillFileReadToolBash reads as "read"; pi's union has no third
-// member, so the zero value stays on its default arm.
+// block, naming fileReadTool as the way to load a skill's file, or naming no
+// tool for SkillFileReadToolIndirect. Any other value reads as "read", so the
+// zero value stays on pi's default arm.
 func FormatSkillsForPromptWithTool(skills []Skill, fileReadTool SkillFileReadTool) string {
 	var visible []Skill
 	for _, s := range skills {
@@ -1161,8 +1213,11 @@ func FormatSkillsForPromptWithTool(skills []Skill, fileReadTool SkillFileReadToo
 		return ""
 	}
 	loadInstruction := "Use the read tool to load a skill's file when the task matches its description."
-	if fileReadTool == SkillFileReadToolBash {
+	switch fileReadTool {
+	case SkillFileReadToolBash:
 		loadInstruction = "Use bash to load a skill's file when the task matches its description."
+	case SkillFileReadToolIndirect:
+		loadInstruction = "Load a skill's file when the task matches its description."
 	}
 	lines := []string{
 		"\n\nThe following skills provide specialized instructions for specific tasks.",
