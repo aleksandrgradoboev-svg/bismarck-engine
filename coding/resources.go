@@ -1137,6 +1137,9 @@ const (
 	// SkillFileReadToolBash points the model at bash, for tool sets that have
 	// no read tool (upstream 1d6dbf9e3).
 	SkillFileReadToolBash SkillFileReadTool = "bash"
+	// SkillFileReadToolIndirect names no tool, for a reader that is reachable
+	// only through another tool (upstream c30840c2).
+	SkillFileReadToolIndirect SkillFileReadTool = "indirect"
 )
 
 // FormatSkillsForPrompt renders visible skills as the Agent Skills XML block,
@@ -1147,9 +1150,9 @@ func FormatSkillsForPrompt(skills []Skill) string {
 }
 
 // FormatSkillsForPromptWithTool renders visible skills as the Agent Skills XML
-// block, naming fileReadTool as the way to load a skill's file. Any value
-// other than SkillFileReadToolBash reads as "read"; pi's union has no third
-// member, so the zero value stays on its default arm.
+// block, naming fileReadTool as the way to load a skill's file, or naming no
+// tool for SkillFileReadToolIndirect. Any other value reads as "read", so the
+// zero value stays on pi's default arm.
 func FormatSkillsForPromptWithTool(skills []Skill, fileReadTool SkillFileReadTool) string {
 	var visible []Skill
 	for _, s := range skills {
@@ -1161,8 +1164,11 @@ func FormatSkillsForPromptWithTool(skills []Skill, fileReadTool SkillFileReadToo
 		return ""
 	}
 	loadInstruction := "Use the read tool to load a skill's file when the task matches its description."
-	if fileReadTool == SkillFileReadToolBash {
+	switch fileReadTool {
+	case SkillFileReadToolBash:
 		loadInstruction = "Use bash to load a skill's file when the task matches its description."
+	case SkillFileReadToolIndirect:
+		loadInstruction = "Load a skill's file when the task matches its description."
 	}
 	lines := []string{
 		"\n\nThe following skills provide specialized instructions for specific tasks.",

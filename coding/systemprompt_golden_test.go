@@ -556,3 +556,44 @@ func TestNormalizeBuildSystemPromptOptionsCopies(t *testing.T) {
 		t.Fatalf("normalized collections must be non-nil: %+v", empty)
 	}
 }
+
+// Mirrors pi system-prompt.test.ts "hidden tools" (upstream c30840c2, #10343).
+func TestSystemPromptHiddenTools(t *testing.T) {
+	skill := Skill{Name: "test-skill", Description: "A test skill.", FilePath: "/skills/test-skill/SKILL.md", BaseDir: "/skills/test-skill"}
+	build := func(hidden []string) string {
+		return mustBuildSystemPrompt(t, BuildSystemPromptOptions{
+			SelectedTools:  []string{"read", "bash", "run"},
+			HiddenTools:    hidden,
+			ToolSnippets:   map[string]string{"read": "Read files", "bash": "Run commands", "run": "Run a task"},
+			ToolGuidelines: map[string][]string{"read": {"Use read for files."}, "run": {"Prefer run."}},
+			Skills:         []Skill{skill},
+			Cwd:            t.TempDir(),
+		})
+	}
+
+	prompt := build([]string{"read", "bash"})
+	if !strings.Contains(prompt, "<tools>\n- run: Run a task\n") {
+		t.Fatalf("tool list must keep only run:\n%s", prompt)
+	}
+	for _, absent := range []string{"- read: ", "Use read for files.", "Use bash for file operations"} {
+		if strings.Contains(prompt, absent) {
+			t.Fatalf("hidden tools leaked %q into the prompt:\n%s", absent, prompt)
+		}
+	}
+	if !strings.Contains(prompt, "- Prefer run.") {
+		t.Fatalf("declared tool's guideline missing:\n%s", prompt)
+	}
+
+	for _, tc := range []struct {
+		hidden []string
+		want   string
+	}{
+		{[]string{"read", "bash"}, "\nLoad a skill's file when the task matches its description."},
+		{[]string{"read"}, "Use bash to load a skill's file"},
+		{nil, "Use the read tool to load a skill's file"},
+	} {
+		if got := build(tc.hidden); !strings.Contains(got, tc.want) {
+			t.Fatalf("hidden %v: skills hint missing %q:\n%s", tc.hidden, tc.want, got)
+		}
+	}
+}
