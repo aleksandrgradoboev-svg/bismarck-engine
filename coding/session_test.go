@@ -75,6 +75,38 @@ func TestSessionUsesCodingSystemPrompt(t *testing.T) {
 	}
 }
 
+// A tool's reported usage counts in the run's Usage, as pi's getSessionStats
+// counts toolResult usage.
+func TestRunUsageCountsToolResultUsage(t *testing.T) {
+	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
+	defer reg.Unregister()
+	reg.SetResponses([]providers.FauxResponseStep{
+		providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{providers.FauxToolCall("spend", map[string]any{}, "call_1")}, ai.StopToolUse)),
+		providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "done"}}, ai.StopStop)),
+	})
+	spent := ai.Usage{Input: 100, Output: 20, TotalTokens: 120, Cost: ai.CostBreakdown{Input: 1, Output: 0.5, Total: 1.5}}
+	spend := agent.AgentTool{Name: "spend", Parameters: ai.Object(), Execute: func(context.Context, string, map[string]any, agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
+		u := spent
+		return agent.AgentToolResult{Content: ai.ContentList{ai.TextContent{Text: "ok"}}, Usage: &u}, nil
+	}}
+	sess := NewSession(SessionOptions{Model: reg.GetModel(), Cwd: t.TempDir(), Tools: []agent.AgentTool{spend}, NoContextFiles: true, NoSkills: true})
+	res, err := sess.Run(context.Background(), "go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var responses ai.Usage
+	for _, m := range res.Messages {
+		if am, ok := messageAsAssistant(m); ok {
+			addUsage(&responses, am.Usage)
+		}
+	}
+	want := responses
+	addUsage(&want, spent)
+	if res.Usage != want {
+		t.Fatalf("run usage = %+v, want responses %+v plus the tool's %+v", res.Usage, responses, spent)
+	}
+}
+
 func TestSessionAppendSystemPrompt(t *testing.T) {
 	for _, custom := range []string{"", "You are a test assistant."} {
 		reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})

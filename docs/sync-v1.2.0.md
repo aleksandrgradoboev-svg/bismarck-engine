@@ -87,7 +87,10 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    (`Options.ResolveModel`); the agent's `tools` narrow the session's active tools; without
    `Options.Confirm` an untrusted project's agents are refused, where pi runs them unasked when it
    has no UI, and the tool has no `confirmProjectAgents` parameter: in pi the model can skip the
-   question with it, here only the user approves. Pi's regression `8261-subagent-project-trust` is ported in `TestProjectTrust`. Added to
+   question with it, here only the user approves. The tool's result carries what its subagents
+   spent, failed runs included, as `Usage`, which pi's example leaves out; and a run's
+   `RunResult.Usage` counts tool results' usage, as pi's `getSessionStats` counts `toolResult`
+   usage, so a host's quota sees subagents and codemode's nested calls. Pi's regression `8261-subagent-project-trust` is ported in `TestProjectTrust`. Added to
    `coding` for it: `SessionOptions.AppendSystemPrompt` (pi `--append-system-prompt`) and the
    exported `ParseFrontmatter`.
 2. **`models.json`** (pi `core/model-config.ts`, `core/model-registry.ts`): custom models and
