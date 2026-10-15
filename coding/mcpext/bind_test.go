@@ -130,7 +130,6 @@ func bindWith(t *testing.T, entries []ServerEntry, servers map[string]fakeServer
 	gate := make(chan struct{})
 	var once sync.Once
 	release := func() { once.Do(func() { close(gate) }) }
-	t.Cleanup(release)
 	m := NewManager(ManagerOptions{
 		Config: LoadedConfig{Servers: entries, AutoEnableCodemode: autoEnable},
 		Cwd:    t.TempDir(),
@@ -140,7 +139,11 @@ func bindWith(t *testing.T, entries []ServerEntry, servers map[string]fakeServer
 			return tr, nil
 		},
 	})
+	// Cleanups run last first: release the transports before Close, which
+	// waits for a connection still opening — a test that never releases them
+	// would otherwise hang in Close.
 	t.Cleanup(m.Close)
+	t.Cleanup(release)
 	model := &fauxModel{}
 	sess := coding.NewSession(coding.SessionOptions{
 		Model: &ai.Model{ID: "m", Api: "faux", Provider: "faux", ContextWindow: 100000, MaxTokens: 8192},
