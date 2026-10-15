@@ -10,11 +10,11 @@
 // subagent can reach: its tools, MCP servers and hooks. The terminal rendering
 // of the call and result is not ported; Details carries everything it shows.
 //
-// Two decisions differ from pi. Project agents are repo-controlled prompts:
-// without Options.Confirm, an untrusted project's agents are refused, where pi
-// runs them unasked when it has no UI to ask with; and the confirmProjectAgents
-// parameter, which lets the model skip the question, only applies when there is
-// someone to ask.
+// Two decisions differ from pi. Project agents are repo-controlled prompts, so
+// an untrusted project's agents run only when the user approves them through
+// Options.Confirm: without it they are refused, where pi runs them unasked
+// when it has no UI to ask with; and the tool has no confirmProjectAgents
+// parameter, with which pi lets the model itself skip the question.
 package subagentext
 
 import (
@@ -207,7 +207,6 @@ func Definition(parent *coding.Session, opts Options) coding.ToolDefinition {
 		ai.Opt("tasks", ai.ArrayOf(taskItem, "Array of {agent, task} for parallel execution")),
 		ai.Opt("chain", ai.ArrayOf(chainItem, "Array of {agent, task} for sequential execution")),
 		ai.Opt("agentScope", scope),
-		ai.Opt("confirmProjectAgents", ai.Boolean("Prompt before running project-local agents. Default: true.").WithDefault(true)),
 		ai.Opt("cwd", ai.String("Working directory for the agent process (single mode)")),
 	)
 	userDir := opts.UserAgentsDir
@@ -283,10 +282,6 @@ func (r *runner) execute(ctx context.Context, _ string, params map[string]any, o
 	}
 	discovery := DiscoverAgents(r.opts.UserAgentsDir, projectDir, scope)
 	agents := discovery.Agents
-	confirmProjectAgents := true
-	if v, ok := params["confirmProjectAgents"].(bool); ok {
-		confirmProjectAgents = v
-	}
 
 	chain, tasks := taskList(params["chain"]), taskList(params["tasks"])
 	single := taskParam{}
@@ -340,19 +335,15 @@ func (r *runner) execute(ctx context.Context, _ string, params map[string]any, o
 			}
 		}
 		if len(projectAgents) > 0 {
+			// Only the user approves them; with no one to ask, they are refused.
 			approved := false
-			// With someone to ask, the call may skip the question, as in pi.
-			// Without, the agents are refused whatever the call says.
 			if r.opts.Confirm != nil {
-				approved = !confirmProjectAgents
-				if !approved {
-					dir := discovery.ProjectAgentsDir
-					if dir == "" {
-						dir = "(unknown)"
-					}
-					approved = r.opts.Confirm(ctx, "Run project-local agents?",
-						fmt.Sprintf("Agents: %s\nSource: %s\n\nProject agents are repo-controlled. Only continue for trusted repositories.", strings.Join(projectAgents, ", "), dir))
+				dir := discovery.ProjectAgentsDir
+				if dir == "" {
+					dir = "(unknown)"
 				}
+				approved = r.opts.Confirm(ctx, "Run project-local agents?",
+					fmt.Sprintf("Agents: %s\nSource: %s\n\nProject agents are repo-controlled. Only continue for trusted repositories.", strings.Join(projectAgents, ", "), dir))
 			}
 			if !approved {
 				return textResult(canceledByConfirm, details(mode, nil)), nil
