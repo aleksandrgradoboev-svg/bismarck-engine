@@ -2,6 +2,7 @@ package durable_test
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"strings"
 	"sync"
@@ -60,6 +61,33 @@ type controlledStorage struct {
 	commitGate        *gate
 	findGate          *gate
 	commitFailure     error
+	// closed stands for a closed database; the records stay, so reopen can
+	// read them again, as a fresh process would.
+	closed bool
+}
+
+func (s *controlledStorage) Close(context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
+	return nil
+}
+
+// reopen reopens the storage after Close, keeping every committed record.
+func (s *controlledStorage) reopen() *controlledStorage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = false
+	return s
+}
+
+func (s *controlledStorage) checkOpen() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return memory.ErrClosed
+	}
+	return nil
 }
 
 func newControlledStorage() *controlledStorage { return &controlledStorage{Storage: memory.New()} }
@@ -115,6 +143,9 @@ func (s *controlledStorage) documentReads() int {
 }
 
 func (s *controlledStorage) Commit(ctx context.Context, writes []durable.StorageWrite) (durable.Seq, error) {
+	if err := s.checkOpen(); err != nil {
+		return 0, err
+	}
 	detached := make([]durable.StorageWrite, len(writes))
 	for i, w := range writes {
 		c, err := durable.CloneWrite(w)
@@ -147,6 +178,9 @@ func (s *controlledStorage) Commit(ctx context.Context, writes []durable.Storage
 }
 
 func (s *controlledStorage) MintID(ctx context.Context) (durable.ID, error) {
+	if err := s.checkOpen(); err != nil {
+		return 0, err
+	}
 	s.mu.Lock()
 	s.mintCount++
 	s.mu.Unlock()
@@ -154,6 +188,9 @@ func (s *controlledStorage) MintID(ctx context.Context) (durable.ID, error) {
 }
 
 func (s *controlledStorage) Document(ctx context.Context, id durable.DocumentID, at durable.DocumentPoint) (*durable.StoredDocument, error) {
+	if err := s.checkOpen(); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	s.documentReadCount++
 	s.mu.Unlock()
@@ -161,6 +198,9 @@ func (s *controlledStorage) Document(ctx context.Context, id durable.DocumentID,
 }
 
 func (s *controlledStorage) FindDocument(ctx context.Context, address durable.DocumentAddress, at durable.DocumentPoint) (*durable.DocumentRecord, error) {
+	if err := s.checkOpen(); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	held := s.findGate
 	s.mu.Unlock()
@@ -334,4 +374,57 @@ func get(m map[string]any, path ...string) any {
 		v = mm[p]
 	}
 	return v
+}
+
+func (s *controlledStorage) Conversation(ctx context.Context, id durable.ConversationID) (*durable.ConversationRecord, error) {
+	if err := s.checkOpen(); err != nil {
+		return nil, err
+	}
+	return s.Storage.Conversation(ctx, id)
+}
+
+func documentCopyChanges(p durable.CommitPublication) []durable.DocumentCopyChange {
+	var out []durable.DocumentCopyChange
+	for _, c := range p.Changes {
+		if d, ok := c.(durable.DocumentCopyChange); ok {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// testTask is a task definition whose first checkpoint is fixed.
+type testTask struct {
+	name       string
+	version    int
+	checkpoint string
+}
+
+func (d testTask) Name() string { return d.name }
+func (d testTask) Version() int { return d.version }
+func (d testTask) Initial(json.RawMessage) (json.RawMessage, error) {
+	return json.RawMessage(d.checkpoint), nil
+}
+
+func ownedByConversation(id durable.ConversationID) durable.TaskOptions {
+	return durable.TaskOptions{Ownership: durable.TaskOwnership{Kind: durable.OwnershipConversation}, ConversationID: id}
+}
+
+// appendEntry appends an entry of kind and returns its ID.
+func appendEntry(tx *durable.Tx, conversationID durable.ConversationID, kind string) durable.EntryID {
+	e, err := tx.AppendEntry(conversationID, durable.EntryDraft{Kind: kind})
+	must(err)
+	return e.ID
+}
+
+func fork(t *testing.T, s *durable.Session, parent durable.ConversationID, at durable.EntryID) durable.ConversationID {
+	t.Helper()
+	id, err := durable.CommitValue(bg, s, func(tx *durable.Tx) (durable.ConversationID, error) {
+		c, err := tx.ForkConversation(parent, at, durable.Ownerless)
+		return c.ID, err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }

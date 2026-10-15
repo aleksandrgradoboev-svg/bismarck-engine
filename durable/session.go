@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord"
@@ -41,7 +42,9 @@ import (
 
 // defaultDocumentRetention is how long an idle document stays cached: ten
 // minutes, as for kept contexts.
-var defaultDocumentRetention = 10 * time.Minute
+var defaultDocumentRetention atomic.Int64 // a time.Duration
+
+func init() { defaultDocumentRetention.Store(int64(10 * time.Minute)) }
 
 // documentRetention is a retention as given when it is 0 or more, otherwise
 // the default.
@@ -51,7 +54,7 @@ func documentRetention(retention func() time.Duration) time.Duration {
 			return d
 		}
 	}
-	return defaultDocumentRetention
+	return time.Duration(defaultDocumentRetention.Load())
 }
 
 // maxSweepDelay is a retention treated as keeping documents for good.
@@ -158,9 +161,14 @@ type Session struct {
 	idleIndex map[string]*list.Element
 	// attached counts the observers per incarnation; a cached incarnation
 	// with any is never evicted.
-	attached          map[DocumentID]int
-	sweep             *documentSweep
-	sweepJobs         int
+	attached  map[DocumentID]int
+	sweep     *documentSweep
+	sweepJobs int
+	// lineBusy is set while a job runs; a sweep due meanwhile runs at the
+	// job's end, still on the line (dueSweep), as pi's microtask queues it
+	// before anything that awaits the job.
+	lineBusy          bool
+	dueSweep          *documentSweep
 	commitListeners   listenerSet[commitListener]
 	internalListeners listenerSet[commitListener]
 	closeListeners    listenerSet[func()]
@@ -196,9 +204,31 @@ func NewSession(storage Storage, options SessionOptions) *Session {
 	return s
 }
 
+// now is the wall clock for task times.
 func (s *Session) now() time.Time { return s.nowFn() }
 
-func (s *Session) documentRetention() time.Duration { return documentRetention(s.retention) }
+// clock is the cache's clock. Cache bookkeeping must never change the
+// outcome of the operation it follows: a clock that panics counts as
+// time.Now.
+func (s *Session) clock() (now time.Time) {
+	defer func() {
+		if recover() != nil {
+			now = time.Now()
+		}
+	}()
+	return s.nowFn()
+}
+
+// documentRetention is the configured retention; one that panics counts as
+// the default.
+func (s *Session) documentRetention() (retention time.Duration) {
+	defer func() {
+		if recover() != nil {
+			retention = time.Duration(defaultDocumentRetention.Load())
+		}
+	}()
+	return documentRetention(s.retention)
+}
 
 // Storage is the Storage behind the failure guard; every component reads and
 // writes through it.
@@ -295,7 +325,29 @@ func (s *Session) enqueue(admit bool, job func() error) error {
 	s.lineWaiting--
 	s.lineMu.Unlock()
 	defer close(done)
+	s.mu.Lock()
+	s.lineBusy = true
+	s.mu.Unlock()
+	defer s.endJob()
 	return job()
+}
+
+// endJob ends the running job and runs a sweep that fell due during it.
+func (s *Session) endJob() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lineBusy = false
+	sweep := s.dueSweep
+	s.dueSweep = nil
+	if sweep == nil {
+		return
+	}
+	if s.sweep == sweep {
+		s.sweep = nil
+	}
+	if !s.closing {
+		s.sweepLocked()
+	}
 }
 
 // Commit runs one atomic transaction on the mutation line. Inside the
@@ -681,7 +733,7 @@ func (s *Session) touchLocked(addressID string) {
 	if cached == nil || s.attached[cached.record.ID] > 0 {
 		return
 	}
-	now := s.now()
+	now := s.clock()
 	retention := s.documentRetention()
 	// A hot document moves to the back at most once per granule, a tenth of
 	// the retention up to 1 s: it may then leave up to a granule early,
@@ -780,8 +832,13 @@ func (s *Session) scheduleSweepLocked() {
 		})
 	}
 	s.sweep = sweep
-	delay := at.Sub(s.now())
+	delay := at.Sub(s.clock())
 	if delay <= 0 {
+		if s.lineBusy {
+			s.sweepJobs++
+			s.dueSweep = sweep
+			return
+		}
 		go run()
 		return
 	}
@@ -791,7 +848,13 @@ func (s *Session) scheduleSweepLocked() {
 // sweepLocked evicts the idle documents whose retention passed, oldest
 // first, then schedules the next eviction. It runs on the line.
 func (s *Session) sweepLocked() {
-	expired := s.now().Add(-s.documentRetention())
+	retention := s.documentRetention()
+	if retention >= maxSweepDelay {
+		// pi's Infinity: a Duration ends after 292 years, which a clock can
+		// pass, so a retention this long never expires.
+		return
+	}
+	expired := s.clock().Add(-retention)
 	for e := s.idle.Front(); e != nil; e = s.idle.Front() {
 		idle := e.Value.(*idleDocument)
 		if idle.since.After(expired) {
