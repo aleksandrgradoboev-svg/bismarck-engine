@@ -172,6 +172,11 @@ type FileSystem interface {
 	// ListDir lists a directory's entries of supported kinds.
 	ListDir(ctx context.Context, path string) ([]FileInfo, error)
 	OpenDirReader(ctx context.Context, path string) (DirReader, error)
+	// Watch reports changes to files and directories, for hosts that load
+	// resources from the environment. Coverage is established once it
+	// returns: a host that watches before it loads cannot miss a change
+	// made during the load.
+	Watch(ctx context.Context, targets []WatchTarget, onChange func(WatchChange)) (FileWatcher, error)
 	// CanonicalPath resolves symbolic links of an existing path.
 	CanonicalPath(ctx context.Context, path string) (string, error)
 	// Exists reports whether a path exists; a missing path is not an error.

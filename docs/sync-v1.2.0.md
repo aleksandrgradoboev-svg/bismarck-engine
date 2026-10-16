@@ -213,6 +213,26 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    `env-truncate`, which tests `truncate.ts`, a tools utility for stage 5. The shell and watching
    are stage 3b.
 
+   **Stage 3b, commands and watching**: the shell half of `node.ts` (`Local.Exec`: a script through
+   pi's bash resolution or an argv run directly, cwd, environment overrides, timeout and abort
+   killing the process tree, the output callback decoded per stream, the spill, `Cleanup`), and
+   `node-watch.ts` in its polling mode (`Local.Watch`), with the rest of the conformance suite
+   (command and watch cases), the shell cases of `env-node` and its watch limit case. pi's shell
+   resolution, process groups, tree killing and signal reading move from `coding` to
+   `internal/proc`, which both runners use; `coding` keeps thin wrappers under its old names. A
+   command is `env.Script` or `env.Argv`, pi's string or array. Output is read from pipes of the
+   environment's own, not `StdoutPipe`, which `Wait` closes at exit: as in pi, a descendant holding
+   the stdio delays settling until the output is idle for 100 ms. `Local` ignores `ExecOptions.Window`,
+   as pi's local environment does. `Local` only polls (owner ruling 2026-10-16): Go's standard
+   library has no native watching, and pi itself polls on Windows. A file's identity is its device
+   and inode; on Windows, where the file index needs an open handle and an open directory handle
+   blocks renaming its parents, it is the creation time, with a directory's modification time.
+   Added: checks that a timeout and an abort return promptly (the pi cases pass even without
+   killing) and a case for a same-size rewrite that keeps its modification time (the content hash
+   pi's polling uses). n/a: `env-node-spill`, since the spill is written synchronously by the loop
+   that reads the output, so there is no spill backpressure; and the asynchronous taskkill spawn
+   error, which Go reports synchronously.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

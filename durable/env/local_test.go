@@ -13,9 +13,11 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/durabletest"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/env"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/proc"
 )
 
 // pi test/env-node.test.ts (its file and text line reader cases) and
@@ -80,10 +82,41 @@ func TestLocalConformance(t *testing.T) {
 	} else {
 		t.Log("symbolic link cases skipped: this machine does not let the test make links")
 	}
-	durabletest.TestEnv(t, options, func(t *testing.T) env.FileSystem {
-		cwd = t.TempDir()
-		return env.NewLocal(cwd)
+	if runtime.GOOS == "windows" {
+		// pi's suite runs scripts through Git Bash on Windows.
+		shell, err := proc.ResolveShell("", func(p string) bool { _, err := os.Stat(p); return err == nil }, "")
+		if err != nil {
+			t.Skip("no bash: ", err)
+		}
+		options.Shell = []string{shell.Path, "-c"}
+	}
+	durabletest.TestEnv(t, options, func(t *testing.T) env.ExecutionEnv {
+		cwd = tempDir(t)
+		// Snapshots every 100 ms, as pi's polling conformance run does; the
+		// cases wait at most three seconds for a change.
+		return env.NewLocalWith(cwd, env.LocalOptions{Watch: env.WatchOptions{PollInterval: 100 * time.Millisecond}})
 	})
+}
+
+// tempDir is a test directory removed with retries: on Windows a killed
+// command's processes can hold it for a while after Exec settles (pi's
+// removeTempDir).
+func tempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "durable-env-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for attempt := 0; ; attempt++ {
+			err := os.RemoveAll(dir)
+			if err == nil || attempt >= 80 {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	})
+	return dir
 }
 
 func TestReadsRangesSpanningSeveralInternalChunks(t *testing.T) {

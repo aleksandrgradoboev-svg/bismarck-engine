@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -32,20 +33,43 @@ const (
 // Local is the environment of the machine the engine runs on (pi
 // NodeExecutionEnv). It is safe for concurrent use.
 type Local struct {
-	cwd string
+	cwd       string
+	shellPath string
+	shellEnv  map[string]string
+	watch     WatchOptions
+
+	mu     sync.Mutex
+	active map[*exec.Cmd]bool
+
+	// spillFile replaces the spill file a command's output goes to, for
+	// tests.
+	spillFile func(ctx context.Context) (string, error)
 }
 
 var _ FileSystem = (*Local)(nil)
 
+// LocalOptions configure a Local.
+type LocalOptions struct {
+	// ShellPath is the bash a script runs through; "" resolves one as pi
+	// does (Git Bash on Windows, /bin/bash, bash on PATH, sh).
+	ShellPath string
+	// ShellEnv adds variables to the inherited environment of every command.
+	ShellEnv map[string]string
+	Watch    WatchOptions
+}
+
 // NewLocal returns the local environment working in cwd; "" is the
 // process's working directory.
-func NewLocal(cwd string) *Local {
+func NewLocal(cwd string) *Local { return NewLocalWith(cwd, LocalOptions{}) }
+
+// NewLocalWith returns a configured local environment working in cwd.
+func NewLocalWith(cwd string, options LocalOptions) *Local {
 	if cwd == "" {
 		if wd, err := os.Getwd(); err == nil {
 			cwd = wd
 		}
 	}
-	return &Local{cwd: cwd}
+	return &Local{cwd: cwd, shellPath: options.ShellPath, shellEnv: options.ShellEnv, watch: options.Watch}
 }
 
 func (l *Local) ID() string  { return localID }
@@ -469,9 +493,6 @@ func (l *Local) CreateTempFile(ctx context.Context, options TempFileOptions) (st
 	}
 	return path, nil
 }
-
-// Cleanup has nothing to release for files.
-func (l *Local) Cleanup(ctx context.Context) {}
 
 // textLineReader is pi's strict-LF reader: Node's readline cannot tell
 // whether the last line ended with a newline. It reads at explicit offsets,
