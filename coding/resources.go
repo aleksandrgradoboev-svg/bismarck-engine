@@ -276,7 +276,7 @@ type Skill struct {
 // SkillDiagnostic mirrors pi's ResourceDiagnostic for skill loading: a validation
 // warning (or error) with the offending file path.
 type SkillDiagnostic struct {
-	Type    string // "warning" | "error"
+	Type    string // "warning" | "error" | "collision"
 	Message string
 	Path    string
 }
@@ -379,26 +379,61 @@ func sessionSkillsWithPaths(cwd string, projectTrusted, noSkills bool, paths []s
 	for _, s := range skills {
 		seen[s.Name] = true
 	}
-	for _, p := range paths {
-		if !filepath.IsAbs(p) {
-			p = filepath.Join(cwd, p)
-		}
-		var found []Skill
-		if info, err := os.Stat(p); err == nil && !info.IsDir() {
-			if s, _ := loadSkillFromFile(p); s != nil {
-				found = []Skill{*s}
-			}
-		} else {
-			found, _ = loadSkillsFromDir(p)
-		}
-		for _, s := range found {
-			if !seen[s.Name] {
-				seen[s.Name] = true
-				skills = append(skills, s)
-			}
+	found, _ := LoadSkillPaths(cwd, paths)
+	for _, s := range found {
+		if !seen[s.Name] {
+			seen[s.Name] = true
+			skills = append(skills, s)
 		}
 	}
 	return skills
+}
+
+// LoadSkillPaths loads the skills at paths, skill directories or .md files,
+// relative paths resolved against cwd; the first skill of a name wins. It is
+// pi's loadSkills with includeDefaults false: no user or project directory is
+// scanned, a path that does not exist or is not markdown is a warning, and a
+// skill dropped for its name is a "collision" diagnostic, after the others.
+func LoadSkillPaths(cwd string, paths []string) ([]Skill, []SkillDiagnostic) {
+	var skills []Skill
+	var diags, collisions []SkillDiagnostic
+	winner := map[string]string{}
+	add := func(found []Skill, d []SkillDiagnostic) {
+		diags = append(diags, d...)
+		for _, s := range found {
+			if path, ok := winner[s.Name]; ok {
+				if path != s.FilePath {
+					collisions = append(collisions, SkillDiagnostic{Type: "collision", Message: `name "` + s.Name + `" collision`, Path: s.FilePath})
+				}
+				continue
+			}
+			winner[s.Name] = s.FilePath
+			skills = append(skills, s)
+		}
+	}
+	for _, p := range paths {
+		p = strings.TrimSpace(p)
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(cwd, p)
+		}
+		info, err := os.Stat(p)
+		switch {
+		case err != nil:
+			diags = append(diags, SkillDiagnostic{Type: "warning", Message: "skill path does not exist", Path: p})
+		case info.IsDir():
+			add(loadSkillsFromDir(p))
+		case strings.HasSuffix(p, ".md"):
+			s, d := loadSkillFromFile(p)
+			if s != nil {
+				add([]Skill{*s}, d)
+			} else {
+				diags = append(diags, d...)
+			}
+		default:
+			diags = append(diags, SkillDiagnostic{Type: "warning", Message: "skill path is not a markdown file", Path: p})
+		}
+	}
+	return skills, append(diags, collisions...)
 }
 
 // LoadSkillsWithTrust is LoadSkillsWithDiagnostics with the project-trust
