@@ -17,6 +17,7 @@ import (
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/durabletest"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/env"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/storage/jsonl"
 )
 
@@ -26,10 +27,10 @@ var ctx = context.Background()
 
 const root = durable.RootConversationID
 
-func openStorage(t *testing.T, directory string, fsys jsonl.FS, options jsonl.Options) *jsonl.Storage {
+func openStorage(t *testing.T, directory string, fsys env.FileSystem, options jsonl.Options) *jsonl.Storage {
 	t.Helper()
 	if fsys == nil {
-		fsys = jsonl.OSFS{}
+		fsys = env.NewLocal("")
 	}
 	s, err := jsonl.Open(ctx, directory, fsys, options)
 	if err != nil {
@@ -295,7 +296,7 @@ func (f failure) String() string { return fmt.Sprintf("%s %d %s", f.operation, f
 
 // instrumentedFS records file operations and injects one failure.
 type instrumentedFS struct {
-	jsonl.OSFS
+	env.Local
 	mu         sync.Mutex
 	operations []string
 	failure    *failure
@@ -343,27 +344,27 @@ func half(data []byte) []byte { return data[:max(1, len(data)/2)] }
 func (f *instrumentedFS) AppendFile(ctx context.Context, path string, data []byte) error {
 	switch f.observe("append", filepath.Base(path)) {
 	case "":
-		return f.OSFS.AppendFile(ctx, path, data)
+		return f.Local.AppendFile(ctx, path, data)
 	case "before":
 		return errors.New("injected append failure")
 	case "short":
-		if err := f.OSFS.AppendFile(ctx, path, half(data)); err != nil {
+		if err := f.Local.AppendFile(ctx, path, half(data)); err != nil {
 			return err
 		}
 		return errors.New("injected short append")
 	}
-	if err := f.OSFS.AppendFile(ctx, path, data); err != nil {
+	if err := f.Local.AppendFile(ctx, path, data); err != nil {
 		return err
 	}
 	return errors.New("injected post-append failure")
 }
 
-func (f *instrumentedFS) Flush(ctx context.Context, path string) error {
+func (f *instrumentedFS) FlushFile(ctx context.Context, path string) error {
 	switch f.observe("flush", filepath.Base(path)) {
 	case "":
-		return f.OSFS.Flush(ctx, path)
+		return f.Local.FlushFile(ctx, path)
 	case "after":
-		if err := f.OSFS.Flush(ctx, path); err != nil {
+		if err := f.Local.FlushFile(ctx, path); err != nil {
 			return err
 		}
 	}
@@ -373,39 +374,39 @@ func (f *instrumentedFS) Flush(ctx context.Context, path string) error {
 func (f *instrumentedFS) WriteFile(ctx context.Context, path string, data []byte) error {
 	switch f.observe("write", filepath.Base(path)) {
 	case "":
-		return f.OSFS.WriteFile(ctx, path, data)
+		return f.Local.WriteFile(ctx, path, data)
 	case "before":
 		return errors.New("injected write failure")
 	case "short":
-		if err := f.OSFS.WriteFile(ctx, path, half(data)); err != nil {
+		if err := f.Local.WriteFile(ctx, path, half(data)); err != nil {
 			return err
 		}
 		return errors.New("injected short write")
 	}
-	if err := f.OSFS.WriteFile(ctx, path, data); err != nil {
+	if err := f.Local.WriteFile(ctx, path, data); err != nil {
 		return err
 	}
 	return errors.New("injected post-write failure")
 }
 
-func (f *instrumentedFS) Rename(ctx context.Context, oldPath, newPath string) error {
+func (f *instrumentedFS) RenameFile(ctx context.Context, oldPath, newPath string) error {
 	switch f.observe("rename", filepath.Base(oldPath)+"->"+filepath.Base(newPath)) {
 	case "":
-		return f.OSFS.Rename(ctx, oldPath, newPath)
+		return f.Local.RenameFile(ctx, oldPath, newPath)
 	case "after":
-		if err := f.OSFS.Rename(ctx, oldPath, newPath); err != nil {
+		if err := f.Local.RenameFile(ctx, oldPath, newPath); err != nil {
 			return err
 		}
 	}
 	return errors.New("injected rename failure")
 }
 
-func (f *instrumentedFS) Remove(ctx context.Context, path string) error {
+func (f *instrumentedFS) Remove(ctx context.Context, path string, options env.RemoveOptions) error {
 	switch f.observe("remove", filepath.Base(path)) {
 	case "":
-		return f.OSFS.Remove(ctx, path)
+		return f.Local.Remove(ctx, path, options)
 	case "after":
-		if err := f.OSFS.Remove(ctx, path); err != nil {
+		if err := f.Local.Remove(ctx, path, options); err != nil {
 			return err
 		}
 	}
@@ -884,7 +885,7 @@ func TestTruncatesTornUTF8TailsAndReusesTheUnconfirmedSequence(t *testing.T) {
 	torn := []byte(`{"text":"€`)
 	torn = torn[:len(torn)-1]
 	for _, path := range []string{sidecarPath, mainPath} {
-		noErr(t, jsonl.OSFS{}.AppendFile(ctx, path, torn))
+		noErr(t, env.NewLocal("").AppendFile(ctx, path, torn))
 	}
 
 	reopened := reopen(t, directory)
@@ -904,7 +905,7 @@ func TestRemovesCompleteUnconfirmedTailsWithoutResurrectingTerminalTasks(t *test
 	sidecarPath := filepath.Join(directory, fmt.Sprintf("task-%d.jsonl", taskID))
 	equal(t, fileExists(t, sidecarPath), false, "task sidecar exists")
 	stale := must(json.Marshal(map[string]any{"format": 1, "type": "record", "seq": 4, "ordinal": 0, "payload": map[string]any{"type": "task", "value": pendingTask(taskID, "stale")}}))
-	noErr(t, jsonl.OSFS{}.AppendFile(ctx, sidecarPath, append(stale, '\n')))
+	noErr(t, env.NewLocal("").AppendFile(ctx, sidecarPath, append(stale, '\n')))
 
 	reopened := reopen(t, directory)
 	equal(t, fileExists(t, sidecarPath), false, "task sidecar exists after reopen")
@@ -950,7 +951,7 @@ func TestRejectsNonIncreasingMainCommitSequences(t *testing.T) {
 	createRoot(t, s)
 	noErr(t, s.Close(ctx))
 	path := filepath.Join(directory, "main.jsonl")
-	noErr(t, jsonl.OSFS{}.AppendFile(ctx, path, must(os.ReadFile(path))))
+	noErr(t, env.NewLocal("").AppendFile(ctx, path, must(os.ReadFile(path))))
 	_, err := jsonl.OpenDir(ctx, directory, jsonl.Options{})
 	fails(t, err, "Commit sequence does not strictly increase")
 }
@@ -971,7 +972,7 @@ func TestRejectsMalformedCompleteMainAndSidecarLines(t *testing.T) {
 	s := reopen(t, mainDirectory)
 	createRoot(t, s)
 	noErr(t, s.Close(ctx))
-	noErr(t, jsonl.OSFS{}.AppendFile(ctx, filepath.Join(mainDirectory, "main.jsonl"), []byte("{bad}\n")))
+	noErr(t, env.NewLocal("").AppendFile(ctx, filepath.Join(mainDirectory, "main.jsonl"), []byte("{bad}\n")))
 	_, err := jsonl.OpenDir(ctx, mainDirectory, jsonl.Options{})
 	fails(t, err, "Malformed complete main.jsonl")
 
