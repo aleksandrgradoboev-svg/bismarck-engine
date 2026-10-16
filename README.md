@@ -38,7 +38,6 @@ MCP and agents — embedded as a library, with no Node.js runtime.
 | [`coding/codemodetool`](coding/codemodetool/) | `pi-coding-agent` extensions/codemode | The `codemode` tool: the model writes JavaScript that calls other tools; its description lists them within a token budget. |
 | [`coding/toolsearch`](coding/toolsearch/) | `pi-coding-agent` extensions/tool-search | The `tool_search` tool and the BM25 ranker scripts' `searchTools()` shares. |
 | [`coding/subagentext`](coding/subagentext/) | `pi-coding-agent` examples/extensions/subagent | The `subagent` tool: tasks delegated to agents defined in `.md` files, one at a time, in parallel or as a chain, each in a session of its own built by the host. |
-| [`server`](server/), [`client`](client/), [`protocol`](protocol/) | pi-server, pi-client (removed upstream) | Transport-neutral session server and client over a CBOR wire format. |
 | [`cmd/pi`](cmd/pi/) | `pi` CLI | Print mode, interactive REPL, session resume, `pi models`, `pi sessions`. |
 
 [`difftest/`](difftest/) is the differential harness: for identical inputs it captures the HTTP
