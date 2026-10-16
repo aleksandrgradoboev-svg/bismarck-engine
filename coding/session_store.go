@@ -303,7 +303,18 @@ type SessionRecorder struct {
 // thinking entry is written even when there is no model). The variadic
 // parameter keeps existing callers source-compatible.
 func StartSession(cwd string, model *ai.Model, thinkingLevel ...string) (*SessionRecorder, error) {
+	return StartSessionIn("", cwd, model, thinkingLevel...)
+}
+
+// StartSessionIn is StartSession with the session file in sessionDir, pi's
+// SessionManager.create(cwd, sessionDir): a host that keeps sessions apart
+// from the agent directory, such as a server storing them per user, names
+// the directory; an empty sessionDir is the default per-cwd directory.
+func StartSessionIn(sessionDir, cwd string, model *ai.Model, thinkingLevel ...string) (*SessionRecorder, error) {
 	dir := DefaultSessionDir(cwd)
+	if sessionDir != "" {
+		dir = normalizePath(sessionDir)
+	}
 	if dir == "" {
 		return nil, fmt.Errorf("cannot locate the agent directory: no home directory is set, so there is nowhere to store sessions. Set HOME (or USERPROFILE on Windows), or pass an explicit session directory")
 	}
