@@ -136,17 +136,28 @@ func TestWatchKeepsTheAcquisitionRevisionUntilStartAndDeliversExactFrames(t *tes
 	if !same(watch.Value(), initial) {
 		t.Fatal("the watch advanced before start")
 	}
-	r := newRecorder(false)
+	// The first delivery holds until released: an inline delivery would keep
+	// Start from returning. Pi checks right after start, which its microtask
+	// delivery makes exact; a Go delivery goroutine may already have run.
+	r := newRecorder(true)
 	var mismatch bool
-	must(watch.Start(func(ctx context.Context, value map[string]any, ops []delta.Op) error {
-		if !same(watch.Value(), value) {
-			mismatch = true
-		}
-		return r.listener(ctx, value, ops)
-	}))
-	if len(r.all()) != 0 {
+	started := make(chan error, 1)
+	go func() {
+		started <- watch.Start(func(ctx context.Context, value map[string]any, ops []delta.Op) error {
+			if !same(watch.Value(), value) {
+				mismatch = true
+			}
+			return r.listener(ctx, value, ops)
+		})
+	}()
+	select {
+	case err := <-started:
+		must(err)
+	case <-time.After(5 * time.Second):
+		close(r.release)
 		t.Fatal("start delivered inline")
 	}
+	close(r.release)
 	eventually(t, func() bool { return len(r.all()) == 2 })
 	d := r.all()
 	if !reflect.DeepEqual(r.values(), []any{1.0, 2.0}) || mismatch {
