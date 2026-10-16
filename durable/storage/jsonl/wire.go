@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"reflect"
-	"unicode/utf8"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
@@ -397,52 +395,4 @@ func parseSidecarRecord(text []byte, file string, line int) (sidecarRecord, erro
 		return sidecarRecord{}, corruption(nil, "Unknown sidecar record type in %s", description)
 	}
 	return record, nil
-}
-
-var rawMessageType = reflect.TypeFor[json.RawMessage]()
-
-// checkUTF8 refuses a commit holding a string, map key or raw JSON payload
-// that is not valid UTF-8: JSON keeps no such string, so the file would
-// read back a different one (see durabletest.StorageOptions).
-func checkUTF8(writes []durable.StorageWrite) error {
-	var walk func(v reflect.Value) bool
-	walk = func(v reflect.Value) bool {
-		switch v.Kind() {
-		case reflect.String:
-			return utf8.ValidString(v.String())
-		case reflect.Pointer, reflect.Interface:
-			return v.IsNil() || walk(v.Elem())
-		case reflect.Struct:
-			for i := range v.NumField() {
-				if !walk(v.Field(i)) {
-					return false
-				}
-			}
-		case reflect.Slice, reflect.Array:
-			if v.Type() == rawMessageType {
-				return utf8.Valid(v.Bytes())
-			}
-			if v.Type().Elem().Kind() == reflect.Uint8 {
-				return true // bytes are encoded as base64
-			}
-			for i := range v.Len() {
-				if !walk(v.Index(i)) {
-					return false
-				}
-			}
-		case reflect.Map:
-			for it := v.MapRange(); it.Next(); {
-				if !walk(it.Key()) || !walk(it.Value()) {
-					return false
-				}
-			}
-		}
-		return true
-	}
-	for _, w := range writes {
-		if !walk(reflect.ValueOf(w)) {
-			return fmt.Errorf("JsonlStorage cannot keep a string that is not valid UTF-8 (%s write)", w.WriteType())
-		}
-	}
-	return nil
 }
