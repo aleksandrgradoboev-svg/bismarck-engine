@@ -502,9 +502,19 @@ func (c *Connection) connectOnce() (*mcp.Client, error) {
 		client.OnNotification("notifications/message", func(params json.RawMessage) { log(c.Name(), params) })
 	}
 	// Closing the client fails its pending initialize or discovery requests
-	// and closes the transport.
-	stopOnShutdown := context.AfterFunc(c.shutdownCtx, func() { _ = client.Close() })
-	defer stopOnShutdown()
+	// and closes the transport. When shutdown runs that close, the attempt
+	// waits for it: a second Client.Close finds the transport taken and
+	// returns at once, and Close must not return while a transport closes.
+	shutdownClosed := make(chan struct{})
+	stopOnShutdown := context.AfterFunc(c.shutdownCtx, func() {
+		defer close(shutdownClosed)
+		_ = client.Close()
+	})
+	defer func() {
+		if !stopOnShutdown() {
+			<-shutdownClosed
+		}
+	}()
 
 	transport, err := c.opts.NewTransport(c.opts.Entry, cwd, c.auth)
 	if err != nil {
