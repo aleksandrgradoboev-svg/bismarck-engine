@@ -13,18 +13,25 @@ import (
 
 // EnvOptions configure the environment conformance suite.
 type EnvOptions struct {
+	// Shell is the argv prefix that runs a script, such as {"sh", "-c"} (the
+	// default); on Windows, Git Bash's path and "-c".
+	Shell []string
 	// Symlink makes link a symbolic link to target, both relative to the
 	// environment's working directory; nil skips the cases that need links.
-	// pi's suite makes links through the environment's shell; here the
-	// caller does, so the file cases need no shell.
+	// pi's suite makes links through the environment's shell, which on
+	// Windows copies instead of linking unless native links are enabled.
 	Symlink func(target, link string) error
 }
 
 // TestEnv runs the environment conformance suite (pi
-// testing/env-conformance.ts), its file cases. open returns an environment
-// whose working directory is a fresh, empty, writable directory.
-func TestEnv(t *testing.T, options EnvOptions, open func(t *testing.T) env.FileSystem) {
-	for _, c := range envCases {
+// testing/env-conformance.ts). open returns an environment whose working
+// directory is a fresh, empty, writable directory. pi's listFiles cases are
+// not here: no environment of the engine implements it yet.
+func TestEnv(t *testing.T, options EnvOptions, open func(t *testing.T) env.ExecutionEnv) {
+	if options.Shell == nil {
+		options.Shell = []string{"sh", "-c"}
+	}
+	for _, c := range slices.Concat(envCases, envExecCases, envWatchCases) {
 		if c.symlinks && options.Symlink == nil {
 			continue
 		}
@@ -36,7 +43,7 @@ func TestEnv(t *testing.T, options EnvOptions, open func(t *testing.T) env.FileS
 
 type envChecker struct {
 	t       *testing.T
-	env     env.FileSystem
+	env     env.ExecutionEnv
 	options EnvOptions
 }
 

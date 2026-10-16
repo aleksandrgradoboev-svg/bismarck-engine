@@ -26,6 +26,7 @@ import (
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/proc"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 	"golang.org/x/text/unicode/norm"
@@ -1260,72 +1261,23 @@ func argFloat(params map[string]any, key string) (float64, bool) {
 // resolves Git Bash in known locations, then bash.exe on PATH, else errors.
 var shellExists = pathExistsFS
 
-// legacyWslBashRE matches the legacy Windows-bundled WSL launcher
-// (C:\Windows\System32\bash.exe, or the WoW64 sysnative redirect) after path
-// normalization. It mishandles `-c "<cmd>"` quoting, so commands go via stdin.
-var legacyWslBashRE = regexp.MustCompile(`^[a-z]:\\windows\\(?:system32|sysnative)\\bash\.exe$`)
+// isLegacyWslBashPath is pi's isLegacyWslBashPath (proc).
+func isLegacyWslBashPath(path string) bool { return proc.IsLegacyWSLBashPath(path) }
 
-// isLegacyWslBashPath ports pi's isLegacyWslBashPath (shell.ts).
-func isLegacyWslBashPath(path string) bool {
-	normalized := strings.ToLower(strings.ReplaceAll(path, "/", `\`))
-	return legacyWslBashRE.MatchString(normalized)
-}
-
-// getBashShellConfig ports pi's getBashShellConfig: legacy WSL bash takes the
-// command on stdin (`bash -s`); every other bash takes `bash -c <command>`.
+// getBashShellConfig is pi's getBashShellConfig (proc).
 func getBashShellConfig(shell string) (string, []string, bool) {
-	if isLegacyWslBashPath(shell) {
-		return shell, []string{"-s"}, true
-	}
-	return shell, []string{"-c"}, false
+	s := proc.BashShell(shell)
+	return s.Path, s.Args, s.Stdin
 }
 
 // getShellConfig returns the shell, its args, and whether the command must be
 // delivered on stdin (legacy WSL bash) rather than appended to argv.
 func getShellConfig() (shell string, args []string, useStdin bool, err error) {
-	if runtime.GOOS == "windows" {
-		var paths []string
-		if pf := os.Getenv("ProgramFiles"); pf != "" {
-			paths = append(paths, pf+`\Git\bin\bash.exe`)
-		}
-		if pf86 := os.Getenv("ProgramFiles(x86)"); pf86 != "" {
-			paths = append(paths, pf86+`\Git\bin\bash.exe`)
-		}
-		for _, p := range paths {
-			if shellExists(p) {
-				s, a, stdin := getBashShellConfig(p)
-				return s, a, stdin, nil
-			}
-		}
-		if p, err := exec.LookPath("bash.exe"); err == nil && p != "" {
-			s, a, stdin := getBashShellConfig(p)
-			return s, a, stdin, nil
-		}
-		var b strings.Builder
-		b.WriteString("No bash shell found. Options:\n")
-		b.WriteString("  1. Install Git for Windows: https://git-scm.com/download/win\n")
-		b.WriteString("  2. Add your bash to PATH (Cygwin, MSYS2, etc.)\n")
-		b.WriteString("  3. Set shellPath in settings.json\n\n")
-		b.WriteString("Searched Git Bash in:\n")
-		for i, p := range paths {
-			if i > 0 {
-				b.WriteString("\n")
-			}
-			b.WriteString("  " + p)
-		}
-		return "", nil, false, errors.New(b.String())
+	s, err := proc.ResolveShell("", shellExists, "Set shellPath in settings.json")
+	if err != nil {
+		return "", nil, false, err
 	}
-
-	// Unix: try /bin/bash, then bash on PATH, then fall back to sh.
-	if shellExists("/bin/bash") {
-		s, a, stdin := getBashShellConfig("/bin/bash")
-		return s, a, stdin, nil
-	}
-	if p, err := exec.LookPath("bash"); err == nil && p != "" {
-		s, a, stdin := getBashShellConfig(p)
-		return s, a, stdin, nil
-	}
-	return "sh", []string{"-c"}, false, nil
+	return s.Path, s.Args, s.Stdin, nil
 }
 
 // powershellArgs ports pi's POWERSHELL_ARGS (shell.ts, upstream 80e62761f):
