@@ -384,7 +384,7 @@ func TestSchedulingFailsTheHarnessOnAFailedReservationCommitAndReopeningRunsTheT
 		t.Fatalf("runs = %d", count())
 	}
 
-	reopened := openRoot(t, []Task{once}, openOptions{storage: storage})
+	reopened := openRoot(t, []Task{once}, openOptions{storage: storage.reopen()})
 	must(t, reopened.h.Resume())
 	if got := waitDone(t, reopened.h, id); got.State.Outcome.Status != durable.OutcomeCompleted || count() != 1 {
 		t.Fatalf("outcome = %s, runs = %d", outcomeJSON(t, got), count())
@@ -419,7 +419,7 @@ func TestSchedulingFailsTheHarnessInsteadOfRunningATaskAgainWhenItsFaultWriteFai
 	}
 	// Reopening recovers the task as after a crash: still running, so its
 	// phase runs again.
-	reopened := openRoot(t, []Task{fails}, openOptions{storage: storage})
+	reopened := openRoot(t, []Task{fails}, openOptions{storage: storage.reopen()})
 	must(t, reopened.h.Resume())
 	if got := outcomeJSON(t, waitDone(t, reopened.h, id)); got != `{"status":"faulted","error":{"message":"boom"}}` || runs != 2 {
 		t.Fatalf("outcome = %s, runs = %d", got, runs)

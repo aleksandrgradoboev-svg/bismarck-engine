@@ -51,6 +51,10 @@ type controlledStorage struct {
 	commits       [][]durable.StorageWrite
 	commitGate    *gate
 	commitFailure error
+	// closed stands for a closed database; the records stay, so a reopen
+	// reads them again, as a fresh process would.
+	closed     bool
+	closeError error
 }
 
 func newControlledStorage() *controlledStorage { return &controlledStorage{Storage: memory.New()} }
@@ -80,7 +84,38 @@ func (s *controlledStorage) Commit(ctx context.Context, writes []durable.Storage
 	return seq, err
 }
 
-func (s *controlledStorage) Close(context.Context) error { return nil }
+func (s *controlledStorage) Close(context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
+	return s.closeError
+}
+
+// reopen reopens the storage after Close, keeping every committed record.
+func (s *controlledStorage) reopen() *controlledStorage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = false
+	return s
+}
+
+// Task fails once the storage is closed, as a closed database read does.
+func (s *controlledStorage) Task(ctx context.Context, id durable.TaskID) (*durable.TaskRecord, error) {
+	s.mu.Lock()
+	closed := s.closed
+	s.mu.Unlock()
+	if closed {
+		return nil, memory.ErrClosed
+	}
+	return s.Storage.Task(ctx, id)
+}
+
+// open reports whether a raw Storage read still succeeds, as code of a
+// joined invocation relies on.
+func (s *controlledStorage) open() bool {
+	_, err := s.Task(bg, 1)
+	return err == nil
+}
 
 func (s *controlledStorage) holdCommits() *gate {
 	s.mu.Lock()

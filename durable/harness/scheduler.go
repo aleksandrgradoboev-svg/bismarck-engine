@@ -322,6 +322,7 @@ func (s *scheduler) abort(ctx context.Context, id durable.TaskID, keepRestart bo
 		select {
 		case <-run.done:
 		case <-s.session.Failed():
+			return "", closedError(s.session)
 		case <-ctx.Done():
 			return "", context.Cause(ctx)
 		}
