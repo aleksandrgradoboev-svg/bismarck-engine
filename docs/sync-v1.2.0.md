@@ -255,6 +255,30 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    The reopen case uses memory storage that survives close, not node's SQLite. n/a:
    `spec-usage`, a compile check of the TypeScript examples in pi's spec.
 
+   **Stage 4b-1, the task scheduler**: `scheduler.ts` whole (reservation, the step and its
+   precedence rules, phase and abort invocations, waits and the wait-for cycle check, the
+   ownership tree with abort cascades, held outcomes and finalization, idle waits, inspection) and
+   the task runtime, with the Harness's `Resume`, `AbortTask`, `WaitForTask`, `WaitForIdle` and
+   `Inspect` and a conversation's `Abort` and `WaitForIdle`. One mutex guards the scheduler; under
+   it nothing joins the Session line and no task or host code runs, so a runtime commit checks
+   the task under it, runs its change without it, and takes it again to stage the state.
+   `queueMicrotask` is a goroutine behind a coalescing flag. The task's signal is its handler's
+   context. A failed Storage call inside a commit callback seals the scheduler on that goroutine,
+   so the seal sets an atomic flag there and rejects waits on a goroutine of its own, which join
+   waits for. A close seals the Session's admission a moment before its listeners run, which pi
+   never lets anything see; a scheduler commit refused as closed in between is the close, not a
+   failure, so `durable` exports `ErrSessionClosed`. `Task` gains `HasMigration`. `pi.live` cleanup
+   of scheduler outcomes and the withdrawal of queued inputs are no-ops until stage 4c; the
+   runtime's `context` reads without the kept range until generation, and its `conversation`
+   handle comes with submissions. Tests: `harness-tasks`, `harness-cancellation-barrier`, and the
+   cases of `harness-inspect`, `harness-lifecycle` and `harness-storage-failure` that need no
+   submissions, generation, tools, views or task graph (those come with their stages). pi orders
+   line jobs by synchronous calls; where a case depends on that order, the Go case waits for the
+   holding commit to reach storage and queues the next jobs with short pauses. One pi case aborts
+   a task twice before its abort invocation starts, which a microtask guarantees in pi; the Go case
+   holds the abort handler instead. n/a: the cases of rejected promises, thenables and another
+   realm's promise.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

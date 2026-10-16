@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -78,6 +79,7 @@ type Harness struct {
 	*durable.Session
 	options Options
 	report  func(error)
+	tasks   *scheduler
 }
 
 // Open opens a Harness over storage.
@@ -99,17 +101,114 @@ func Open(ctx context.Context, storage durable.Storage, options Options) (*Harne
 		return nil, fmt.Errorf("Registry lacks built-in tasks %s; create it with NewRegistry()", strings.Join(missing, ", "))
 	}
 	h := &Harness{options: options, report: safeReport(options.OnReport)}
+	now := safeNow(options.Now, h.report)
 	h.Session = durable.NewSession(storage, durable.SessionOptions{
-		Now: safeNow(options.Now, h.report),
+		Now: now,
 		// Read at each use, as all settings are, but only this field: it is
 		// read on every commit.
 		DocumentRetention: func() time.Duration { return h.settings().DocumentRetention },
 		Hooks: durable.SessionHooks{
 			Report:              h.report,
 			ConversationCreated: h.conversationCreated,
+			// Signal and join task invocations after the close listeners and
+			// before Storage closes; writes no task outcome.
+			BeforeClose: func() { h.tasks.join() },
 		},
 	})
+	h.tasks = newScheduler(schedulerOptions{
+		session:  h.Session,
+		registry: options.Registry,
+		models:   options.Models,
+		agent: func(ctx context.Context, id durable.ConversationID, snapshot *RegistrySnapshot) (*Agent, error) {
+			return h.resolveAgent(ctx, id, snapshot)
+		},
+		settings: h.settings,
+		env:      h.buildEnv,
+		now:      now,
+		report:   h.report,
+		// pi.live and pi.inbox come with the submissions stage, and with them
+		// the cleanup of a scheduler outcome and the withdrawal of queued
+		// inputs.
+		settleOutcome:  func(*durable.Tx, durable.TaskRecord, durable.TaskOutcome) error { return nil },
+		withdrawInputs: func(*durable.Tx, durable.ConversationID) error { return nil },
+		ctx:            context.WithoutCancel(ctx),
+	})
+	if err := h.tasks.open(ctx); err != nil {
+		// The caller's context may be what failed open: close without it, and
+		// return the open error. A failing Storage close fails the Session,
+		// which reports it.
+		_ = h.Close(context.WithoutCancel(ctx))
+		return nil, err
+	}
 	return h, nil
+}
+
+// Resume enables task scheduling. It is idempotent. The calls that ask for
+// progress enable it too: WaitForTask, WaitForIdle, and a conversation's
+// Abort and WaitForIdle; read-only viewers never do.
+func (h *Harness) Resume() error {
+	if h.tasks.closing.Load() {
+		return closedError(h.Session)
+	}
+	h.tasks.resume()
+	return nil
+}
+
+// AbortTask commits the abort mark, signals and joins an active run
+// invocation, and schedules the abort invocation. A task whose definition
+// cannot take it settles as orphaned instead. It returns "marked" or
+// "terminal".
+func (h *Harness) AbortTask(ctx context.Context, id durable.TaskID) (string, error) {
+	return h.tasks.abort(ctx, id, false)
+}
+
+// WaitForTask returns the task's terminal record; cancelling ctx cancels only
+// this wait.
+func (h *Harness) WaitForTask(ctx context.Context, id durable.TaskID) (durable.TaskRecord, error) {
+	h.tasks.resume()
+	return h.tasks.waitForTask(ctx, id)
+}
+
+// WaitForIdle returns when the ordinary ownership scope of every ownerless
+// conversation has no live non-background task.
+func (h *Harness) WaitForIdle(ctx context.Context) error {
+	h.tasks.resume()
+	return h.tasks.waitForIdle(ctx, 0)
+}
+
+// HarnessInspection is a point-in-time view of live work: unfinished tasks and
+// submissions, read on the Session line.
+type HarnessInspection struct {
+	// Scheduling is "paused", "running" or "closing".
+	Scheduling string
+	Tasks      []TaskInspection
+	// Submissions are the queued and placed submissions, in ID order.
+	Submissions []durable.SubmissionRecord
+}
+
+// Inspect returns the live tasks and unsettled submissions. It writes nothing
+// and runs no task code.
+func (h *Harness) Inspect(ctx context.Context) (HarnessInspection, error) {
+	var inspection HarnessInspection
+	err := h.ReadOnLine(func() error {
+		scheduling, tasks, err := h.tasks.inspect(h.options.Registry.Snapshot())
+		if err != nil {
+			return err
+		}
+		inspection.Scheduling, inspection.Tasks = scheduling, tasks
+		for _, status := range []string{durable.SubmissionQueued, durable.SubmissionPlaced} {
+			submissions, err := scanAll(func(cursor durable.Cursor) (durable.Page[durable.SubmissionRecord], error) {
+				return h.Storage().ScanSubmissions(ctx, durable.SubmissionQuery{Status: status}, scanPageSize, cursor)
+			})
+			if err != nil {
+				return err
+			}
+			inspection.Submissions = append(inspection.Submissions, submissions...)
+		}
+		sort.Slice(inspection.Submissions, func(i, j int) bool { return inspection.Submissions[i].ID < inspection.Submissions[j].ID })
+		return nil
+	})
+	return inspection, err
 }
 
 // settings resolves the host settings.
@@ -336,6 +435,23 @@ func (c *Conversation) Entries(ctx context.Context, query durable.EntryQuery, li
 		return err
 	})
 	return page, err
+}
+
+// Abort marks every live non-background task of the conversation's ordinary
+// ownership scope, signals them, and returns once the scope is idle.
+// Background subtrees survive unless background is set: then traversal
+// crosses them, and the wait covers every task it reached.
+func (c *Conversation) Abort(ctx context.Context, background bool) error {
+	c.h.tasks.resume()
+	return c.h.tasks.abortConversation(ctx, c.ID, background)
+}
+
+// WaitForIdle returns when the conversation's ordinary ownership scope has no
+// live non-background task: this conversation and the conversations owned,
+// transitively, by its non-background tasks.
+func (c *Conversation) WaitForIdle(ctx context.Context) error {
+	c.h.tasks.resume()
+	return c.h.tasks.waitForIdle(ctx, c.ID)
 }
 
 // Fork forks this conversation at a visible entry.

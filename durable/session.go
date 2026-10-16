@@ -60,7 +60,8 @@ func documentRetention(retention func() time.Duration) time.Duration {
 // maxSweepDelay is a retention treated as keeping documents for good.
 const maxSweepDelay = 100 * 365 * 24 * time.Hour
 
-var errSessionClosed = errors.New("Session is closed")
+// ErrSessionClosed is what a closing or closed Session rejects new work with.
+var ErrSessionClosed = errors.New("Session is closed")
 
 // SessionOptions configure a Session.
 type SessionOptions struct {
@@ -297,7 +298,7 @@ func (s *Session) usableLocked() error {
 		return err
 	}
 	if s.closing {
-		return errSessionClosed
+		return ErrSessionClosed
 	}
 	return nil
 }
@@ -1184,7 +1185,7 @@ func (g *guardedStorage) call(read context.Context, run func() error) (err error
 	g.mu.Lock()
 	if g.closing {
 		g.mu.Unlock()
-		return errSessionClosed
+		return ErrSessionClosed
 	}
 	g.underway.Add(1)
 	g.mu.Unlock()
