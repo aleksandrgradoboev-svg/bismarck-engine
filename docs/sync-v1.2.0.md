@@ -233,6 +233,28 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    that reads the output, so there is no spill backpressure; and the asynchronous taskkill spawn
    error, which Go reports synchronously.
 
+   **Stage 4a, the harness frame**: `durable/harness` (pi `harness/`): `registry.ts`, `define.ts`,
+   `agent.ts`, the settings, `prompt.ts`, `context.ts` without its kept reads, `usage.ts`,
+   `provider.ts`, and `harness.ts` with the conversation handle's `agent`, `configure`, `commit`,
+   `context`, `entries` and `fork`; the built-in documents `pi.live` and `pi.inbox` are defined,
+   their operations come with stage 4c. pi's entry kinds (`entries.ts`) join `durable`. Tests: the
+   `harness-registry`, `harness-prompt` and `harness-conversations` suites, and the
+   `harness-context` cases that derive a context from committed entries (the extended and kept
+   reads come with generation, stage 4d). The harness is a `durable.Session` with the creation
+   hook through `SessionOptions`, not a subclass. Tasks are erased to JSON (`Task`, with phases,
+   abort and migration) and typed by `DefineTask[I, S, R]`; hooks are a struct of functions per
+   task. `AgentChange` fields are `Change[T]`, set or cleared, since Go has no `undefined` beside
+   `null`; selections are `Selection[T]`, exact or an edit. Wrappers return an error, and a panic
+   in a wrapper or a section is its throw. A tool's extra application fields (pi's generic
+   `Tool`) have no Go form; the registry holds `*ToolRegistration`. pi compares the baseline
+   system message by object identity; Go messages are values, so each contributed message carries
+   its entry, index and whether an edit contributed it. The built-in tasks join the registry with
+   their stages, so `NewRegistry()` holds none yet. The process-wide UUIDv7 generator moves from
+   `coding` to `internal/uuidv7`, which `pi.provider` uses too. Added: a case for callers, model
+   tools and deferred tools in resolution (pi covers them through nested calls and `tool_search`).
+   The reopen case uses memory storage that survives close, not node's SQLite. n/a:
+   `spec-usage`, a compile check of the TypeScript examples in pi's spec.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
