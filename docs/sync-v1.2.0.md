@@ -175,6 +175,27 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    pi re-serializes them. n/a: `storage-runtime-boundary` (Go's package graph keeps the portable
    packages free of the local adapter).
 
+   **Stage 2b, SQLite storage**: `durable/storage/sqlite` (pi `storage/sqlite`: `schema.ts`,
+   `migrations.ts`, `storage.ts`) and the module `durable/storage/sqlite/modernc` (pi
+   `storage/sqlite/node.ts`). The storage runs on a `database/sql` database, which takes the place
+   of pi's `SqliteDatabase` facade, so the root module needs no SQLite driver. The file adapter is
+   its own module on `modernc.org/sqlite`, a SQLite without cgo (owner ruling 2026-10-16; licenses
+   checked against the module sources: BSD-3-Clause and MIT, SQLite public domain, the MPL-2.0
+   module of its graph not built; the module's own allowlist test checks the Linux, Windows and
+   macOS build graphs, which differ). It configures the connection as pi's adapter does (WAL,
+   NORMAL synchronous, a 5 s busy timeout, BEGIN IMMEDIATE, one connection serializing operations,
+   the WAL truncated on close). The schema and migrations are pi's byte for byte, and indexed
+   strings are encoded as `JSON.stringify` encodes them (checked against Node), so a database
+   either side wrote is searched by the same bytes. Ported: the conformance suite directly and
+   across a reopen after every commit, `sqlite-storage`, `sqlite-migrations`, and of
+   `sqlite-facade` the cases that apply to `database/sql` (serialized transactions, idempotent
+   close, reads admitted before close finish, IDs adopted only after a successful commit, a
+   document read from one committed state). n/a: the facade's own operation queue, statement
+   cache, stale transaction handles and rollback-failure error (`database/sql` owns them), and
+   `cloudflare.ts`. Deviation: the UTF-8 rejection of stage 2a, for the same reason; the check
+   moves to `durable/internal/utf8check`. The adapter module requires the engine through a
+   `replace` to this checkout; a release pins the engine's tag instead.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

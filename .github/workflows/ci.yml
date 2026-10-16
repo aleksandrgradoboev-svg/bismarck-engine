@@ -43,3 +43,15 @@ jobs:
           # the race detector's slowdown breaks; the test step runs them.
           go test -race -count=1 -skip 'TestOutputAtItemLimitIsLinear|TestMemoryLimit' ./coding/codemodetool/...
           go test -race -count=1 -run 'Nested|Registry|SetPromptSection|ModelOnly|Orchestration|PrepareLoadout|RestoreTools|PendingTools|ToolModifiers|ExcludeTools|AllowlistKeepsMCP|RestoreSkipsUnnamed' ./agent/ ./coding/
+      # The SQLite file adapter is a module of its own, so the root module needs
+      # no driver; ./... above does not reach it.
+      - name: vet and test (SQLite file adapter module)
+        working-directory: durable/storage/sqlite/modernc
+        shell: bash
+        run: |
+          go vet ./...
+          go test -count=1 ./...
+      - name: race (SQLite file adapter module)
+        if: runner.os == 'Linux'
+        working-directory: durable/storage/sqlite/modernc
+        run: go test -race -count=1 ./...
