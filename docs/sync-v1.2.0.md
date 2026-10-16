@@ -284,3 +284,7 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
   `06a46693` (v1.2.0).
 - pi's model catalog is not regenerated in this sync.
+- The session server stack is removed, as pi removed it in `7472cda0` (2026-10-12, before v1.2.0):
+  the `server`, `client` and `protocol` packages and `coding/remotesession.go`, `coding/transcript.go`
+  with their tests (about 13k lines of code and 15k of tests). Nothing else in the engine used them;
+  `go mod tidy` drops no dependency. A host that needs a transport builds its own.
