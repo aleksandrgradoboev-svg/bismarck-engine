@@ -18,6 +18,7 @@ import (
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/uuidv7"
 )
 
 // jsonWhitespace is the padding JSON.parse accepts around a value. A session
@@ -58,153 +59,15 @@ func genID() string {
 	return hex.EncodeToString(b)
 }
 
-const (
-	// maxUUIDv7Timestamp is pi's MAX_UUID_V7_TIMESTAMP: the largest millisecond
-	// timestamp a v7 UUID's 48-bit time field can carry.
-	maxUUIDv7Timestamp = int64(0xffffffffffff)
-	// maxUUIDv7Sequence is pi's MAX_SEQUENCE: the ceiling of the 41-bit counter
-	// packed into bytes 6-11.
-	maxUUIDv7Sequence = uint64(1)<<41 - 1
-)
-
-// uuidv7Now mirrors pi's uuidv7() (packages/ai/src/utils/uuid.ts) with no
-// argument: a time-ordered v7 UUID (version nibble 7, RFC-4122 variant) in
-// canonical 8-4-4-4-12 form, stamped with the wall clock — never earlier than
-// the last clock-stamped id, so a clock that steps backwards cannot un-order
-// ids.
-//
-// It returns an error exactly where pi throws its RangeError and no id can be
-// produced: a system clock outside [1970-01-01, +10889] (unrepresentable in 48
-// bits — a machine whose RTC has been reset to a pre-1970 date reaches this)
-// or the process's 41-bit sequence exhausted. Both mean the generator cannot
-// mint a valid, unique id at all; the alternative would be silently emitting
-// duplicate session ids. The counter is seeded with 40 random bits, so
-// exhaustion needs upwards of 2^40 ids from one process; restarting the
-// process reseeds it.
-func uuidv7Now() (string, error) {
-	return nextUUIDv7(nil)
-}
+// uuidv7Now mints a session id with the process-wide generator pi shares
+// across packages (pi-ai utils/uuid.ts); see uuidv7.New.
+func uuidv7Now() (string, error) { return uuidv7.New() }
 
 // mustUUIDv7 is the panicking convenience form of uuidv7Now, for the one caller
 // that cannot yet propagate an error (compaction.go's per-request routing
 // session id). Every caller that returns an error uses uuidv7Now instead, and
 // so should any new one.
-func mustUUIDv7() string {
-	id, err := uuidv7Now()
-	if err != nil {
-		panic(err)
-	}
-	return id
-}
-
-// uuidv7At mirrors pi's uuidv7(timestampMs): a v7 UUID carrying timestampMs
-// verbatim, for "follower" ids that must sort at a known point in time. Unlike
-// uuidv7Now it does not advance — or read — the clock-stamped high-water mark,
-// so a follower id cannot drag ordinary ids forward.
-func uuidv7At(timestampMs int64) (string, error) {
-	return nextUUIDv7(&timestampMs)
-}
-
-// nextUUIDv7 is the shared generator. A nil timestampMs is pi's
-// `timestampMs === undefined`: read the clock, and floor the result at (and
-// store it as) the clock-stamped high-water mark.
-//
-// Go has no BigInt, and none is needed: the sequence is 41 bits and the
-// timestamp 48, both of which fit a uint64/int64 exactly.
-func nextUUIDv7(timestampMs *int64) (string, error) {
-	clockStamped := timestampMs == nil
-	requested := uuidNow()
-	if !clockStamped {
-		requested = *timestampMs
-	}
-	if requested < 0 || requested > maxUUIDv7Timestamp {
-		return "", fmt.Errorf(
-			"UUIDv7 timestamp must be an integer between 0 and %d, got %d: pass a Unix time in milliseconds (a value outside that range does not fit a v7 UUID's 48-bit time field)",
-			maxUUIDv7Timestamp, requested)
-	}
-
-	var random [16]byte
-	uuidRandom(random[:])
-	// Seed 40 of the 41 counter bits from random bytes 1-5, leaving at least
-	// 2^40 ordered values before exhaustion. Those bytes are then overwritten by
-	// the timestamp; the tail bytes 12-15 stay fresh on every id.
-	seed := uint64(random[1])<<32 |
-		uint64(random[2])<<24 |
-		uint64(random[3])<<16 |
-		uint64(random[4])<<8 |
-		uint64(random[5])
-
-	seq, effective, err := reserveUUIDv7(seed, requested, clockStamped)
-	if err != nil {
-		return "", err
-	}
-
-	var b [16]byte
-	ts := uint64(effective)
-	for i := 0; i < 6; i++ {
-		b[i] = byte(ts >> ((5 - i) * 8))
-	}
-	b[6] = 0x70 | byte((seq>>37)&0x0f)
-	b[7] = byte((seq >> 29) & 0xff)
-	b[8] = 0x80 | byte((seq>>23)&0x3f)
-	b[9] = byte((seq >> 15) & 0xff)
-	b[10] = byte((seq >> 7) & 0xff)
-	b[11] = byte((seq&0x7f)<<1) | (random[11] & 0x01)
-	copy(b[12:], random[12:])
-
-	h := hex.EncodeToString(b[:])
-	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32], nil
-}
-
-// reserveUUIDv7 advances the process-wide generator state under uuidMu and
-// hands back the sequence value and effective timestamp for one id. seed
-// supplies the 40 random bits used the first (and only) time the counter is
-// seeded. Keeping the whole critical section in one function means the unlock
-// is a single defer rather than one per exit path.
-func reserveUUIDv7(seed uint64, requestedMs int64, clockStamped bool) (seq uint64, effectiveMs int64, err error) {
-	uuidMu.Lock()
-	defer uuidMu.Unlock()
-
-	effectiveMs = requestedMs
-	if clockStamped {
-		if effectiveMs < uuidLastOrdinaryTimestamp {
-			effectiveMs = uuidLastOrdinaryTimestamp
-		}
-		uuidLastOrdinaryTimestamp = effectiveMs
-	}
-	switch {
-	case !uuidSequenceSeeded:
-		uuidSequence = seed
-		uuidSequenceSeeded = true
-	case uuidSequence == maxUUIDv7Sequence:
-		return 0, 0, fmt.Errorf(
-			"UUIDv7 generator sequence exhausted after %d ids: restart the process to reseed the counter",
-			maxUUIDv7Sequence)
-	default:
-		uuidSequence++
-	}
-	return uuidSequence, effectiveMs, nil
-}
-
-var (
-	uuidMu sync.Mutex
-	// uuidLastOrdinaryTimestamp is pi's lastOrdinaryTimestamp, starting below
-	// every valid timestamp so the first clock-stamped id is never floored.
-	uuidLastOrdinaryTimestamp int64 = -1
-	// uuidSequence is pi's module-scoped `sequence`; uuidSequenceSeeded stands
-	// in for its `undefined` state, which a uint64 cannot express (0 is a
-	// reachable seed).
-	uuidSequence       uint64
-	uuidSequenceSeeded bool
-
-	// uuidNow and uuidRandom are the generator's clock and randomness. They are
-	// vars because that is the only seam pi's own tests use: uuid.test.ts drives
-	// the clock-rollback floor with vi.setSystemTime and pins which random byte
-	// reaches which uuid byte with vi.stubGlobal("crypto", ...). Production code
-	// must never reassign them.
-	uuidNow    = func() int64 { return time.Now().UnixMilli() }
-	uuidRandom = func(b []byte) { _, _ = rand.Read(b) }
-)
+func mustUUIDv7() string { return uuidv7.Must() }
 
 // randomUUIDv4 returns a canonical random (version 4, RFC-4122 variant) UUID —
 // node's randomUUID(), which is what pi's session-manager mints.
