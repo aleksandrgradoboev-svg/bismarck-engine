@@ -292,6 +292,48 @@ func TestCloseStopsAnInitializingConnection(t *testing.T) {
 	}
 }
 
+// slowClose finishes closing its transport only after a delay, and records
+// when it has.
+type slowClose struct {
+	mcp.Transport
+	delay  time.Duration
+	closed atomic.Bool
+}
+
+func (t *slowClose) Close() error {
+	time.Sleep(t.delay)
+	err := t.Transport.Close()
+	t.closed.Store(true)
+	return err
+}
+
+// TestCloseWaitsForTheShutdownClose: Close cancels the connection, whose
+// shutdown hook closes the client on a goroutine of its own while the
+// failing connect attempt closes it too. The second Close finds the
+// transport taken and returns at once, so Close must wait for the hook as
+// well, or it returns while the transport is still closing.
+func TestCloseWaitsForTheShutdownClose(t *testing.T) {
+	for range 20 {
+		client, server := mcp.NewInMemoryTransportPair()
+		initializing := make(chan struct{})
+		var once sync.Once
+		server.OnMessage(func(mcp.Message) { once.Do(func() { close(initializing) }) })
+		_ = server.Start(context.Background())
+		transport := &slowClose{Transport: client, delay: 20 * time.Millisecond}
+		c := connectWith(t, stdioEntry("fake"), func() mcp.Transport { return transport })
+		failure := make(chan error, 1)
+		go func() { _, err := c.Client(context.Background()); failure <- err }()
+		<-initializing
+		c.Close()
+		if !transport.closed.Load() {
+			t.Fatal("Close returned while the transport was still closing")
+		}
+		if err := <-failure; err == nil || !strings.Contains(err.Error(), "failed to connect") {
+			t.Fatalf("failure %v", err)
+		}
+	}
+}
+
 // closeSignal closes its channel when the transport is closed.
 type closeSignal struct {
 	mcp.Transport
