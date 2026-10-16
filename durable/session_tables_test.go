@@ -373,6 +373,25 @@ func TestTablesReplaceTaskRecordsCompletely(t *testing.T) {
 	}
 }
 
+func TestTablesValidateAgainstTheCommittedTaskWhenTheReadRecordIsChanged(t *testing.T) {
+	ts := openTestSession(t)
+	conversationID := createConversation(t, ts.session)
+	taskID := createWorkTask(t, ts.session, conversationID, false)
+	commit(t, ts.session, func(tx *durable.Tx) error {
+		task, err := tx.Task(taskID)
+		must(err)
+		task.State = terminal(*task).State
+		task.AbortRequested = true
+		if again := readTask(tx, taskID); again.State.Status != durable.TaskPending || again.AbortRequested {
+			t.Fatalf("the read record changed with the caller's copy: %+v", again)
+		}
+		return tx.SetTask(*task)
+	})
+	if task, _ := ts.storage.Task(bg, taskID); task.State.Status != durable.TaskTerminal || !task.AbortRequested {
+		t.Fatalf("task = %+v", task)
+	}
+}
+
 func TestTablesCreateATaskAndItsDocumentInOneTransaction(t *testing.T) {
 	ts := openTestSession(t)
 	conversationID := createConversation(t, ts.session)

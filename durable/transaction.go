@@ -296,13 +296,20 @@ func (tx *Tx) Entry(id EntryID) (*EntryRecord, error) {
 	return &stored.Entry, nil
 }
 
-// Task reads one committed task; nil when absent.
+// Task reads one committed task; nil when absent. The record is the
+// caller's copy: changing it before SetTask leaves the committed record the
+// commit validates against untouched.
 func (tx *Tx) Task(id TaskID) (*TaskRecord, error) {
 	if err := tx.read("task"); err != nil {
 		return nil, err
 	}
 	defer tx.endOp()
-	return tx.committedTask(id)
+	record, err := tx.committedTask(id)
+	if record == nil || err != nil {
+		return record, err
+	}
+	copied := record.Clone()
+	return &copied, nil
 }
 
 // ScanConversations scans committed conversations.
