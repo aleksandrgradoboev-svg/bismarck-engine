@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -1195,15 +1196,21 @@ func runBashCommand(cmd *exec.Cmd, w io.Writer) error {
 	// The reader goroutine feeds w and reports each chunk (and final EOF) on
 	// chunks. Closing pr unblocks a read parked on a pipe a descendant still
 	// holds open.
+	// writing is set while a chunk is handed to w: the grace measures a pipe
+	// nobody writes to, and time the sink takes over a chunk is not idle. In
+	// pi the chunk handler is synchronous, so its timer never fires inside it.
 	chunks := make(chan struct{}, 1)
 	readDone := make(chan struct{})
+	var writing atomic.Bool
 	go func() {
 		defer close(readDone)
 		buf := make([]byte, 32*1024)
 		for {
 			n, rerr := pr.Read(buf)
 			if n > 0 {
+				writing.Store(true)
 				w.Write(buf[:n])
+				writing.Store(false)
 			}
 			select {
 			case chunks <- struct{}{}:
@@ -1235,6 +1242,10 @@ drain:
 			}
 			timer.Reset(bashExitStdioGrace)
 		case <-timer.C:
+			if writing.Load() {
+				timer.Reset(bashExitStdioGrace)
+				continue
+			}
 			break drain
 		}
 	}
