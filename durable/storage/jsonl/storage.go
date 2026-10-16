@@ -30,6 +30,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/internal/utf8check"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/storage/memory"
 )
 
@@ -175,7 +176,7 @@ func (s *Storage) Commit(ctx context.Context, writes []durable.StorageWrite) (du
 	if err != nil {
 		return 0, err
 	}
-	if err := checkUTF8(prepared.Writes); err != nil {
+	if err := utf8check.Writes("JsonlStorage", prepared.Writes); err != nil {
 		return 0, err
 	}
 	encoded, err := s.encodeCommit(prepared.Seq, prepared.Writes)
