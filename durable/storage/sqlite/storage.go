@@ -29,6 +29,7 @@ import (
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/internal/utf8check"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
 const maxSafeInteger = 1<<53 - 1
@@ -149,38 +150,12 @@ func encodeJSON(v any) (string, error) {
 	return strings.TrimSuffix(b.String(), "\n"), nil
 }
 
-// indexedString is pi's encodeIndexedString, JSON.stringify of a string,
-// byte for byte, so indexed columns match a database pi wrote. Strings are
-// valid UTF-8 here (commits check it), so no surrogate needs escaping.
+// indexedString is pi's encodeIndexedString: JSON.stringify of a string,
+// byte for byte, so indexed columns match a database pi wrote. Commits check
+// that strings are valid UTF-8, so Stringify cannot fail here.
 func indexedString(s string) string {
-	var b strings.Builder
-	b.WriteByte('"')
-	for _, r := range s {
-		switch r {
-		case '"':
-			b.WriteString(`\"`)
-		case '\\':
-			b.WriteString(`\\`)
-		case '\b':
-			b.WriteString(`\b`)
-		case '\f':
-			b.WriteString(`\f`)
-		case '\n':
-			b.WriteString(`\n`)
-		case '\r':
-			b.WriteString(`\r`)
-		case '\t':
-			b.WriteString(`\t`)
-		default:
-			if r < 0x20 {
-				fmt.Fprintf(&b, `\u%04x`, r)
-			} else {
-				b.WriteRune(r)
-			}
-		}
-	}
-	b.WriteByte('"')
-	return b.String()
+	text, _ := jstext.Stringify(s)
+	return text
 }
 
 type addressParts struct {

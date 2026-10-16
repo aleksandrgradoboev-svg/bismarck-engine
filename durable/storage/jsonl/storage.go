@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -30,6 +28,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/env"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/internal/utf8check"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/storage/memory"
 )
@@ -116,7 +115,7 @@ type encodedCommit struct {
 // Storage is the JSONL Storage. Reads are safe for concurrent use; commits
 // are serialized.
 type Storage struct {
-	fsys      FS
+	fsys      env.FileSystem
 	directory string
 	mainPath  string
 	fsync     bool
@@ -133,19 +132,24 @@ type Storage struct {
 
 var _ durable.Storage = (*Storage)(nil)
 
-// Open opens or creates a JSONL storage directory on fsys.
-func Open(ctx context.Context, directory string, fsys FS, options Options) (*Storage, error) {
-	absolute, err := filepath.Abs(directory)
+// Open opens or creates a JSONL storage directory in an environment's file
+// system.
+func Open(ctx context.Context, directory string, fsys env.FileSystem, options Options) (*Storage, error) {
+	absolute, err := fsys.AbsolutePath(ctx, directory)
 	if err != nil {
 		return nil, fileError("path resolution", err)
 	}
-	if err := fsys.MkdirAll(ctx, absolute); err != nil {
+	if err := fsys.CreateDir(ctx, absolute, true); err != nil {
 		return nil, fileError("directory creation", err)
+	}
+	mainPath, err := fsys.JoinPath(ctx, []string{absolute, mainFile})
+	if err != nil {
+		return nil, fileError("path join", err)
 	}
 	s := &Storage{
 		fsys:                 fsys,
 		directory:            absolute,
-		mainPath:             filepath.Join(absolute, mainFile),
+		mainPath:             mainPath,
 		fsync:                options.Fsync,
 		memory:               memory.New(),
 		currentOnlyDocuments: map[durable.DocumentID]bool{},
@@ -160,10 +164,17 @@ func Open(ctx context.Context, directory string, fsys FS, options Options) (*Sto
 // OpenDir opens or creates a JSONL storage directory on the local file
 // system (pi openNodeJsonlStorage).
 func OpenDir(ctx context.Context, directory string, options Options) (*Storage, error) {
-	return Open(ctx, directory, OSFS{}, options)
+	return Open(ctx, directory, env.NewLocal(""), options)
 }
 
-func (s *Storage) path(file string) string { return filepath.Join(s.directory, file) }
+// path is a file of the storage directory.
+func (s *Storage) path(ctx context.Context, file string) (string, error) {
+	path, err := s.fsys.JoinPath(ctx, []string{s.directory, file})
+	if err != nil {
+		return "", fileError("path join", err)
+	}
+	return path, nil
+}
 
 // Commit atomically persists one batch.
 func (s *Storage) Commit(ctx context.Context, writes []durable.StorageWrite) (durable.Seq, error) {
@@ -184,16 +195,23 @@ func (s *Storage) Commit(ctx context.Context, writes []durable.StorageWrite) (du
 		return 0, err
 	}
 	reclamations := s.planReclamations(prepared.Writes, &encoded)
+	// Paths are resolved before any write, so their failure poisons nothing.
+	paths := make([]string, len(encoded.sidecars.names))
+	for i, file := range encoded.sidecars.names {
+		if paths[i], err = s.path(ctx, file); err != nil {
+			return 0, err
+		}
+	}
 
-	for _, file := range encoded.sidecars.names {
+	for i, file := range encoded.sidecars.names {
 		content, _ := encoded.sidecars.get(file)
-		if err := s.fsys.AppendFile(ctx, s.path(file), content); err != nil {
+		if err := s.fsys.AppendFile(ctx, paths[i], content); err != nil {
 			return 0, s.poisoned(fileError("append to "+file, err))
 		}
 	}
 	if s.fsync {
-		for _, file := range encoded.sidecars.names {
-			if err := s.fsys.Flush(ctx, s.path(file)); err != nil {
+		for i, file := range encoded.sidecars.names {
+			if err := s.fsys.FlushFile(ctx, paths[i]); err != nil {
 				return 0, s.poisoned(fileError("flush of "+file, err))
 			}
 		}
@@ -479,7 +497,7 @@ func (s *Storage) reclaimSidecars(ctx context.Context, replacements *files) {
 		return
 	}
 	if s.fsync {
-		if err := s.fsys.Flush(ctx, s.mainPath); err != nil {
+		if err := s.fsys.FlushFile(ctx, s.mainPath); err != nil {
 			return
 		}
 	}
@@ -490,21 +508,27 @@ func (s *Storage) reclaimSidecars(ctx context.Context, replacements *files) {
 }
 
 func (s *Storage) replaceSidecar(ctx context.Context, file string, content []byte) {
-	path := s.path(file)
-	if len(content) == 0 {
-		_ = s.fsys.Remove(ctx, path)
+	path, err := s.path(ctx, file)
+	if err != nil {
 		return
 	}
-	temporary := s.path(file + reclaimSuffix)
+	if len(content) == 0 {
+		_ = s.fsys.Remove(ctx, path, env.RemoveOptions{Force: true})
+		return
+	}
+	temporary, err := s.path(ctx, file+reclaimSuffix)
+	if err != nil {
+		return
+	}
 	if err := s.fsys.WriteFile(ctx, temporary, content); err != nil {
 		return
 	}
 	if s.fsync {
-		if err := s.fsys.Flush(ctx, temporary); err != nil {
+		if err := s.fsys.FlushFile(ctx, temporary); err != nil {
 			return
 		}
 	}
-	_ = s.fsys.Rename(ctx, temporary, path)
+	_ = s.fsys.RenameFile(ctx, temporary, path)
 }
 
 type parsedLine[T any] struct {
@@ -513,6 +537,7 @@ type parsedLine[T any] struct {
 }
 
 type parsedFile[T any] struct {
+	name  string
 	path  string
 	lines []parsedLine[T]
 }
@@ -536,19 +561,19 @@ func (s *Storage) recover(ctx context.Context) error {
 		previousSeq = line.value.seq
 	}
 
-	listed, err := s.fsys.ReadDir(ctx, s.directory)
+	listed, err := s.fsys.ListDir(ctx, s.directory)
 	if err != nil {
 		return fileError("directory listing", err)
 	}
 	var sidecarFiles []string
 	for _, info := range listed {
-		if info.IsDir() || !info.Type().IsRegular() {
+		if info.Kind != env.KindFile {
 			continue
 		}
-		if reclaimFileName.MatchString(info.Name()) {
-			_ = s.fsys.Remove(ctx, s.path(info.Name()))
-		} else if sidecarFileName.MatchString(info.Name()) {
-			sidecarFiles = append(sidecarFiles, info.Name())
+		if reclaimFileName.MatchString(info.Name) {
+			_ = s.fsys.Remove(ctx, info.Path, env.RemoveOptions{Force: true})
+		} else if sidecarFileName.MatchString(info.Name) {
+			sidecarFiles = append(sidecarFiles, info.Name)
 		}
 	}
 	slices.Sort(sidecarFiles)
@@ -556,7 +581,11 @@ func (s *Storage) recover(ctx context.Context) error {
 	parsedFiles := make([]parsedFile[sidecarRecord], 0, len(sidecarFiles))
 	recordByKey := map[recordKey]sidecarRecord{}
 	for _, file := range sidecarFiles {
-		parsed, err := readLines(ctx, s.fsys, s.path(file), file, func(text []byte, line int) (sidecarRecord, error) {
+		path, err := s.path(ctx, file)
+		if err != nil {
+			return err
+		}
+		parsed, err := readLines(ctx, s.fsys, path, file, func(text []byte, line int) (sidecarRecord, error) {
 			return parseSidecarRecord(text, file, line)
 		})
 		if err != nil {
@@ -698,7 +727,7 @@ func (s *Storage) recover(ctx context.Context) error {
 
 	var reclamations files
 	for _, parsed := range parsedFiles {
-		file := filepath.Base(parsed.path)
+		file := parsed.name
 		unconfirmedAt := int64(-1)
 		var confirmedLines []parsedLine[sidecarRecord]
 		for _, line := range parsed.lines {
@@ -712,7 +741,7 @@ func (s *Storage) recover(ctx context.Context) error {
 			}
 		}
 		if unconfirmedAt >= 0 {
-			if err := s.fsys.Truncate(ctx, parsed.path, unconfirmedAt); err != nil {
+			if err := s.fsys.TruncateFile(ctx, parsed.path, unconfirmedAt); err != nil {
 				return fileError("tail truncation of "+file, err)
 			}
 		}
@@ -759,22 +788,22 @@ func (s *Storage) recover(ctx context.Context) error {
 
 // readLines reads a file's complete lines, cutting off a torn last line
 // (one without its newline). A missing file has no lines.
-func readLines[T any](ctx context.Context, fsys FS, path, name string, parse func(text []byte, line int) (T, error)) (parsedFile[T], error) {
-	data, err := fsys.ReadFile(ctx, path)
+func readLines[T any](ctx context.Context, fsys env.FileSystem, path, name string, parse func(text []byte, line int) (T, error)) (parsedFile[T], error) {
+	data, err := fsys.ReadBinaryFile(ctx, path)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return parsedFile[T]{path: path}, nil
+		if env.Code(err) == env.CodeNotFound {
+			return parsedFile[T]{name: name, path: path}, nil
 		}
 		return parsedFile[T]{}, fileError("read of "+name, err)
 	}
 	complete := len(data)
 	if complete > 0 && data[complete-1] != '\n' {
 		complete = bytes.LastIndexByte(data, '\n') + 1
-		if err := fsys.Truncate(ctx, path, int64(complete)); err != nil {
+		if err := fsys.TruncateFile(ctx, path, int64(complete)); err != nil {
 			return parsedFile[T]{}, fileError("torn-line truncation of "+name, err)
 		}
 	}
-	out := parsedFile[T]{path: path}
+	out := parsedFile[T]{name: name, path: path}
 	start, number := 0, 1
 	for end := 0; end < complete; end++ {
 		if data[end] != '\n' {

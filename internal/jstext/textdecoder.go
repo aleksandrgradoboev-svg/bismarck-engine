@@ -9,6 +9,10 @@ import "strings"
 // (DecodeUTF8); and a sequence a call leaves incomplete is held for the next.
 // The zero value is ready to use.
 type TextDecoder struct {
+	// IgnoreBOM is TextDecoder("utf-8", {ignoreBOM: true}): a leading U+FEFF
+	// is kept as text, as when decoding a range that starts mid-stream.
+	IgnoreBOM bool
+
 	held []byte
 	// started is whether the stream's first character has been decoded,
 	// after which no byte-order mark is dropped.
@@ -35,13 +39,13 @@ func (d *TextDecoder) Decode(b []byte) string {
 // drops them.
 func (d *TextDecoder) Flush() string {
 	text := d.emit(DecodeUTF8(d.held))
-	*d = TextDecoder{}
+	*d = TextDecoder{IgnoreBOM: d.IgnoreBOM}
 	return text
 }
 
 // emit drops the byte-order mark the stream's first character may be.
 func (d *TextDecoder) emit(text string) string {
-	if !d.started && text != "" {
+	if !d.started && text != "" && !d.IgnoreBOM {
 		d.started = true
 		text = strings.TrimPrefix(text, byteOrderMark)
 	}

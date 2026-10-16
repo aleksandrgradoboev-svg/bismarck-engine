@@ -196,6 +196,23 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    moves to `durable/internal/utf8check`. The adapter module requires the engine through a
    `replace` to this checkout; a release pins the engine's tag instead.
 
+   **Stage 3a, the environment's files**: `durable/env` (pi `env/index.ts`, `decode.ts`,
+   `line-scan.ts`, and the file half of `node.ts` as `Local`) with `durabletest.TestEnv` (pi
+   `testing/env-conformance.ts`, its file cases), pi's `env-line-scan` suite, the file and text line
+   reader cases of `env-node`, and the reader cases of `env-node-conformance`. `durable/env` is new
+   beside `coding.ExecutionEnv`, which ports the env of pi's agent harness that upstream removed
+   (`7fd478a2`); moving the coding tools onto `durable/env` is later work. pi's `Result` is
+   `(T, error)` with a `*FileError` whose `Code` is pi's; `fileInfo` is `Stat`, since a Go method
+   cannot share its result type's name. Decoding uses `internal/jstext.TextDecoder`, which gains
+   `IgnoreBOM` for ranges that start mid-file; pi's `StreamDecoder` is its default. `JsonlStorage`
+   now writes through `env.FileSystem`, as pi's does, and `jsonl.FS` is gone; the indexed strings
+   of `SqliteStorage` use `jstext.Stringify`. Added: a dir reader case whose entries vanish after
+   the reader read them, since Go reads a directory lazily and pi's case never reaches that branch.
+   n/a: the cases that replace `FileHandle` methods with spies (a read cancelled while pending, a
+   failing sync); `listFiles`, which pi's local environment does not implement either; and
+   `env-truncate`, which tests `truncate.ts`, a tools utility for stage 5. The shell and watching
+   are stage 3b.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
