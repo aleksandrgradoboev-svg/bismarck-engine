@@ -160,6 +160,21 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    retention override, and pi's `this` in `checkpointWhen`. The test storage stands for a closed
    database without discarding its records, so `reopen` can read them, as pi's does.
 
+   **Stage 2a, JSONL storage**: `durable/storage/jsonl` (pi `storage/jsonl/storage.ts`, and
+   `storage/jsonl/node.ts` as `OpenDir`) with pi's `jsonl-storage` suite, and the storage
+   conformance suite run on it directly and across a reopen after every commit. The storage writes
+   through `jsonl.FS`, the nine operations of pi's env `FileSystem` it uses, with `OSFS` on the
+   local file system; stage 3's environment can satisfy it. The line formats are pi's, so the files
+   read the same. Deviation: pi's strings are UTF-16 and its files keep a lone surrogate as an
+   escape, while a Go string holds one only as invalid UTF-8, which `encoding/json` replaces, so
+   reading back would merge distinct identities. The storage therefore rejects a commit holding a
+   string, map key or raw payload that is not valid UTF-8, before any I/O and without poisoning
+   itself, and refuses a line holding a lone surrogate escape as corruption rather than read it
+   lossily; `durabletest.StorageOptions.RejectsInvalidUTF8` makes the conformance suite check that
+   rejection in place of the lossless case. Recovery writes kept sidecar lines back as read, where
+   pi re-serializes them. n/a: `storage-runtime-boundary` (Go's package graph keeps the portable
+   packages free of the local adapter).
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

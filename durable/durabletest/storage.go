@@ -22,9 +22,26 @@ import (
 // each case; the suite closes nothing it did not open itself, so register
 // cleanup in open.
 func TestStorage(t *testing.T, open func(t *testing.T) durable.Storage) {
+	TestStorageWith(t, StorageOptions{}, open)
+}
+
+// StorageOptions are the documented deviations of a backend from pi's
+// contract that the suite checks instead of the pi behavior.
+type StorageOptions struct {
+	// RejectsInvalidUTF8 is a backend that rejects a commit holding a string
+	// that is not valid UTF-8, with no durable effect, instead of keeping it
+	// losslessly. pi's identities can be lone surrogates, which a JSON file
+	// keeps as escapes; a Go string holds them only as invalid UTF-8, which
+	// encoding/json replaces, so a JSON-backed Go storage would merge
+	// distinct identities on reopen.
+	RejectsInvalidUTF8 bool
+}
+
+// TestStorageWith runs the storage conformance suite with options.
+func TestStorageWith(t *testing.T, options StorageOptions, open func(t *testing.T) durable.Storage) {
 	for _, c := range storageCases {
 		t.Run(c.name, func(t *testing.T) {
-			c.run(&checker{t: t, s: open(t)})
+			c.run(&checker{t: t, s: open(t), options: options})
 		})
 	}
 }
@@ -32,8 +49,9 @@ func TestStorage(t *testing.T, open func(t *testing.T) durable.Storage) {
 var ctx = context.Background()
 
 type checker struct {
-	t *testing.T
-	s durable.Storage
+	t       *testing.T
+	s       durable.Storage
+	options StorageOptions
 }
 
 func (c *checker) fatalf(format string, args ...any) {
@@ -674,9 +692,22 @@ var storageCases = []storageCase{
 		doc := func(id durable.DocumentID, kind string, key *string, identity string) durable.StorageWrite {
 			return durable.DocumentCreateWrite{Record: durable.DocumentCreate{ID: id, Kind: kind, Key: key, Scope: durable.SessionScope()}, Content: base(1, obj{"identity": identity})}
 		}
-		c.commit(taskW(t1), taskW(t2), sub(firstSub, first), sub(secondSub, second),
+		writes := []durable.StorageWrite{taskW(t1), taskW(t2), sub(firstSub, first), sub(secondSub, second),
 			doc(firstKind, first, nil, "first kind"), doc(secondKind, second, nil, "second kind"),
-			doc(firstKey, "family", p(first), "first key"), doc(secondKey, "family", p(second), "second key"))
+			doc(firstKey, "family", p(first), "first key"), doc(secondKey, "family", p(second), "second key")}
+		if c.options.RejectsInvalidUTF8 {
+			for _, w := range writes {
+				_, err := c.s.Commit(ctx, []durable.StorageWrite{w})
+				c.fails(err, "UTF-8")
+			}
+			got, err := c.s.Task(ctx, firstTask)
+			c.must(err)
+			c.equal(got, (*durable.TaskRecord)(nil), "rejected task")
+			c.equal(c.document(firstKey, durable.Current), (*durable.StoredDocument)(nil), "rejected document")
+			c.commit(taskW(pendingTask(firstTask, root)))
+			return
+		}
+		c.commit(writes...)
 
 		for _, k := range []struct {
 			kind string
