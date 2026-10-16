@@ -378,13 +378,14 @@ func TestDocumentRejectsASucceedingCallbackWithAPendingAcquisition(t *testing.T)
 	ref := LiveDoc.Conversation(conversationID)
 	must(ts.session.UnloadDocuments())
 	g := ts.storage.holdFindDocument()
+	defer g.Release() // a failed assertion must not leave Close waiting on the gate
 	commits := ts.storage.commitCount()
 	var pending <-chan error
 	var captured atomic.Pointer[durable.Tx]
 	result := async(func() error {
 		return ts.session.Commit(bg, func(tx *durable.Tx) error {
+			captured.Store(tx) // before the acquisition can reach the gate
 			pending = async(func() error { _, err := tx.Doc(ref); return err })
-			captured.Store(tx)
 			<-g.entered // the acquisition is registered and waits on Storage
 			return nil
 		})
@@ -416,13 +417,14 @@ func TestDocumentLateAbsentAcquisitionNeitherInitializesNorMints(t *testing.T) {
 		Initial: func(any) map[string]any { initialized.Add(1); return map[string]any{"count": 0} },
 	})
 	g := ts.storage.holdFindDocument()
+	defer g.Release() // a failed assertion must not leave Close waiting on the gate
 	mints := ts.storage.mints()
 	var pending <-chan error
 	var captured atomic.Pointer[durable.Tx]
 	result := async(func() error {
 		return ts.session.Commit(bg, func(tx *durable.Tx) error {
+			captured.Store(tx) // before the acquisition can reach the gate
 			pending = async(func() error { _, err := tx.Doc(lateDoc.Session()); return err })
-			captured.Store(tx)
 			<-g.entered // the acquisition is registered and waits on Storage
 			return nil
 		})
@@ -441,12 +443,13 @@ func TestDocumentFailingCallbackWithAPendingAcquisitionReturnsItsError(t *testin
 	ts, conversationID := setupLive(t)
 	must(ts.session.UnloadDocuments())
 	g := ts.storage.holdFindDocument()
+	defer g.Release() // a failed assertion must not leave Close waiting on the gate
 	var pending <-chan error
 	var captured atomic.Pointer[durable.Tx]
 	result := async(func() error {
 		return ts.session.Commit(bg, func(tx *durable.Tx) error {
+			captured.Store(tx) // before the acquisition can reach the gate
 			pending = async(func() error { _, err := tx.Doc(LiveDoc.Conversation(conversationID)); return err })
-			captured.Store(tx)
 			<-g.entered // the acquisition is registered and waits on Storage
 			return errors.New("callback failed")
 		})
