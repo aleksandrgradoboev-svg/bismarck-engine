@@ -19,24 +19,17 @@ type Task interface {
 	// Abort runs in a fresh invocation after an abort mark and must commit a
 	// terminal outcome.
 	Abort(ctx context.Context, task *durable.TaskRecord, runtime *TaskRuntime) error
+	// HasMigration reports whether Migrate can convert older records.
+	HasMigration() bool
 	// Migrate converts a record stored by an older supported version; it runs
-	// at reservation. ok is false when the definition has no migration.
-	Migrate(input, checkpoint json.RawMessage, fromVersion int) (migratedInput, migratedCheckpoint json.RawMessage, ok bool, err error)
+	// at reservation, and only when HasMigration.
+	Migrate(input, checkpoint json.RawMessage, fromVersion int) (migratedInput, migratedCheckpoint json.RawMessage, err error)
 }
 
 // PhaseHandler runs one checkpoint phase of a running task. It must commit a
 // changed checkpoint or a terminal outcome through the runtime; returning
 // without durable progress faults the task.
 type PhaseHandler func(ctx context.Context, task *durable.TaskRecord, runtime *TaskRuntime) error
-
-// TaskRuntime is the operations of one task invocation.
-//
-// It is filled in by the scheduler, which arrives with the next stage of the
-// harness port; until then it only names the invocation.
-type TaskRuntime struct {
-	TaskID         durable.TaskID
-	ConversationID durable.ConversationID
-}
 
 // Running is a running task with its input and checkpoint decoded, as a typed
 // phase handler receives it.
@@ -143,23 +136,25 @@ func (t *typedTask[I, S, R]) Abort(ctx context.Context, record *durable.TaskReco
 	return t.spec.Abort(ctx, running, runtime)
 }
 
-func (t *typedTask[I, S, R]) Migrate(input, checkpoint json.RawMessage, fromVersion int) (json.RawMessage, json.RawMessage, bool, error) {
+func (t *typedTask[I, S, R]) HasMigration() bool { return t.spec.Migrate != nil }
+
+func (t *typedTask[I, S, R]) Migrate(input, checkpoint json.RawMessage, fromVersion int) (json.RawMessage, json.RawMessage, error) {
 	if t.spec.Migrate == nil {
-		return nil, nil, false, nil
+		return nil, nil, fmt.Errorf("Task %s has no migration", t.spec.Name)
 	}
 	in, state, err := t.spec.Migrate(input, checkpoint, fromVersion)
 	if err != nil {
-		return nil, nil, true, err
+		return nil, nil, err
 	}
 	migratedInput, err := json.Marshal(in)
 	if err != nil {
-		return nil, nil, true, err
+		return nil, nil, err
 	}
 	migratedCheckpoint, err := json.Marshal(state)
 	if err != nil {
-		return nil, nil, true, err
+		return nil, nil, err
 	}
-	return migratedInput, migratedCheckpoint, true, nil
+	return migratedInput, migratedCheckpoint, nil
 }
 
 func decodeRunning[I, S any](record *durable.TaskRecord) (*Running[I, S], error) {
