@@ -3,7 +3,7 @@ module github.com/aleksandrgradoboev-svg/bismarck-engine/durable/storage/sqlite/
 go 1.26.0
 
 require (
-	github.com/aleksandrgradoboev-svg/bismarck-engine v0.0.0-00010101000000-000000000000
+	github.com/aleksandrgradoboev-svg/bismarck-engine v0.2.0
 	modernc.org/sqlite v1.60.1
 )
 
@@ -20,6 +20,6 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 )
 
-// Development builds use the engine beside this module; a release pins the
-// engine's tag instead.
+// Development builds use the engine beside this module; consumers ignore this
+// replace and get the engine version required above.
 replace github.com/aleksandrgradoboev-svg/bismarck-engine => ../../../..
