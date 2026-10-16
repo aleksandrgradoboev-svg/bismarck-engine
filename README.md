@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/img/portrait.png" alt="Bismarck" width="220"></p>
+
 # bismarck-engine
 
 The agent engine of **Bismarck**: a Go implementation of [pi](https://github.com/earendil-works/pi)
