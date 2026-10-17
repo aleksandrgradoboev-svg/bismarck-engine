@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
 )
 
@@ -78,24 +77,21 @@ func DecodeTaskGraph(value map[string]any) (TaskGraph, error) {
 func (s *Session) TaskGraph(ctx context.Context) (DocumentState, error) {
 	var state DocumentState
 	err := s.enqueue(true, func() error {
-		var source *committedStateSource
-		detach, err := s.taskGraphView().attach(ctx, func(value map[string]any, release func()) documentObserver {
-			source = newCommittedStateSource(value, release)
-			return source
+		_, err := s.taskGraphView().attach(ctx, func(value map[string]any, release func()) Observer {
+			var observer Observer
+			observer, state = NewCommittedState(value, release, s.report)
+			return observer
 		})
-		if err != nil {
-			return err
-		}
-		defer func() {
-			if r := recover(); r != nil {
-				detach()
-				panic(r)
-			}
-		}()
-		state = chord.AttachReplicatedState[map[string]any](source, chord.ReplicatedStateSourceOptions{OnError: s.report})
-		return nil
+		return err
 	})
-	return state, err
+	if err != nil {
+		// An observer made before attach refused it was never registered.
+		if state != nil {
+			state.Dispose()
+		}
+		return nil, err
+	}
+	return state, nil
 }
 
 // WatchTaskGraph acquires a serialized exact-frame watch of the task graph.
@@ -103,8 +99,8 @@ func (s *Session) TaskGraph(ctx context.Context) (DocumentState, error) {
 func (s *Session) WatchTaskGraph(ctx context.Context) (*TaskGraphWatch, error) {
 	var watch *DocumentWatch
 	err := s.enqueue(true, func() error {
-		_, err := s.taskGraphView().attach(ctx, func(value map[string]any, release func()) documentObserver {
-			watch = newDocumentWatch(value, release, s.report)
+		_, err := s.taskGraphView().attach(ctx, func(value map[string]any, release func()) Observer {
+			watch = NewCommittedWatch(value, release, s.report)
 			return watch
 		})
 		return err
@@ -113,11 +109,11 @@ func (s *Session) WatchTaskGraph(ctx context.Context) (*TaskGraphWatch, error) {
 		return nil, err
 	}
 	if ctx.Err() != nil {
-		watch.cancel()
+		watch.Cancel()
 		return nil, context.Cause(ctx)
 	}
 	if ctx.Done() != nil {
-		watch.observeCancellation(ctx)
+		watch.ObserveCancellation(ctx)
 	}
 	return watch, nil
 }
@@ -149,12 +145,12 @@ type taskGraphView struct {
 
 type taskGraphMount struct {
 	value     map[string]any
-	observers []documentObserver
+	observers []Observer
 }
 
 // attach registers an observer created from the current revision, on the
 // line.
-func (v *taskGraphView) attach(ctx context.Context, create func(value map[string]any, release func()) documentObserver) (func(), error) {
+func (v *taskGraphView) attach(ctx context.Context, create func(value map[string]any, release func()) Observer) (func(), error) {
 	if err := v.s.healthy(); err != nil {
 		return nil, err
 	}
@@ -168,7 +164,7 @@ func (v *taskGraphView) attach(ctx context.Context, create func(value map[string
 		}
 		mount = &taskGraphMount{value: value}
 	}
-	var observer documentObserver
+	var observer Observer
 	detach := func() {
 		v.mu.Lock()
 		defer v.mu.Unlock()
@@ -338,7 +334,7 @@ func (v *taskGraphView) advance(publication CommitPublication, ctx context.Conte
 	v.mu.Unlock()
 	frame := context.WithoutCancel(ctx)
 	for _, observer := range observers {
-		contained(func() { observer.advance(frame, value, ops) }, v.s.report)
+		contained(func() { observer.Advance(frame, value, ops) }, v.s.report)
 	}
 }
 
@@ -346,7 +342,7 @@ func (v *taskGraphView) advance(publication CommitPublication, ctx context.Conte
 func (v *taskGraphView) close() {
 	v.mu.Lock()
 	v.closed = true
-	var observers []documentObserver
+	var observers []Observer
 	if v.mount != nil {
 		observers = slices.Clone(v.mount.observers)
 	}
@@ -354,7 +350,7 @@ func (v *taskGraphView) close() {
 	v.mu.Unlock()
 	failure := v.s.Failure()
 	for _, observer := range observers {
-		contained(func() { observer.closeSession(failure) }, v.s.report)
+		contained(func() { observer.CloseSession(failure) }, v.s.report)
 	}
 }
 

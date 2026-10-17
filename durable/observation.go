@@ -29,6 +29,40 @@ var retirementOps = []delta.Op{delta.Replace{Value: nil}}
 // document incarnation; its value is nil once the incarnation retires.
 type DocumentState = chord.AttachedReplicatedState[map[string]any]
 
+// Observer receives each committed revision of an observed value and the
+// Session's close: a state source or a watch. Views built over committed
+// publications outside this package (the harness's conversation views)
+// hand their revisions to observers made by NewCommittedState and
+// NewCommittedWatch.
+type Observer interface {
+	// Advance publishes one committed revision: the exact immutable value,
+	// nil once retired, and the operations that produced it.
+	Advance(ctx context.Context, value map[string]any, ops []delta.Op)
+	// CloseSession ends the observer as the Session closes; failure is what
+	// failed it, nil for a plain close.
+	CloseSession(failure error)
+}
+
+// NewCommittedState makes a state source over value and the disposable
+// chord state attached to it; release runs once the state is disposed or
+// closed. report receives listener errors.
+func NewCommittedState(value map[string]any, release func(), report func(error)) (Observer, DocumentState) {
+	source := newCommittedStateSource(value, release)
+	defer func() {
+		if r := recover(); r != nil {
+			source.finishDisposal()
+			panic(r)
+		}
+	}()
+	return source, chord.AttachReplicatedState[map[string]any](source, chord.ReplicatedStateSourceOptions{OnError: report})
+}
+
+// NewCommittedWatch makes a serialized exact-frame watch over value;
+// release runs once it ends. report receives a failing listener's error.
+func NewCommittedWatch(value map[string]any, release func(), report func(error)) *DocumentWatch {
+	return newDocumentWatch(value, release, report)
+}
+
 // committedStateSource bridges the Session to chord for one attached state.
 type committedStateSource struct {
 	mu          sync.Mutex
@@ -69,8 +103,8 @@ func (s *committedStateSource) Attach() chord.ReplicatedStateSourceAttachment[ma
 	return a
 }
 
-// advance publishes one committed revision; nil retires the source.
-func (s *committedStateSource) advance(ctx context.Context, value map[string]any, ops []delta.Op) {
+// Advance publishes one committed revision; nil retires the source.
+func (s *committedStateSource) Advance(ctx context.Context, value map[string]any, ops []delta.Op) {
 	s.mu.Lock()
 	if s.closed || s.retired {
 		s.mu.Unlock()
@@ -89,8 +123,8 @@ func (s *committedStateSource) advance(ctx context.Context, value map[string]any
 	}
 }
 
-// closeSession stops publishing; the attached states keep their last value.
-func (s *committedStateSource) closeSession(error) {
+// CloseSession stops publishing; the attached states keep their last value.
+func (s *committedStateSource) CloseSession(error) {
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -321,9 +355,9 @@ func (w *DocumentWatch) End() WatchEnd {
 	return *w.end
 }
 
-// observeCancellation cancels the watch when ctx is done.
-func (w *DocumentWatch) observeCancellation(ctx context.Context) {
-	stop := context.AfterFunc(ctx, w.cancel)
+// ObserveCancellation cancels the watch when ctx is done.
+func (w *DocumentWatch) ObserveCancellation(ctx context.Context) {
+	stop := context.AfterFunc(ctx, w.Cancel)
 	w.mu.Lock()
 	if w.end != nil {
 		w.mu.Unlock()
@@ -334,11 +368,11 @@ func (w *DocumentWatch) observeCancellation(ctx context.Context) {
 	w.mu.Unlock()
 }
 
-func (w *DocumentWatch) cancel() { w.terminate(WatchEnd{Reason: WatchCancelled}) }
+func (w *DocumentWatch) Cancel() { w.terminate(WatchEnd{Reason: WatchCancelled}) }
 
-// closeSession ends the watch with "session_closed", or with
+// CloseSession ends the watch with "session_closed", or with
 // "session_failed" and the error when the Session failed.
-func (w *DocumentWatch) closeSession(failure error) {
+func (w *DocumentWatch) CloseSession(failure error) {
 	if failure == nil {
 		w.terminate(WatchEnd{Reason: WatchSessionClosed})
 		return
@@ -346,7 +380,7 @@ func (w *DocumentWatch) closeSession(failure error) {
 	w.terminate(WatchEnd{Reason: WatchSessionFailed, Err: failure})
 }
 
-func (w *DocumentWatch) advance(ctx context.Context, value map[string]any, ops []delta.Op) {
+func (w *DocumentWatch) Advance(ctx context.Context, value map[string]any, ops []delta.Op) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.end != nil || w.retired {
