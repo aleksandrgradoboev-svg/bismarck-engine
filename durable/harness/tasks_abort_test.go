@@ -217,9 +217,11 @@ func TestAbortAbortsWaitingWorkAndFaultsAbortHandlersThatFailOrSettleNothing(t *
 
 func TestAbortDoesNotSignalARunningAbortHandlerAndACancelledCallerLeavesTheMarkDurable(t *testing.T) {
 	reached, proceed, runRelease := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	entered := make(chan struct{})
 	var abortSignalled bool
 	var aborts int
 	run := oneStep(t, "test.abort-again", func(context.Context, *stepTask, *TaskRuntime) error {
+		close(entered)
 		// Ignores the signal, so the first caller is still joining when it
 		// gives up.
 		<-runRelease
@@ -234,7 +236,10 @@ func TestAbortDoesNotSignalARunningAbortHandlerAndACancelledCallerLeavesTheMarkD
 	o := openRoot(t, []Task{run}, openOptions{})
 	id := start(t, o.root, run, false)
 	must(t, o.h.Resume())
-	eventually(t, func() bool { return getTask(t, o.h, id).State.Status == durable.TaskRunning })
+	// The handler itself, not the running record: the reservation writes that,
+	// and an abort mark that lands before the run's first step ends the run
+	// there, so the caller would join a run that already ended.
+	<-entered
 	// This caller gives up while joining; the mark and the abort invocation
 	// are unaffected.
 	callerCtx, giveUp := context.WithCancelCause(bg)

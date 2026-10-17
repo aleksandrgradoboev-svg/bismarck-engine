@@ -35,9 +35,11 @@ jobs:
         shell: bash
         # -json keeps every failure with its test name, so the summary below
         # lists the flaky tests instead of the first one to fail.
+        # The ownership chain test tests depth, not concurrency, and takes
+        # minutes a pass under -race; ci.yml skips it there too.
         run: |
           set +e
-          go test -race -count="$COUNT" -timeout 80m -json $PACKAGES > results.json
+          go test -race -count="$COUNT" -timeout 80m -skip 'TestOwnershipTracksOwnershipChainsDeeperThanTheCallStack' -json $PACKAGES > results.json
           status=$?
           echo "## Failed tests (x$COUNT)" >> "$GITHUB_STEP_SUMMARY"
           jq -r 'select(.Action == "fail" and .Test != null) | "\(.Package | sub(".*/bismarck-engine/"; "")) \(.Test)"' results.json \
