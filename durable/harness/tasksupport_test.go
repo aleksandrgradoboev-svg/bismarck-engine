@@ -62,6 +62,13 @@ type controlledStorage struct {
 func newControlledStorage() *controlledStorage { return &controlledStorage{Storage: memory.New()} }
 
 func (s *controlledStorage) Commit(ctx context.Context, writes []durable.StorageWrite) (durable.Seq, error) {
+	return s.commit(ctx, writes, nil)
+}
+
+// commit commits writes once the gate lets it through; a commit whose
+// process died meanwhile (alive reports false) writes nothing. The write and
+// the liveness check share the lock, so a crash lands before or after it.
+func (s *controlledStorage) commit(ctx context.Context, writes []durable.StorageWrite, alive func() bool) (durable.Seq, error) {
 	s.mu.Lock()
 	g := s.commitGate
 	failure := s.commitFailure
@@ -73,15 +80,18 @@ func (s *controlledStorage) Commit(ctx context.Context, writes []durable.Storage
 	if failure != nil {
 		return 0, failure
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if alive != nil && !alive() {
+		return 0, errCrashed
+	}
 	seq, err := s.Storage.Commit(ctx, writes)
 	if err == nil {
 		copies := make([]durable.StorageWrite, len(writes))
 		for i, write := range writes {
 			copies[i], _ = durable.CloneWrite(write)
 		}
-		s.mu.Lock()
 		s.commits = append(s.commits, copies)
-		s.mu.Unlock()
 	}
 	return seq, err
 }
