@@ -318,8 +318,13 @@ func (w *pollWatcher) scan() (map[string]watchEntry, error) {
 		}
 		return nil
 	}
-	record := func(path string, info fs.FileInfo) {
+	// fileIndex identifies a directory where its identity needs it (Windows);
+	// zero is unknown.
+	record := func(path string, info fs.FileInfo, fileIndex uint64) {
 		e := entryOf(info)
+		if e.kind == entryDirectory {
+			e.id = withIndex(e.id, fileIndex)
+		}
 		if e.kind == entryFile && info.Size() <= hashMaxBytes && time.Since(info.ModTime()) < hashRecent {
 			if content, err := os.ReadFile(path); err == nil {
 				e.hash, e.hashed = sha256.Sum256(content), true
@@ -334,7 +339,7 @@ func (w *pollWatcher) scan() (map[string]watchEntry, error) {
 			return nil
 		}
 		traversed[key] = true
-		entries, err := os.ReadDir(directory)
+		entries, err := listDirectory(directory)
 		if err != nil {
 			// The watched directory itself must be readable; below it,
 			// unreadable directories are skipped.
@@ -347,7 +352,7 @@ func (w *pollWatcher) scan() (map[string]watchEntry, error) {
 			return err
 		}
 		for _, entry := range entries {
-			name := entry.Name()
+			name := entry.name
 			if t.excluded(name) {
 				continue
 			}
@@ -363,7 +368,7 @@ func (w *pollWatcher) scan() (map[string]watchEntry, error) {
 				// A target's own entry (following links) wins over its
 				// listing by another target.
 				if _, recorded := snapshot[path]; !recorded {
-					record(path, info)
+					record(path, info, entry.index)
 				}
 			}
 			if t.recursive && kind == entryDirectory {
@@ -398,7 +403,11 @@ func (w *pollWatcher) scan() (map[string]watchEntry, error) {
 			}
 			continue
 		}
-		record(t.path, info)
+		var fileIndex uint64
+		if info.IsDir() {
+			fileIndex = targetIndex(t.path)
+		}
+		record(t.path, info, fileIndex)
 		if info.IsDir() {
 			if err := count(t.path); err != nil {
 				return nil, err
