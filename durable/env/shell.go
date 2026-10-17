@@ -258,7 +258,15 @@ func (l *Local) Exec(ctx context.Context, command Command, options *ExecOptions)
 		return ExecResult{}, &ExecutionError{Code: ExecSpawnError, Message: err.Error(), Cause: err}
 	}
 	cmd.Stdout, cmd.Stderr = stdoutW, stderrW
+	// Started and tracked in one step, as pi's spawn and its add to the
+	// active set run in one turn: a Cleanup in between would miss a command
+	// that is already running.
+	l.mu.Lock()
 	startErr := cmd.Start()
+	if startErr == nil {
+		l.trackLocked(cmd, true)
+	}
+	l.mu.Unlock()
 	stdoutW.Close()
 	stderrW.Close()
 	if startErr != nil {
@@ -266,7 +274,6 @@ func (l *Local) Exec(ctx context.Context, command Command, options *ExecOptions)
 		stderrR.Close()
 		return ExecResult{}, &ExecutionError{Code: ExecSpawnError, Message: startErr.Error(), Cause: startErr}
 	}
-	l.track(cmd, true)
 	defer l.track(cmd, false)
 
 	return l.run(ctx, cmd, stdoutR, stderrR, options)
@@ -275,6 +282,10 @@ func (l *Local) Exec(ctx context.Context, command Command, options *ExecOptions)
 func (l *Local) track(cmd *exec.Cmd, active bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.trackLocked(cmd, active)
+}
+
+func (l *Local) trackLocked(cmd *exec.Cmd, active bool) {
 	if l.active == nil {
 		l.active = map[*exec.Cmd]bool{}
 	}
