@@ -150,7 +150,8 @@ func TestStorageFailureEndsEverythingWithTheFirstError(t *testing.T) {
 	idle := async(func() (struct{}, error) { return struct{}{}, o.h.WaitForIdle(bg) })
 	watch, err := o.h.WatchDoc(bg, LiveDoc.Conversation(o.root.ID))
 	must(t, err)
-	flush()
+	parked(t, 1, onWaiter, "(*Harness).WaitForTask(")
+	parked(t, 1, onWaiter, "(*Harness).WaitForIdle(")
 
 	failure := errors.New("disk gone")
 	storage.failNextCommit(failure)
@@ -410,7 +411,7 @@ func TestStorageFailureFailsItForAStorageErrorDuringAHostCloseBeforeTheBackendCl
 	committing := async(func() (struct{}, error) { return struct{}{}, appendNote(o) })
 	held.Entered(t)
 	closing := async(func() (struct{}, error) { return struct{}{}, o.h.Close(bg) })
-	flush()
+	eventually(t, func() bool { return o.h.tasks.closing.Load() })
 	storage.releaseHold(held)
 	if _, err := await(t, committing); err != failure {
 		t.Fatalf("commit = %v", err)
@@ -449,7 +450,7 @@ func TestStorageFailureEndsAnAbortJoiningARunThatIgnoresItsSignal(t *testing.T) 
 	// The abort mark commits and the abort joins the run, which ignores its
 	// signal; then the Session fails.
 	eventually(t, func() bool { return getTask(t, h, id).AbortRequested })
-	flush()
+	parked(t, 1, "(*scheduler).abort(", "(*Harness).AbortTask(")
 	failure := errors.New("disk gone")
 	storage.failNextCommit(failure)
 	if err := root.Commit(bg, func(tx *durable.Tx) error {

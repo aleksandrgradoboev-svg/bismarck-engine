@@ -3,6 +3,8 @@ package harness
 import (
 	"context"
 	"errors"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -319,6 +321,72 @@ func eventually(t *testing.T, check func() bool) {
 		}
 		time.Sleep(time.Millisecond)
 	}
+}
+
+// Where a call blocks: waiting its turn on the Session line, or registered as
+// a scheduler waiter.
+const (
+	onLine   = "durable.(*Session).enqueue("
+	onWaiter = "durable/harness.wait["
+)
+
+// parked waits until n goroutines have stopped in at — the first frame of
+// their stack outside the runtime — with from among their callers. pi's tests
+// know a call has queued because it returned a promise; a Go call blocks, so
+// the test reads where its goroutine stopped instead of letting time pass. A
+// running line job also has enqueue on its stack, but below its own frames,
+// so it is never counted as waiting. Safe from any goroutine: on timeout it
+// reports an error and returns.
+func parked(t *testing.T, n int, at, from string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for countParked(at, from) < n {
+		if time.Now().After(deadline) {
+			t.Errorf("%d goroutines from %s did not stop in %s", n, from, at)
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func countParked(at, from string) int {
+	buf := make([]byte, 1<<20)
+	for {
+		size := runtime.Stack(buf, true)
+		if size < len(buf) {
+			buf = buf[:size]
+			break
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+	count := 0
+	for _, g := range strings.Split(string(buf), "\n\n") {
+		if !strings.Contains(g, from) {
+			continue
+		}
+		for _, line := range strings.Split(g, "\n")[1:] {
+			if strings.HasPrefix(line, "\t") || strings.HasPrefix(line, "runtime.") {
+				continue
+			}
+			if strings.Contains(line, at) {
+				count++
+			}
+			break
+		}
+	}
+	return count
+}
+
+// schedulerQuiet waits until the scheduler has no reconcile pass and no drain
+// scheduled or underway, so no commit of its own is about to join the line.
+func schedulerQuiet(t *testing.T, h *Harness) {
+	t.Helper()
+	eventually(t, func() bool {
+		s := h.tasks
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return !s.reconcileScheduled && s.reconciling == 0 && !s.draining
+	})
 }
 
 // flush gives pending goroutines a moment to run.

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
@@ -337,12 +338,21 @@ func TestCloseCompletesReadsQueuedAtTheSealAndFailsQueuedWaitsAndAcquisitions(t 
 	o := openRoot(t, nil, openOptions{storage: storage})
 	must(t, o.h.Commit(bg, func(tx *durable.Tx) error { _, err := tx.Doc(notes.Session()); return err }))
 	taskID := start(t, o.root, pending, false)
+	// Starting the task leaves reconcile passes to come; in pi they run as
+	// microtasks before the reads below, here they would join the line among
+	// them and throw the count off.
+	schedulerQuiet(t, o.h)
 
 	held := holdLine(t, o.h, storage, o.root.ID)
 	type outcome = <-chan result[string]
+	// A read served from the document cache answers without queueing, so
+	// "queued at the seal" means each read is on the line or already answered.
+	var answered atomic.Int32
+	waitingBefore := o.h.LineWaiting()
 	settle := func(f func() (bool, error)) outcome {
 		return async(func() (string, error) {
 			present, err := f()
+			answered.Add(1)
 			if err != nil {
 				return closedOutcome(err), nil
 			}
@@ -370,7 +380,7 @@ func TestCloseCompletesReadsQueuedAtTheSealAndFailsQueuedWaitsAndAcquisitions(t 
 		}),
 		"watchDoc": settle(func() (bool, error) { w, err := o.h.WatchDoc(bg, notes.Session()); return w != nil, err }),
 	}
-	flush()
+	eventually(t, func() bool { return o.h.LineWaiting()-waitingBefore+int(answered.Load()) == len(queued) })
 	closing := async(func() (struct{}, error) { return struct{}{}, o.h.Close(bg) })
 	eventually(t, func() bool { return o.h.tasks.closing.Load() })
 	storage.releaseHold(held)

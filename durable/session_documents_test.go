@@ -790,13 +790,13 @@ func TestSessionSettlesAdmittedCommitsBeforeClose(t *testing.T) {
 	queued := async(func() error {
 		return ts.session.Commit(bg, func(tx *durable.Tx) error { return mustDoc(tx, ref).Set("message", "queued") })
 	})
-	eventually(t, func() bool { return durable.LineWaiting(ts.session) == 1 })
+	eventually(t, func() bool { return ts.session.LineWaiting() == 1 })
 	var absent map[string]any
 	admittedSnapshot := async(func() (err error) {
 		absent, err = ts.session.Snapshot(bg, MemberDoc.Session().Member("absent", nil))
 		return
 	})
-	eventually(t, func() bool { return durable.LineWaiting(ts.session) == 2 })
+	eventually(t, func() bool { return ts.session.LineWaiting() == 2 })
 	closed := async(func() error { return ts.session.Close(bg) })
 	eventually(t, func() bool { return durable.Closing(ts.session) })
 	errorContains(t, ts.session.Commit(bg, func(*durable.Tx) error { return nil }), "closed")

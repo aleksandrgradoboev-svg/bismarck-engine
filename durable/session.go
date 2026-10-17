@@ -333,6 +333,16 @@ func (s *Session) enqueue(admit bool, job func() error) error {
 	return job()
 }
 
+// LineWaiting is how many admitted jobs wait for their turn on the line, not
+// counting the one running. A Go call blocks where pi's returns a promise, so
+// a caller that must know another call has queued — tests above all — waits
+// for this count instead of for time to pass.
+func (s *Session) LineWaiting() int {
+	s.lineMu.Lock()
+	defer s.lineMu.Unlock()
+	return s.lineWaiting
+}
+
 // endJob ends the running job and runs a sweep that fell due during it.
 func (s *Session) endJob() {
 	s.mu.Lock()

@@ -1,0 +1,54 @@
+name: stress
+
+# Repeats the concurrent test suites many times under the race detector to
+# surface flaky tests: an ordering that a single run gets right by luck fails
+# within a few dozen repetitions. Not part of the pull request checks — run it
+# by hand or by pushing a stress/** branch.
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: "Repetitions per test"
+        default: "50"
+      packages:
+        description: "Packages to repeat"
+        default: "./durable/..."
+  push:
+    branches: ["stress/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      COUNT: ${{ inputs.count || '50' }}
+      PACKAGES: ${{ inputs.packages || './durable/...' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: race x${{ env.COUNT }}
+        shell: bash
+        # -json keeps every failure with its test name, so the summary below
+        # lists the flaky tests instead of the first one to fail.
+        # The ownership chain test tests depth, not concurrency, and takes
+        # minutes a pass under -race; ci.yml skips it there too.
+        run: |
+          set +e
+          go test -race -count="$COUNT" -timeout 80m -skip 'TestOwnershipTracksOwnershipChainsDeeperThanTheCallStack' -json $PACKAGES > results.json
+          status=$?
+          echo "## Failed tests (x$COUNT)" >> "$GITHUB_STEP_SUMMARY"
+          jq -r 'select(.Action == "fail" and .Test != null) | "\(.Package | sub(".*/bismarck-engine/"; "")) \(.Test)"' results.json \
+            | sort | uniq -c | sort -rn | tee -a "$GITHUB_STEP_SUMMARY"
+          jq -r 'select(.Action == "fail" and .Test == null) | "package failed: \(.Package)"' results.json | tee -a "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - name: keep the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: race-results
+          path: results.json
