@@ -173,14 +173,17 @@ type Session struct {
 	commitListeners   listenerSet[commitListener]
 	internalListeners listenerSet[commitListener]
 	closeListeners    listenerSet[func()]
-	closing           bool
-	closeDone         chan struct{}
-	closeErr          error
-	failure           error
-	hasFailure        bool
-	failed            chan struct{}
-	closed            chan struct{}
-	end               SessionEnd
+	// taskGraph is the task graph view, subscribed at first use.
+	taskGraphOnce sync.Once
+	taskGraph     *taskGraphView
+	closing       bool
+	closeDone     chan struct{}
+	closeErr      error
+	failure       error
+	hasFailure    bool
+	failed        chan struct{}
+	closed        chan struct{}
+	end           SessionEnd
 }
 
 // NewSession opens a Session kernel over one storage backend.
