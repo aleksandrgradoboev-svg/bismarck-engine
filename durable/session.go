@@ -485,7 +485,7 @@ func (s *Session) DocumentState(ctx context.Context, ref DocRef) (DocumentState,
 			return err
 		}
 		var source *committedStateSource
-		detach, err := s.attachDocument(def, loaded, true, func(value map[string]any, detach func()) documentObserver {
+		detach, err := s.attachDocument(def, loaded, true, func(value map[string]any, detach func()) Observer {
 			source = newCommittedStateSource(value, detach)
 			return source
 		})
@@ -526,7 +526,7 @@ func (s *Session) WatchDoc(ctx context.Context, ref DocRef) (*DocumentWatch, err
 		if err != nil || loaded == nil {
 			return err
 		}
-		_, err = s.attachDocument(def, loaded, false, func(value map[string]any, detach func()) documentObserver {
+		_, err = s.attachDocument(def, loaded, false, func(value map[string]any, detach func()) Observer {
 			watch = newDocumentWatch(value, detach, s.report)
 			return watch
 		})
@@ -536,11 +536,11 @@ func (s *Session) WatchDoc(ctx context.Context, ref DocRef) (*DocumentWatch, err
 		return nil, err
 	}
 	if ctx.Err() != nil {
-		watch.cancel()
+		watch.Cancel()
 		return nil, context.Cause(ctx)
 	}
 	if ctx.Done() != nil {
-		watch.observeCancellation(ctx)
+		watch.ObserveCancellation(ctx)
 	}
 	return watch, nil
 }
@@ -1057,16 +1057,10 @@ func (s *Session) publish(ctx context.Context, seq Seq, writes []StorageWrite, d
 	}
 }
 
-// documentObserver is a document state source or a watch.
-type documentObserver interface {
-	advance(ctx context.Context, value map[string]any, ops []delta.Op)
-	closeSession(failure error)
-}
-
 // attachDocument attaches an observer to one committed incarnation: check
 // the definition, then forward this incarnation's committed changes and
 // close. The returned detach removes both subscriptions. It runs on the line.
-func (s *Session) attachDocument(def DocDef, loaded *loadedDocument, stateSource bool, create func(value map[string]any, detach func()) documentObserver) (func(), error) {
+func (s *Session) attachDocument(def DocDef, loaded *loadedDocument, stateSource bool, create func(value map[string]any, detach func()) Observer) (func(), error) {
 	s.mu.Lock()
 	if err := s.checkLoadedLocked(def, loaded); err != nil {
 		s.mu.Unlock()
@@ -1127,7 +1121,7 @@ func (s *Session) attachDocument(def DocDef, loaded *loadedDocument, stateSource
 			if change.Value == nil {
 				unpin()
 			}
-			observer.advance(frameCtx, change.Value, ops)
+			observer.Advance(frameCtx, change.Value, ops)
 		}
 	})
 	if err != nil {
@@ -1135,7 +1129,7 @@ func (s *Session) attachDocument(def DocDef, loaded *loadedDocument, stateSource
 		return nil, err
 	}
 	keep(unsubscribe)
-	unsubscribeClose, err := s.SubscribeClose(func() { observer.closeSession(s.Failure()) })
+	unsubscribeClose, err := s.SubscribeClose(func() { observer.CloseSession(s.Failure()) })
 	if err != nil {
 		detach()
 		return nil, err
