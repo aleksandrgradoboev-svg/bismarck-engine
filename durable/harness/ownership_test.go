@@ -383,6 +383,43 @@ func TestOwnershipCascadesThroughEndedTasksIntoAnOwnedBackgroundSubtreeWhenAbort
 	expectEnded(t, o.h, d, durable.OutcomeAborted)
 }
 
+func TestOwnershipKeepsOwnershipQueriesOffFinishedSubtrees(t *testing.T) {
+	f := newOwnership(t)
+	o := f.openOwned(t, nil)
+	// Ended chains under a live owner, each ending in an empty owned
+	// conversation.
+	owner := f.create(t, o.root, "owner")
+	const chains = 50
+	var tasks []durable.TaskID
+	for n := 0; n < chains; n++ {
+		must(t, o.root.Commit(bg, func(tx *durable.Tx) error {
+			first := f.holdIn(t, tx, fmt.Sprintf("c%d.0", n), taskOwned(owner))
+			second := f.holdIn(t, tx, fmt.Sprintf("c%d.1", n), taskOwned(first))
+			_, err := tx.CreateConversation(ownedBy(second))
+			tasks = append(tasks, first, second)
+			return err
+		}))
+	}
+	for n := 0; n < chains; n++ {
+		f.open(fmt.Sprintf("c%d.1", n), durable.OutcomeCompleted)
+		f.open(fmt.Sprintf("c%d.0", n), durable.OutcomeCompleted)
+	}
+	for _, id := range tasks {
+		waitDone(t, o.h, id)
+	}
+	// Set entries iterated while the owner settles, a measure of the walks
+	// down: one through every ended task iterates hundreds of entries; one
+	// over live work alone, none below the owner. Go finishes the chains'
+	// bookkeeping off the waits above, so the count starts once it is done.
+	schedulerQuiet(t, o.h)
+	before := setEntries.Load()
+	f.open("owner", durable.OutcomeCompleted)
+	expectEnded(t, o.h, owner, durable.OutcomeCompleted)
+	if entries := setEntries.Load() - before; entries >= chains {
+		t.Fatalf("%d set entries iterated, want fewer than %d", entries, chains)
+	}
+}
+
 func TestOwnershipTracksOwnershipChainsDeeperThanTheCallStack(t *testing.T) {
 	f := newOwnership(t)
 	o := f.openOwned(t, nil)
@@ -407,6 +444,63 @@ func TestOwnershipTracksOwnershipChainsDeeperThanTheCallStack(t *testing.T) {
 	f.open("leaf", durable.OutcomeCompleted)
 	expectEnded(t, o.h, leaf, durable.OutcomeCompleted)
 	expectEnded(t, o.h, top, durable.OutcomeCompleted)
+}
+
+func TestOwnershipFinalizesManyHeldSiblingsThatEndTogetherInOnePass(t *testing.T) {
+	f := newOwnership(t)
+	o := f.openOwned(t, nil)
+	// Top holds 1000 held children, each holding one live leaf; the leaves
+	// end in one commit.
+	const count = 1000
+	var top durable.TaskID
+	var leaves []durable.TaskID
+	must(t, o.root.Commit(bg, func(tx *durable.Tx) error {
+		top = f.holdIn(t, tx, "top", conversationOwned(false))
+		siblings := make([]durable.TaskID, count)
+		for n := range count {
+			siblings[n] = f.holdIn(t, tx, fmt.Sprintf("s%d", n), taskOwned(top))
+		}
+		// Leaves in reverse sibling order: the last sibling is freed first,
+		// so a holder checked after each freed sibling would scan the
+		// siblings already finalized each time.
+		for n := count - 1; n >= 0; n-- {
+			leaves = append(leaves, f.holdIn(t, tx, fmt.Sprintf("l%d", n), taskOwned(siblings[n])))
+		}
+		return nil
+	}))
+	for n := range count {
+		f.open(fmt.Sprintf("s%d", n), durable.OutcomeCompleted)
+	}
+	f.open("top", durable.OutcomeCompleted)
+	waitStatus(t, o.h, top, durable.TaskCompleting)
+	// Set entries iterated while it all finalizes: one pass is linear, a
+	// recheck per sibling quadratic (~500,000). Go finalizes on the line
+	// within the commit below, so the count starts before it, once the
+	// siblings' own endings are done.
+	schedulerQuiet(t, o.h)
+	before := setEntries.Load()
+	must(t, o.root.Commit(bg, func(tx *durable.Tx) error {
+		// Reads before the first write.
+		records := make([]durable.TaskRecord, 0, count)
+		for _, id := range leaves {
+			record, err := tx.Task(id)
+			if err != nil {
+				return err
+			}
+			records = append(records, *record)
+		}
+		for _, record := range records {
+			record.State = durable.TaskState{Status: durable.TaskTerminal, Outcome: &durable.TaskOutcome{Status: durable.OutcomeCompleted, Result: []byte("null")}}
+			if err := tx.SetTask(record); err != nil {
+				return err
+			}
+		}
+		return nil
+	}))
+	expectEnded(t, o.h, top, durable.OutcomeCompleted)
+	if entries := setEntries.Load() - before; entries >= count*20 {
+		t.Fatalf("%d set entries iterated, want fewer than %d", entries, count*20)
+	}
 }
 
 // bridgeTree is live P owning B, which owns A, which owns the empty

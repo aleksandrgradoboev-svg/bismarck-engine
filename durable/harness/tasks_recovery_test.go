@@ -369,6 +369,9 @@ func TestRecoveryResumesAbortWorkAfterCloseAtEveryDirectTaskAbortStage(t *testin
 	eventually(t, func() bool { return len(log.all()) == 1 })
 	aborting := markDurably(t, o.h, id)
 	closing := async(func() (struct{}, error) { return struct{}{}, o.h.Close(bg) })
+	// pi's close marks the Harness closing before it returns its promise; wait
+	// for that before the run may end, or the abort invocation starts first.
+	eventually(t, o.h.tasks.closing.Load)
 	close(runRelease)
 	if _, err := await(t, closing); err != nil {
 		t.Fatal(err)

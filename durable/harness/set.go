@@ -1,6 +1,14 @@
 package harness
 
-import "container/list"
+import (
+	"container/list"
+	"sync/atomic"
+)
+
+// setEntries counts the members every values call returns: the cost of the
+// scheduler's walks, which tests bound as pi's do by counting Set iteration.
+// values copies the whole set, so this is an upper bound on what pi counts.
+var setEntries atomic.Int64
 
 // set is an insertion-ordered set, pi's Set: iteration follows insertion, and
 // re-adding a member keeps its place. Add, delete and has are O(1).
@@ -45,6 +53,7 @@ func (s *set[T]) values() []T {
 	for e := s.order.Front(); e != nil; e = e.Next() {
 		out = append(out, e.Value.(T))
 	}
+	setEntries.Add(int64(len(out)))
 	return out
 }
 
