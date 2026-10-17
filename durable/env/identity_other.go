@@ -19,3 +19,8 @@ func identity(info fs.FileInfo) fileID {
 
 // ancestorIdentity is the identity of an ancestor: the same as any file's.
 func ancestorIdentity(info fs.FileInfo) fileID { return identity(info) }
+
+// withIndex keeps id: the inode already identifies the file.
+func withIndex(id fileID, index uint64) fileID { return id }
+
+func targetIndex(path string) uint64 { return 0 }
