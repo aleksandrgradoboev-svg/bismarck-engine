@@ -6,13 +6,6 @@ import "time"
 // return promises, so a test that needs a call admitted or registered before
 // the next one waits for it here.
 
-// LineWaiting is how many admitted jobs wait for their turn on the line.
-func LineWaiting(s *Session) int {
-	s.lineMu.Lock()
-	defer s.lineMu.Unlock()
-	return s.lineWaiting
-}
-
 // Closing reports whether close has sealed admission.
 func Closing(s *Session) bool {
 	s.mu.Lock()

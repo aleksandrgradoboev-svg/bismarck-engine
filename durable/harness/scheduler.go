@@ -125,7 +125,11 @@ type scheduler struct {
 	failFastChecks *set[durable.TaskID]
 	abandoned      *set[durable.TaskID]
 
-	reconcileScheduled  bool
+	reconcileScheduled bool
+	// reconciling counts reconcile passes from the moment they clear
+	// reconcileScheduled until their commit returns, so "nothing is scheduled"
+	// has no gap while a pass waits for the line.
+	reconciling         int
 	sweepScheduled      bool
 	cascadePending      bool
 	unsubscribeRegistry func()
@@ -589,6 +593,12 @@ func (s *scheduler) scheduleReconcile() {
 func (s *scheduler) reconcile() {
 	s.mu.Lock()
 	s.reconcileScheduled = false
+	s.reconciling++
+	defer func() {
+		s.mu.Lock()
+		s.reconciling--
+		s.unlock()
+	}()
 	cascade := s.cascadePending
 	s.cascadePending = false
 	checks := s.failFastChecks.values()

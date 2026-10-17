@@ -212,10 +212,10 @@ func TestRuntimeOrdersCommitsAgainstTheStepOneQueuedBeforeLandsOneAfterFails(t *
 		// the step queues behind that commit.
 		held = holdLine(t, h, storage, rt.ConversationID)
 		before = commit(rt, "before")
-		flush()
+		parked(t, 1, onLine, "(*TaskRuntime).Commit(")
 		// Queued after the handler returned, so after the step.
 		go func() {
-			flush()
+			parked(t, 1, onLine, "(*scheduler).step(")
 			after = commit(rt, "after")
 			close(ready)
 		}()
@@ -226,7 +226,7 @@ func TestRuntimeOrdersCommitsAgainstTheStepOneQueuedBeforeLandsOneAfterFails(t *
 	id := start(t, o.root, detached, false)
 	must(t, o.h.Resume())
 	<-ready
-	flush()
+	parked(t, 2, onLine, "(*TaskRuntime).Commit(")
 	storage.releaseHold(held)
 	if _, err := await(t, before); err != nil {
 		t.Fatal(err)
@@ -254,7 +254,7 @@ func TestRuntimeStopsAWatchWhoseAcquisitionFinishesAfterTheInvocationEnded(t *te
 		// Starts after the handler returned, so its line job queues behind the
 		// step that ends the invocation.
 		go func() {
-			flush()
+			parked(t, 1, onLine, "(*scheduler).step(")
 			watching = async(func() (*durable.DocumentWatch, error) { return rt.WatchDoc(bg, notes.Session()) })
 			close(ready)
 		}()
@@ -266,7 +266,7 @@ func TestRuntimeStopsAWatchWhoseAcquisitionFinishesAfterTheInvocationEnded(t *te
 	id := start(t, o.root, late, false)
 	must(t, o.h.Resume())
 	<-ready
-	flush()
+	parked(t, 1, onLine, "(*TaskRuntime).WatchDoc(")
 	storage.releaseHold(held)
 	watch, err := await(t, watching)
 	expectError(t, err, "invocation has ended")
@@ -554,7 +554,7 @@ func TestSchedulingFailsTaskWaitsCancelledOrClosedWhileQueuedAndPendingWaitsOnCl
 	held := holdLine(t, o.h, storage, o.root.ID)
 	waitCtx, cancel := context.WithCancelCause(bg)
 	cancelledWhileQueued := async(func() (durable.TaskRecord, error) { return o.h.WaitForTask(waitCtx, id) })
-	flush()
+	parked(t, 1, onLine, "(*Harness).WaitForTask(")
 	cancel(errors.New("wait cancelled"))
 	storage.releaseHold(held)
 	_, err := await(t, cancelledWhileQueued)
@@ -563,12 +563,14 @@ func TestSchedulingFailsTaskWaitsCancelledOrClosedWhileQueuedAndPendingWaitsOnCl
 	pending := async(func() (durable.TaskRecord, error) { return o.h.WaitForTask(bg, id) })
 	idle := async(func() (struct{}, error) { return struct{}{}, o.h.WaitForIdle(bg) })
 	conversationIdle := async(func() (struct{}, error) { return struct{}{}, o.root.WaitForIdle(bg) })
-	flush()
+	parked(t, 1, onWaiter, "(*Harness).WaitForTask(")
+	parked(t, 1, onWaiter, "(*Harness).WaitForIdle(")
+	parked(t, 1, onWaiter, "(*Conversation).WaitForIdle(")
 	heldAgain := holdLine(t, o.h, storage, o.root.ID)
 	closedWhileQueued := async(func() (durable.TaskRecord, error) { return o.h.WaitForTask(bg, id) })
-	flush()
+	parked(t, 1, onLine, "(*Harness).WaitForTask(")
 	closing := async(func() (struct{}, error) { return struct{}{}, o.h.Close(bg) })
-	flush()
+	eventually(t, func() bool { return o.h.tasks.closing.Load() })
 	storage.releaseHold(heldAgain)
 	for _, ch := range []<-chan result[durable.TaskRecord]{closedWhileQueued, pending} {
 		_, err := await(t, ch)

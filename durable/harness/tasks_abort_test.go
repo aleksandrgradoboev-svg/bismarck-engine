@@ -292,7 +292,7 @@ func TestAbortNeverStartsPhaseOneWhenTheAbortLandsWhileTheReservationSettles(t *
 	// The reservation commit is in storage; the abort mark commit queues
 	// behind it.
 	aborting := async(func() (string, error) { return o.h.AbortTask(bg, id) })
-	flush()
+	parked(t, 1, onLine, "(*Harness).AbortTask(")
 	storage.releaseHold(held)
 	if result, err := await(t, aborting); err != nil || result != "marked" {
 		t.Fatalf("abort = %s, %v", result, err)
@@ -322,7 +322,7 @@ func TestAbortLetsAnAbortMarkWinOverAFaultThatRacesIt(t *testing.T) {
 	id := start(t, o.root, racing, false)
 	must(t, o.h.Resume())
 	<-ready
-	flush()
+	parked(t, 1, onLine, "(*scheduler).step(")
 	storage.releaseHold(held)
 	if got := outcomeJSON(t, waitDone(t, o.h, id)); got != `{"status":"aborted","reason":"test"}` {
 		t.Fatalf("outcome = %s", got)
@@ -362,7 +362,7 @@ func TestCloseStopsWithoutOutcomesAndStartsNoFreshPhaseOrAbortInvocation(t *test
 	record := getTask(t, o.h, id)
 	commits := storage.commitCount()
 	closing := async(func() (struct{}, error) { return struct{}{}, o.h.Close(bg) })
-	flush()
+	eventually(t, func() bool { return o.h.tasks.closing.Load() })
 	close(proceed)
 	if _, err := await(t, closing); err != nil {
 		t.Fatal(err)
@@ -429,9 +429,9 @@ func TestCloseWritesNoFaultWhenItSealsWhileTheStepAfterAFailedPhaseIsQueued(t *t
 	id := start(t, o.root, fails, false)
 	must(t, o.h.Resume())
 	<-ready
-	flush()
+	parked(t, 1, onLine, "(*scheduler).step(")
 	closing := async(func() (struct{}, error) { return struct{}{}, o.h.Close(bg) })
-	flush()
+	eventually(t, func() bool { return o.h.tasks.closing.Load() })
 	storage.releaseHold(held)
 	if _, err := await(t, closing); err != nil {
 		t.Fatal(err)
@@ -458,7 +458,7 @@ func TestCloseStartsNoAbortHandlerWhoseReservationSettlesWhileClosing(t *testing
 	must(t, o.h.Resume())
 	held.Entered(t)
 	closing := async(func() (struct{}, error) { return struct{}{}, o.h.Close(bg) })
-	flush()
+	eventually(t, func() bool { return o.h.tasks.closing.Load() })
 	storage.releaseHold(held)
 	if _, err := await(t, closing); err != nil {
 		t.Fatal(err)
@@ -478,7 +478,7 @@ func TestCloseFailsARuntimeCommitThatWasQueuedOnTheLineWhenCloseSealedIt(t *test
 	q := oneStep(t, "test.close-queued-commit", func(_ context.Context, _ *stepTask, rt *TaskRuntime) error {
 		held = holdLine(t, h, storage, rt.ConversationID)
 		queued = async(func() (struct{}, error) { return struct{}{}, rt.Commit(bg, completeWith(nil)) })
-		flush()
+		parked(t, 1, onLine, "(*TaskRuntime).Commit(")
 		close(ready)
 		// Ignores the close signal, so the invocation is still alive when the
 		// queued commit reaches the line.
@@ -491,7 +491,7 @@ func TestCloseFailsARuntimeCommitThatWasQueuedOnTheLineWhenCloseSealedIt(t *test
 	must(t, o.h.Resume())
 	<-ready
 	closing := async(func() (struct{}, error) { return struct{}{}, o.h.Close(bg) })
-	flush()
+	eventually(t, func() bool { return o.h.tasks.closing.Load() })
 	storage.releaseHold(held)
 	_, err := await(t, queued)
 	expectError(t, err, "Harness is closed")
@@ -580,7 +580,7 @@ func TestCloseJoinsAReservationThatSettlesWhileClosingWithoutStartingItsHandler(
 	must(t, o.h.Resume())
 	held.Entered(t)
 	closing := async(func() (struct{}, error) { return struct{}{}, o.h.Close(bg) })
-	flush()
+	eventually(t, func() bool { return o.h.tasks.closing.Load() })
 	storage.releaseHold(held)
 	if _, err := await(t, closing); err != nil {
 		t.Fatal(err)
