@@ -34,3 +34,17 @@ func CreateWriteTool(cwd string, ops *WriteOperations) agent.AgentTool {
 func CreateEditTool(cwd string, ops *EditOperations) agent.AgentTool {
 	return editToolOps(cwd, ops)
 }
+
+// CreateBashTool builds the bash tool in cwd against ops, which run its
+// commands. The command ops receive is what the model wrote; Env carries the
+// server's environment, which a host running commands elsewhere replaces.
+func CreateBashTool(cwd string, ops *BashOperations) agent.AgentTool {
+	return shellToolOps(cwd, bashShellConfig, nil, ops)
+}
+
+// CreatePowerShellTool builds the powershell tool in cwd against ops. The
+// command ops receive starts with the prefix that switches PowerShell's
+// output to UTF-8.
+func CreatePowerShellTool(cwd string, ops *BashOperations) agent.AgentTool {
+	return shellToolOps(cwd, powershellShellConfig, nil, ops)
+}

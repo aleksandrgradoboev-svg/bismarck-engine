@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
 )
 
 // The exported constructors exist so a host can confine the tools; one that
@@ -85,5 +87,31 @@ func TestCreateWriteAndEditToolsUseOps(t *testing.T) {
 	}
 	if edited != "new\n" {
 		t.Fatalf("host WriteFile got %q", edited)
+	}
+}
+
+func TestCreateShellToolsUseOps(t *testing.T) {
+	cwd := t.TempDir()
+	for name, create := range map[string]func(string, *BashOperations) agent.AgentTool{
+		"bash": CreateBashTool, "powershell": CreatePowerShellTool,
+	} {
+		var gotCommand, gotCwd string
+		ops := BashOperations{Exec: func(_ context.Context, command, dir string, o BashExecOptions) (*int, error) {
+			gotCommand, gotCwd = command, dir
+			o.OnData([]byte("from host\n"))
+			code := 0
+			return &code, nil
+		}}
+		tool := create(cwd, &ops)
+		res, err := tool.Execute(context.Background(), "1", map[string]any{"command": "echo hi"}, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if tool.Name != name || gotCwd != cwd || !strings.HasSuffix(gotCommand, "echo hi") || !strings.Contains(resultText(res), "from host") {
+			t.Fatalf("%s: name %q, cwd %q, command %q, result %q", name, tool.Name, gotCwd, gotCommand, resultText(res))
+		}
+		if name == "powershell" && !strings.HasPrefix(gotCommand, utf8OutputPrefix) {
+			t.Fatalf("powershell command lacks the UTF-8 prefix: %q", gotCommand)
+		}
 	}
 }
