@@ -55,6 +55,14 @@ type ChildSpec struct {
 	// AppendSystemPrompt is the agent's system prompt, for
 	// SessionOptions.AppendSystemPrompt.
 	AppendSystemPrompt string
+	// ToolCallID is the id of the subagent tool call that runs this task, and
+	// Index the task's place in it: 0 in single mode, the 1-based step in a
+	// chain, the 1-based task in a parallel call. Together they name one
+	// running subagent, so a host can address it (Session.Steer) while the
+	// call runs; the tasks of one parallel call share ToolCallID. Not in pi,
+	// whose subagents are processes the host does not talk to.
+	ToolCallID string
+	Index      int
 }
 
 // Options configure Definition.
@@ -323,7 +331,7 @@ func (r *runner) execute(ctx context.Context, id string, params map[string]any, 
 	return res, err
 }
 
-func (r *runner) run(ctx context.Context, _ string, params map[string]any, onUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
+func (r *runner) run(ctx context.Context, callID string, params map[string]any, onUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
 	scope := ScopeUser
 	if s, ok := params["agentScope"].(string); ok && s != "" {
 		scope = Scope(s)
@@ -406,11 +414,11 @@ func (r *runner) run(ctx context.Context, _ string, params map[string]any, onUpd
 
 	switch mode {
 	case ModeChain:
-		return r.runChain(ctx, agents, chain, onUpdate, details)
+		return r.runChain(ctx, callID, agents, chain, onUpdate, details)
 	case ModeParallel:
-		return r.runParallel(ctx, agents, tasks, onUpdate, details)
+		return r.runParallel(ctx, callID, agents, tasks, onUpdate, details)
 	}
-	result, err := r.runAgent(ctx, agents, single, 0, func(res Result) {
+	result, err := r.runAgent(ctx, callID, agents, single, 0, 0, func(res Result) {
 		if onUpdate != nil {
 			onUpdate(progress(res, details(ModeSingle, []Result{res})))
 		}
@@ -451,12 +459,12 @@ func progress(res Result, d Details) agent.AgentToolResult {
 	return textResult(text, d)
 }
 
-func (r *runner) runChain(ctx context.Context, agents []Agent, chain []taskParam, onUpdate agent.ToolUpdateFunc, details func(Mode, []Result) Details) (agent.AgentToolResult, error) {
+func (r *runner) runChain(ctx context.Context, callID string, agents []Agent, chain []taskParam, onUpdate agent.ToolUpdateFunc, details func(Mode, []Result) Details) (agent.AgentToolResult, error) {
 	var results []Result
 	previous := ""
 	for i, step := range chain {
 		step.task = strings.ReplaceAll(step.task, "{previous}", previous)
-		result, err := r.runAgent(ctx, agents, step, i+1, func(res Result) {
+		result, err := r.runAgent(ctx, callID, agents, step, i+1, i+1, func(res Result) {
 			if onUpdate != nil {
 				all := append(slices.Clone(results), res)
 				onUpdate(progress(res, details(ModeChain, all)))
@@ -476,7 +484,7 @@ func (r *runner) runChain(ctx context.Context, agents []Agent, chain []taskParam
 	return textResult(finalOrNone(results[len(results)-1].Messages), details(ModeChain, results)), nil
 }
 
-func (r *runner) runParallel(ctx context.Context, agents []Agent, tasks []taskParam, onUpdate agent.ToolUpdateFunc, details func(Mode, []Result) Details) (agent.AgentToolResult, error) {
+func (r *runner) runParallel(ctx context.Context, callID string, agents []Agent, tasks []taskParam, onUpdate agent.ToolUpdateFunc, details func(Mode, []Result) Details) (agent.AgentToolResult, error) {
 	if len(tasks) > MaxParallelTasks {
 		return textResult(fmt.Sprintf("Too many parallel tasks (%d). Max is %d.", len(tasks), MaxParallelTasks), details(ModeParallel, nil)), nil
 	}
@@ -516,7 +524,7 @@ func (r *runner) runParallel(ctx context.Context, agents []Agent, tasks []taskPa
 				if index >= len(tasks) {
 					return
 				}
-				result, err := r.runAgent(ctx, agents, tasks[index], 0, func(res Result) {
+				result, err := r.runAgent(ctx, callID, agents, tasks[index], 0, index+1, func(res Result) {
 					mu.Lock()
 					all[index] = res
 					emit()
@@ -567,7 +575,7 @@ var errAborted = errors.New("Subagent was aborted")
 // runAgent runs one task (pi runSingleAgent). Failures to find the agent,
 // resolve its model or build its session are failed results; only an abort is
 // an error, which fails the whole call.
-func (r *runner) runAgent(ctx context.Context, agents []Agent, t taskParam, step int, update func(Result)) (Result, error) {
+func (r *runner) runAgent(ctx context.Context, callID string, agents []Agent, t taskParam, step, index int, update func(Result)) (Result, error) {
 	result := Result{Agent: t.agent, AgentSource: SourceUnknown, Task: t.task, Messages: []ai.Message{}, Step: step}
 	fail := func(stderr string) (Result, error) {
 		result.ExitCode = 1
@@ -589,7 +597,7 @@ func (r *runner) runAgent(ctx context.Context, agents []Agent, t taskParam, step
 	def := agents[i]
 	result.AgentSource = def.Source
 
-	spec := ChildSpec{Agent: def, Cwd: t.cwd, AppendSystemPrompt: def.SystemPrompt}
+	spec := ChildSpec{Agent: def, Cwd: t.cwd, AppendSystemPrompt: def.SystemPrompt, ToolCallID: callID, Index: index}
 	if spec.Cwd == "" {
 		spec.Cwd = r.parent.Cwd
 	}

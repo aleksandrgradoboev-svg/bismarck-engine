@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -330,6 +331,63 @@ func TestParallel(t *testing.T) {
 	if d.Mode != ModeParallel || len(d.Results) != 6 || d.Results[4].Task != "five" {
 		t.Fatalf("details = %+v", d)
 	}
+}
+
+// TestChildSpecNamesTheCall: every child knows the call that runs it and its
+// place there, so a host can tell two tasks of one parallel call apart.
+func TestChildSpecNamesTheCall(t *testing.T) {
+	positions := func(f *fixture) map[string]int {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		out := map[string]int{}
+		for _, s := range f.specs {
+			if s.ToolCallID != "call-1" {
+				t.Errorf("%s: ToolCallID = %q, want call-1", s.Agent.Name, s.ToolCallID)
+			}
+			out[s.Agent.Name] = s.Index
+		}
+		return out
+	}
+	newWithAgents := func(t *testing.T, n int) *fixture {
+		f := newFixture(t)
+		for _, name := range []string{"a", "b", "c"} {
+			writeAgent(t, f.userDir, name+".md", "---\nname: "+name+"\ndescription: "+name+"\n---\nbody")
+		}
+		f.reg.SetResponses(steps(n, answer(func(string) string { return "ok" })))
+		return f
+	}
+
+	t.Run("single", func(t *testing.T) {
+		f := newWithAgents(t, 1)
+		if _, err := f.run(t, map[string]any{"agent": "a", "task": "x"}); err != nil {
+			t.Fatal(err)
+		}
+		if got := positions(f); !maps.Equal(got, map[string]int{"a": 0}) {
+			t.Fatalf("positions = %v", got)
+		}
+	})
+	t.Run("chain", func(t *testing.T) {
+		f := newWithAgents(t, 2)
+		if _, err := f.run(t, map[string]any{"chain": []any{
+			map[string]any{"agent": "a", "task": "x"}, map[string]any{"agent": "b", "task": "y"},
+		}}); err != nil {
+			t.Fatal(err)
+		}
+		if got := positions(f); !maps.Equal(got, map[string]int{"a": 1, "b": 2}) {
+			t.Fatalf("positions = %v", got)
+		}
+	})
+	t.Run("parallel", func(t *testing.T) {
+		f := newWithAgents(t, 3)
+		if _, err := f.run(t, map[string]any{"tasks": []any{
+			map[string]any{"agent": "a", "task": "x"}, map[string]any{"agent": "b", "task": "y"}, map[string]any{"agent": "c", "task": "z"},
+		}}); err != nil {
+			t.Fatal(err)
+		}
+		if got := positions(f); !maps.Equal(got, map[string]int{"a": 1, "b": 2, "c": 3}) {
+			t.Fatalf("positions = %v", got)
+		}
+	})
 }
 
 func TestParallelLimit(t *testing.T) {
