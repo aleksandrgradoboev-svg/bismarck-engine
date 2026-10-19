@@ -32,7 +32,14 @@ type chatSetup struct {
 
 func newChatSetup(t *testing.T) *chatSetup {
 	t.Helper()
-	faux := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
+	return newChatSetupWith(t, providers.RegisterFauxProviderOptions{})
+}
+
+// newChatSetupWith is newChatSetup with faux provider options, such as a
+// streaming rate (pi chatSetup(options)).
+func newChatSetupWith(t *testing.T, fauxOptions providers.RegisterFauxProviderOptions) *chatSetup {
+	t.Helper()
+	faux := providers.RegisterFauxProvider(fauxOptions)
 	t.Cleanup(faux.Unregister)
 	models := ai.CreateModels(nil)
 	models.SetProvider(ai.CreateProvider(ai.CreateProviderOptions{
