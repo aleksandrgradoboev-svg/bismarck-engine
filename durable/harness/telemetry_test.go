@@ -750,6 +750,211 @@ func TestTelemetryTracesSurviveAReopenedJSONLStorage(t *testing.T) {
 	equalValues(t, "submission trace", submissionStatus(t, reopened).Trace, submitted)
 }
 
+// The cases below are beyond pi: each covers a mechanism no case of pi's
+// checks (sabotage of the durable telemetry slice).
+
+func generationRecords(t *testing.T, h *Harness) []durable.TaskRecord {
+	t.Helper()
+	var tasks durable.Page[durable.TaskRecord]
+	must(t, h.Commit(bg, func(tx *durable.Tx) error {
+		var err error
+		tasks, err = tx.ScanTasks(durable.TaskQuery{Kind: GenerationTask.Name()}, 10, nil)
+		return err
+	}))
+	return tasks.Items
+}
+
+// A run whose first input has no trace (an internal admission, as pi's
+// compaction makes) starts at the adapter root, not under the span of the
+// commit that places it — here the answering phase of the run before.
+func TestTelemetryStartsARunAtTheRootWhenItsFirstInputHasNoTrace(t *testing.T) {
+	setup, recorder := trackedSetup(t)
+	first, reached, release := gatedStep(fauxAnswer("first"))
+	setup.faux.SetResponses([]providers.FauxResponseStep{first, fauxText("second")})
+	h, root := openChat(t, memory.New(), setup)
+	one := submit(t, root, inputDraft("first"))
+	awaitSignal(t, reached, "the first request")
+	var internal durable.SubmissionID
+	must(t, root.Commit(bg, func(tx *durable.Tx) error {
+		admitted, err := admitSubmission(tx, root.ID, inputDraft("internal"), 0, h.settings(), nil)
+		internal = admitted.id
+		return err
+	}))
+	release()
+	waitFor(t, one)
+	queued, err := h.Submission(bg, internal)
+	must(t, err)
+	waitFor(t, queued)
+	must(t, h.WaitForIdle(bg))
+	allSettled(t, recorder)
+	generations := generationRecords(t, h)
+	if len(generations) != 2 {
+		t.Fatalf("generations = %d, want 2", len(generations))
+	}
+	if trace := generations[1].Trace; trace != nil {
+		t.Fatalf("the internal input's run stored trace %v, want none", trace)
+	}
+	for _, span := range spansNamed(recorder, SpanPhase) {
+		if span.Attributes["task.id"] == int64(generations[1].ID) && span.ParentContext != nil {
+			t.Fatalf("phase %v of the internal run has parent %v, want a root", span.Attributes["phase"], span.ParentContext)
+		}
+	}
+}
+
+// An idle admission behind queued items runs a boundary: the input is
+// "placed" when the boundary selects it last, otherwise "queued".
+func TestTelemetryReportsPlacedOrQueuedForAnAdmissionBehindABoundary(t *testing.T) {
+	for _, mode := range []QueueMode{QueueOneAtATime, QueueAll} {
+		t.Run(string(mode), func(t *testing.T) {
+			setup, recorder := trackedSetup(t)
+			setup.setSettings(func(s *HarnessSettings) { s.FollowUpMode = mode })
+			failing, reached, release := gatedStep(fauxError("invalid request"))
+			setup.faux.SetResponses([]providers.FauxResponseStep{failing, fauxText("for f"), fauxText("for g")})
+			h, root := openChat(t, memory.New(), setup)
+			input := submit(t, root, inputDraft("a"))
+			awaitSignal(t, reached, "the failing request")
+			f := submit(t, root, inputDraft("f"))
+			release()
+			waitFor(t, input)
+			must(t, h.WaitForIdle(bg))
+			g := submit(t, root, inputDraft("g"))
+			want := "queued"
+			if mode == QueueAll {
+				want = "placed"
+			}
+			submits := spansNamed(recorder, SpanSubmit)
+			if got := submits[len(submits)-1].Attributes["result"]; got != want {
+				t.Fatalf("result of g = %v, want %s", got, want)
+			}
+			waitFor(t, f)
+			waitFor(t, g)
+		})
+	}
+}
+
+// A repeated request ID reports its submission's status; unanswered is
+// reported done, as a stale write is.
+func TestTelemetryReportsADuplicatesUnansweredSubmissionDone(t *testing.T) {
+	setup, recorder := trackedSetup(t)
+	_, root := openChat(t, memory.New(), setup)
+	old := appendPlainNote(t, root)
+	reset(t, root, nil)
+	draft := headWrite("summary", old.ID)
+	draft.RequestID = "stale"
+	// A write's span is a child of its caller's.
+	must(t, recorder.StartSpan(telemetry.SpanOptions{Name: "caller"}, func(span telemetry.Span) error {
+		ctx := telemetry.WithSpan(bg, span)
+		first, err := root.Submit(ctx, draft)
+		must(t, err)
+		expectUnanswered(t, "stale", waitFor(t, first), "stale")
+		_, err = root.Submit(ctx, draft)
+		return err
+	}))
+	var results []any
+	for _, span := range spansNamed(recorder, SpanSubmit) {
+		results = append(results, span.Attributes["result"])
+	}
+	equalValues(t, "results", results, []any{"done", "done"})
+}
+
+// A queued submission is not settled: its admission commit emits no
+// settlement event.
+func TestTelemetryEmitsNoSettlementEventForAQueuedSubmission(t *testing.T) {
+	setup, recorder := trackedSetup(t)
+	first, reached, release := gatedStep(fauxAnswer("first"))
+	setup.faux.SetResponses([]providers.FauxResponseStep{first})
+	_, root := openChat(t, memory.New(), setup)
+	input := submit(t, root, inputDraft("a"))
+	awaitSignal(t, reached, "the first request")
+	must(t, recorder.StartSpan(telemetry.SpanOptions{Name: "caller"}, func(span telemetry.Span) error {
+		_, err := root.Submit(telemetry.WithSpan(bg, span), queuedNote("w"))
+		return err
+	}))
+	var write telemetry.RecordedSpan
+	for _, span := range spansNamed(recorder, SpanSubmit) {
+		if span.Attributes["submission.type"] == durable.SubmissionTypeWrite {
+			write = span
+		}
+	}
+	if write.Attributes["result"] != "queued" {
+		t.Fatalf("write result = %v, want queued", write.Attributes["result"])
+	}
+	for _, event := range write.Events {
+		if event.Name == EventSubmission {
+			t.Fatalf("a queued write emitted %v", event)
+		}
+	}
+	release()
+	waitFor(t, input)
+}
+
+// A task's creation-time links belong to its first invocation: after a
+// reopen, the next invocation's phases carry none.
+func TestTelemetryLinksATasksCreationLinksToItsFirstInvocationOnly(t *testing.T) {
+	setup, recorder := trackedSetup(t)
+	storage := newControlledStorage()
+	var recover atomic.Bool
+	reached := make(chan struct{})
+	var once sync.Once
+	task := oneStep(t, "test.links", func(ctx context.Context, _ *stepTask, rt *TaskRuntime) error {
+		if !recover.Load() {
+			once.Do(func() { close(reached) })
+			<-ctx.Done()
+			return ctx.Err()
+		}
+		return rt.Commit(ctx, completeWith(nil))
+	}, nil)
+	installTask(t, setup, task)
+	h, root := openChat(t, storage, setup)
+	var target telemetry.Carrier
+	must(t, recorder.StartSpan(telemetry.SpanOptions{Name: "target"}, func(span telemetry.Span) error {
+		target = recorder.Inject(span)
+		return nil
+	}))
+	var id durable.TaskID
+	must(t, root.Commit(bg, func(tx *durable.Tx) error {
+		var err error
+		id, err = CreateTask[any](tx, task, nil, durable.TaskOptions{Ownership: durable.TaskOwnership{Kind: durable.OwnershipConversation}, Links: []telemetry.Carrier{target}})
+		return err
+	}))
+	must(t, h.Resume())
+	awaitSignal(t, reached, "the first invocation")
+	must(t, h.Close(bg))
+	recover.Store(true)
+	h, _ = openChat(t, storage.reopen(), setup)
+	_, err := h.WaitForTask(bg, id)
+	must(t, err)
+	allSettled(t, recorder)
+	var links [][]telemetry.RecordedLink
+	for _, span := range spansNamed(recorder, SpanPhase) {
+		links = append(links, span.Links)
+	}
+	equalValues(t, "phase links", links, [][]telemetry.RecordedLink{{{Context: target, Attributes: telemetry.SpanAttributes{}}}, {}})
+}
+
+// Every phase records one duration, with fixed fields only (pi checks this
+// in its content-free case, which waits for the tool slice).
+func TestTelemetryRecordsOneDurationPerPhaseWithoutIDs(t *testing.T) {
+	setup, recorder := trackedSetup(t)
+	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText("answer")})
+	h, root := openChat(t, memory.New(), setup)
+	waitFor(t, submit(t, root, inputDraft("input")))
+	must(t, h.WaitForIdle(bg))
+	allSettled(t, recorder)
+	phases := spansNamed(recorder, SpanPhase)
+	durations := measurementsNamed(recorder, MetricPhaseDuration)
+	if len(phases) == 0 || len(durations) != len(phases) {
+		t.Fatalf("durations = %d, phases = %d", len(durations), len(phases))
+	}
+	for _, m := range recorder.Measurements() {
+		for key := range m.Attributes {
+			if strings.Contains(key, "id") {
+				t.Fatalf("metric %s carries %s", m.Name, key)
+			}
+		}
+	}
+}
+
 // TelemetrySchema marshals as pi's DURABLE_TELEMETRY_SCHEMA does (spot
 // checks; the definition is data, so a key or value a schema reader needs is
 // what may not drift).

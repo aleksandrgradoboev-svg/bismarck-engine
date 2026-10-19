@@ -442,13 +442,15 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    Adapted: the trace-inheritance case matches phases by task, as its two tasks run concurrently;
    the admission case checks Storage reads and results, as a span's propagation is the adapter's
    own and cannot be spied on through the root. Added: traces surviving a reopened JSONL Storage.
-   Sabotage 32 of 45. Expected or equivalent: the steer link and the phase duration (slice 2),
-   the provider request span (pi-ai's request telemetry is not ported), events only with
-   listeners (a Harness always listens), copying an immutable trace in `Clone`, the explicit ok of
-   an aborted phase (its callback never fails). No case of pi's checks: the settlement event of a
-   queued submission, the context of a Session failure and of an outdated report, a traceless
-   first input starting a root run, a duplicate's unanswered result reported done, the placed or
-   queued result behind a boundary, links on a later invocation.
+   Added beyond pi, for mechanisms no case of pi's checks: a traceless first input starting a
+   root run, the placed or queued result behind a boundary, a duplicate's unanswered result
+   reported done, no settlement event for a queued submission, creation links on the first
+   invocation only, and one duration per phase without IDs (pi checks this in its content-free
+   case, which waits for slice 2). Sabotage 38 of 45. Expected or equivalent: the steer link
+   (slice 2), the provider request span (pi-ai's request telemetry is not ported), events only
+   with listeners (a Harness always listens), copying an immutable trace in `Clone`, the explicit
+   ok of an aborted phase (its callback never fails). Unchecked, as in pi: the context of a
+   Session failure inside a step and of an outdated report.
 
 ## 5. Bookkeeping
 
