@@ -392,6 +392,29 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    uncovered: the postTools boundary (slice 2), data-only writes while busy
    (`harness-input-entries`) and the outcome cleanup (slice 1 (d)).
 
+   **Telemetry contract** (snapshot moves to `d2e7d8b7`, 2026-10-19; pi `48909d98` and the
+   contract part of `2ec55d80`): `telemetry` gains propagation (`Carrier`, `Propagation`), span
+   links (`SpanLink`, `SpanOptions.Links`, `Span.AddLink`), metrics (`Counter`, `UpDownCounter`,
+   `Histogram` with an exemplar context, `Metrics`, `NoopMetrics`), schema data
+   (`SchemaDefinition` and its parts, marshalling as pi's objects) and `NewTypedMetrics` for
+   `createTypedMetrics`. pi's optional `metrics` and `propagation` properties are the optional
+   interfaces `MetricsCapable` and `PropagationCapable`, read through `MetricsOf` and
+   `PropagationOf`, so an adapter without them still implements `Context`. `NoopContext` is now
+   `NoopSpan`, carrying the no-op capabilities. pi's chord `Context.telemetry` ("always a span")
+   is a `context.Context` value: `WithSpan`, `SpanFrom` (`NoopSpan` when unset) and `TraceIn`.
+   `InMemoryContext` records carriers (`pi-memory-scope`/`pi-memory-span`), parent carriers,
+   links and measurements (`Measurements`, pi's `getMetrics`); a child of a settled span runs on
+   an inert span that keeps the adapter's capabilities. The adapter conformance suite is
+   `telemetry/telemetrytest` (`TestAdapter`). Not ported: the TypeScript inference over schemas
+   and `createTypedSpanStarter` (compile-time typing), and every case built on unreadable
+   payloads (proxies that throw on read; a Go value cannot). Adapted: the "another Node process"
+   propagation case feeds the JSON carrier to a second recorder, as what it checks is that no
+   recorder state is shared; a returned error and a panic stand in for pi's rejection and throw.
+   Strengthened: the detached-carrier case compares with a copy taken before the mutation — in
+   pi's form a carrier shared between injections compares equal to itself. Added beyond pi: the
+   local parent ID of an extracted carrier of the recorder's own span, which no case of pi's
+   checks. Sabotage 30 of 30. CI runs `./telemetry/...` under the race detector.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
