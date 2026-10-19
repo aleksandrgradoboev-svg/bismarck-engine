@@ -70,8 +70,9 @@ func replaySections(messages []ai.Message) *ordered[string] {
 // renderSections renders the agent's sections in order. An omitted section is
 // left out; tagged text is wrapped as "<key>\n...\n</key>". A section that
 // fails keeps its shown text, if any, and is reported; failures after ctx is
-// cancelled propagate.
-func renderSections(ctx context.Context, sections []*PromptSection, input PromptInput, shown *ordered[string], report func(error)) (*ordered[string], error) {
+// cancelled propagate. report gets the failing section, whose extension the
+// caller knows.
+func renderSections(ctx context.Context, sections []*PromptSection, input PromptInput, shown *ordered[string], report func(error, *PromptSection)) (*ordered[string], error) {
 	desired := newOrdered[string]()
 	for _, section := range sections {
 		text, ok, err := renderSection(ctx, section, input)
@@ -79,7 +80,7 @@ func renderSections(ctx context.Context, sections []*PromptSection, input Prompt
 			if ctx.Err() != nil {
 				return nil, err
 			}
-			report(err)
+			report(err, section)
 			if kept, ok := shown.get(section.Key); ok {
 				desired.set(section.Key, kept)
 			}

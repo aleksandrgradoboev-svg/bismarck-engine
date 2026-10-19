@@ -56,7 +56,7 @@ func (s *scheduler) wakeLocked() Wake {
 				var err error
 				if snapshot, err = s.snapshotSafely(); err != nil {
 					snapshotFailed = true
-					s.reportLocked(err)
+					s.reportLocked(err, registryError)
 				}
 			}
 			if snapshot != nil {
@@ -165,7 +165,7 @@ func (s *scheduler) deliverWake() {
 	// Only a delivered wake counts: after a panic, the next change or pass
 	// offers it again.
 	if err := s.callHost(func() { s.onWake(wake) }); err != nil {
-		s.report(err)
+		s.report(err, onWakeError)
 		return
 	}
 	s.lastWake = &wake
@@ -180,7 +180,7 @@ func (s *scheduler) armSleepTimer(at time.Time) {
 	}
 	if s.timer != nil {
 		if err := s.callHost(s.timer.disarm); err != nil {
-			s.report(err)
+			s.report(err, setTimerError)
 		}
 		s.timer = nil
 		s.timerArmed.Store(false)

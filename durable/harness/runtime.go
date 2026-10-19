@@ -372,12 +372,31 @@ func (rt *TaskRuntime) Now() (time.Time, error) {
 	return rt.s.now(), nil
 }
 
-// Report forwards a non-fatal failure to Options.OnReport.
-func (rt *TaskRuntime) Report(err error) error {
+// ReportFrom says whose code a TaskRuntime.Report is about when not the
+// task's own: an extension's (Extension, when known), or a host callback's
+// (Callback, one of the durable.Callback names).
+type ReportFrom struct {
+	Extension string
+	Callback  string
+}
+
+// Report forwards a non-fatal failure to Options.OnReport: a task_error of
+// this task, or, with from, an extension_error or a host_error (when from
+// names a Callback) with this task.
+func (rt *TaskRuntime) Report(err error, from ...ReportFrom) error {
 	if e := rt.check(); e != nil {
 		return e
 	}
-	rt.s.report(err)
+	task, extension := aboutTask(rt.inv)
+	info := taskReport(durable.ReportTaskError, task, extension, "")
+	if len(from) > 0 {
+		if from[0].Callback != "" {
+			info = durable.HostError(from[0].Callback, task)
+		} else {
+			info = durable.ReportInfo{Type: durable.ReportExtensionError, Task: task, Extension: from[0].Extension}
+		}
+	}
+	rt.s.report(err, info)
 	return nil
 }
 
@@ -505,8 +524,8 @@ func EachHook[H any](ctx context.Context, rt *TaskRuntime, invoke func(handlers 
 	if err != nil {
 		return err
 	}
-	for _, handlers := range agentHooks(agent, rt.phase.task().Name()) {
-		typed, ok := handlers.(H)
+	for _, hooks := range agentHooks(agent, rt.phase.task().Name()) {
+		typed, ok := hooks.handlers.(H)
 		if !ok {
 			continue
 		}
@@ -524,7 +543,8 @@ func EachHook[H any](ctx context.Context, rt *TaskRuntime, invoke func(handlers 
 		if rt.inv.ctx.Err() != nil {
 			return err
 		}
-		rt.s.report(err)
+		task, _ := aboutTask(rt.inv)
+		rt.s.report(err, durable.ReportInfo{Type: durable.ReportExtensionError, Extension: hooks.extension, Task: task})
 	}
 	return nil
 }

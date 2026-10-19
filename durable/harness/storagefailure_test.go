@@ -434,7 +434,7 @@ func TestStorageFailureEndsAnAbortJoiningARunThatIgnoresItsSignal(t *testing.T) 
 	var h *Harness
 	var reentered <-chan result[struct{}]
 	var once sync.Once
-	h, err := Open(bg, storage, Options{Registry: registry, OnReport: func(error) {
+	h, err := Open(bg, storage, Options{Registry: registry, OnReport: func(error, durable.ReportInfo) {
 		once.Do(func() {
 			reentered = async(func() (struct{}, error) { return struct{}{}, h.WaitForIdle(bg) })
 		})
@@ -567,7 +567,10 @@ func TestListenersFaultOnlyTheTaskAndEndOnlyTheWatchForAnOddPanicValue(t *testin
 func TestListenersReportAPanickingClockOnceAlsoWhenTheReportReadsTheClockAgain(t *testing.T) {
 	var reports []error
 	var clock func() time.Time
-	clock = safeNow(func() time.Time { panic(errors.New("clock broke")) }, func(err error) {
+	clock = safeNow(func() time.Time { panic(errors.New("clock broke")) }, func(err error, info durable.ReportInfo) {
+		if info != durable.HostError(durable.CallbackNow, nil) {
+			t.Errorf("info = %+v", info)
+		}
 		reports = append(reports, err)
 		// Reentry, as a handler that commits does: the clock is read again
 		// before this report returns.
@@ -592,7 +595,7 @@ func TestListenersKeepWorkingWhenOnReportPanicsAndFallBackWhenTheClockPanics(t *
 	h, err := Open(bg, memory.New(), Options{
 		Registry: registry,
 		Now:      func() time.Time { panic(errors.New("clock broke")) },
-		OnReport: func(error) { panic(errors.New("report broke")) },
+		OnReport: func(error, durable.ReportInfo) { panic(errors.New("report broke")) },
 	})
 	must(t, err)
 	t.Cleanup(func() { closeSoon(t, h) })

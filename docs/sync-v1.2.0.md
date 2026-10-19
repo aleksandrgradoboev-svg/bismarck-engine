@@ -303,6 +303,22 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    one deadline). The restart count, typed reports and the close write-back follow in their own
    changes.
 
+   **Catch-up to pi `1402973a`, typed reports** (`91b33cab`, with the report sources of
+   `a30c2a81`, `440a5fcd`, `5ba1cbaf`): `OnReport` and `SessionHooks.Report` take a
+   `durable.ReportInfo`. pi's discriminated union is one flat struct whose `Type` decides which of
+   `Task`, `Extension`, `ConversationID`, `Reason` and `Callback` are set; its JSON keys are pi's.
+   Task reports name the extension that installed the definition, captured at reservation; a
+   phase's failure is reported as `task_faulted` once durable. `TaskRuntime.Report` takes an
+   optional `ReportFrom` for pi's `from`. `agentHooks` pairs handlers with their extension, and
+   `renderSections` hands the failing section to its caller, as in pi; `sectionExtension` and
+   `toolExtension` come with generation and tools, which use them. `task_outdated` carries its
+   cause in `Reason`. Tests: `harness-reports` without its generation case, which comes with
+   generation; the typed checks pi added to two handover cases and to agent hooks. Added: a
+   task's report sources and a failing hook's extension (pi covers them through tools and
+   generation), and both the Session's and the scheduler's timer failures in the timer case,
+   whose first report alone hid the scheduler's. n/a: an installer among several extensions that
+   list one task, which the registry refuses.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

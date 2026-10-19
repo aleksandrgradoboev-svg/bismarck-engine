@@ -189,8 +189,8 @@ func TestPromptRendersSectionsInOrderWithTagsOmissionsWrappersAndFailures(t *tes
 	}}))
 	var reports []error
 	shown := desiredOf("failing", "<failing>\nold\n</failing>", "cwd", "stale")
-	agent := resolveAgent(nil, registry.Snapshot(), resolveSettings(HarnessSettings{}), func(err error) { t.Fatal(err) })
-	desired, err := renderSections(bg, agent.Sections, promptInput, shown, func(err error) { reports = append(reports, err) })
+	agent := resolveAgent(nil, registry.Snapshot(), resolveSettings(HarnessSettings{}), func(err error, _ string) { t.Fatal(err) })
+	desired, err := renderSections(bg, agent.Sections, promptInput, shown, func(err error, _ *PromptSection) { reports = append(reports, err) })
 	must(t, err)
 	want := []string{"preamble", "You are helpful.", "cwd", "<cwd>\n/repo (git)\n</cwd>", "failing", "<failing>\nold\n</failing>"}
 	if got := pairsOf(desired); !reflect.DeepEqual(got, want) {
@@ -205,7 +205,7 @@ func TestPromptPropagatesSectionErrorsAfterCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(bg)
 	cancel()
 	failing := Section("a", func(context.Context, PromptInput) (string, bool, error) { return "", false, errors.New("cancelled") })
-	_, err := renderSections(ctx, []*PromptSection{failing}, promptInput, newOrdered[string](), func(error) { t.Fatal("reported") })
+	_, err := renderSections(ctx, []*PromptSection{failing}, promptInput, newOrdered[string](), func(error, *PromptSection) { t.Fatal("reported") })
 	if err == nil || err.Error() != "cancelled" {
 		t.Fatalf("err = %v, want cancelled", err)
 	}

@@ -292,14 +292,20 @@ func createAgent(tx *durable.Tx, conversation durable.ConversationRecord) error 
 	return nil
 }
 
+// extensionHooks are one selected extension's handlers of a task's hooks.
+type extensionHooks struct {
+	extension string
+	handlers  any
+}
+
 // agentHooks returns the handlers of the selected extensions' hooks for a
-// task name, in extension order.
-func agentHooks(agent *Agent, taskName string) []any {
-	var handlers []any
+// task name, in extension order, each with its extension's name.
+func agentHooks(agent *Agent, taskName string) []extensionHooks {
+	var handlers []extensionHooks
 	for _, extension := range agent.Extensions {
 		for _, hook := range extension.Hooks {
 			if hook.Task == taskName {
-				handlers = append(handlers, hook.Handlers)
+				handlers = append(handlers, extensionHooks{extension: extension.Name, handlers: hook.Handlers})
 			}
 		}
 	}
@@ -309,8 +315,9 @@ func agentHooks(agent *Agent, taskName string) []any {
 // resolveAgent resolves an agent from its stored state (nil: every field
 // unset), a registry snapshot, and resolved settings. A wrapper that fails or
 // renames drops its target and is reported; a wrapper without a target does
-// nothing.
-func resolveAgent(state *AgentState, snapshot *RegistrySnapshot, settings Settings, report func(error)) *Agent {
+// nothing. report gets a wrapper's failure with the name of the wrapper's
+// extension.
+func resolveAgent(state *AgentState, snapshot *RegistrySnapshot, settings Settings, report func(err error, extension string)) *Agent {
 	if state == nil {
 		state = &AgentState{}
 	}
@@ -329,11 +336,13 @@ func resolveAgent(state *AgentState, snapshot *RegistrySnapshot, settings Settin
 		}
 	}
 	for _, extension := range extensions {
+		name := extension.Name
+		wrapReport := func(err error) { report(err, name) }
 		for _, wrap := range extension.Wraps {
 			if wrap.wrapT != nil {
-				applyWrap(tools, wrap.tool, wrap.wrapT, toolName, report)
+				applyWrap(tools, wrap.tool, wrap.wrapT, toolName, wrapReport)
 			} else if wrap.wrapS != nil {
-				applyWrap(sections, wrap.section, wrap.wrapS, func(s *PromptSection) string { return s.Key }, report)
+				applyWrap(sections, wrap.section, wrap.wrapS, func(s *PromptSection) string { return s.Key }, wrapReport)
 			}
 		}
 	}

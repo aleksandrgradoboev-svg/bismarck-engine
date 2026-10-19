@@ -69,8 +69,10 @@ type Options struct {
 	OnWake func(Wake)
 	// OnReport receives failures that do not fail the calling operation, such
 	// as a failing hook or listener, and the error that fails the Session,
-	// once. Its own panic is dropped.
-	OnReport func(error)
+	// once; info says where each came from. A host acts on reports outside
+	// the scheduler, for example counting faults of one task kind toward a
+	// breaker. Its own panic is dropped.
+	OnReport func(error, durable.ReportInfo)
 }
 
 // ConversationInit runs inside the creating commit, after the creation hook
@@ -94,7 +96,7 @@ type ConversationCreateOptions struct {
 type Harness struct {
 	*durable.Session
 	options Options
-	report  func(error)
+	report  func(error, durable.ReportInfo)
 	tasks   *scheduler
 }
 
@@ -143,8 +145,10 @@ func Open(ctx context.Context, storage durable.Storage, options Options) (*Harne
 		env:      h.buildEnv,
 		now:      now,
 		onWake:   options.OnWake,
-		timers:   durable.HostTimers(options.SetTimer, h.report),
-		report:   h.report,
+		timers: durable.HostTimers(options.SetTimer, func(err error) {
+			h.report(err, durable.HostError(durable.CallbackSetTimer, nil))
+		}),
+		report: h.report,
 		// pi.live and pi.inbox come with the submissions stage, and with them
 		// the cleanup of a scheduler outcome and the withdrawal of queued
 		// inputs.
@@ -299,7 +303,9 @@ func (h *Harness) resolveAgent(ctx context.Context, id durable.ConversationID, s
 			return nil, err
 		}
 	}
-	return resolveAgent(state, snapshot, h.settings(), h.report), nil
+	return resolveAgent(state, snapshot, h.settings(), func(err error, extension string) {
+		h.report(err, durable.ReportInfo{Type: durable.ReportExtensionError, ConversationID: id, Extension: extension})
+	}), nil
 }
 
 // buildEnv builds a conversation's environment from its current Cwd; nil
@@ -505,20 +511,20 @@ func (c *Conversation) Fork(ctx context.Context, at durable.EntryID, options Con
 
 // safeReport returns an OnReport that cannot fail: it is the last place an
 // error goes, so its own panic is dropped.
-func safeReport(onReport func(error)) func(error) {
-	return func(err error) {
+func safeReport(onReport func(error, durable.ReportInfo)) func(error, durable.ReportInfo) {
+	return func(err error, info durable.ReportInfo) {
 		if onReport == nil {
 			return
 		}
 		defer func() { _ = recover() }()
-		onReport(err)
+		onReport(err, info)
 	}
 }
 
 // safeNow returns the host clock, falling back to time.Now when it panics: a
 // broken clock must not stop commits. The first panic is reported; the clock
 // is read in every task change, so later ones are not.
-func safeNow(now func() time.Time, report func(error)) func() time.Time {
+func safeNow(now func() time.Time, report func(error, durable.ReportInfo)) func() time.Time {
 	if now == nil {
 		return time.Now
 	}
@@ -529,7 +535,7 @@ func safeNow(now func() time.Time, report func(error)) func() time.Time {
 				// Set first: a report handler that reads the clock again must not
 				// report again.
 				if reported.CompareAndSwap(false, true) {
-					report(panicError(r))
+					report(panicError(r), durable.HostError(durable.CallbackNow, nil))
 				}
 				t = time.Now()
 			}

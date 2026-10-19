@@ -192,11 +192,13 @@ func (s *controlledStorage) lastTaskWrites() []durable.TaskRecord {
 type reportLog struct {
 	mu      sync.Mutex
 	reports []error
+	infos   []durable.ReportInfo
 }
 
-func (r *reportLog) add(err error) {
+func (r *reportLog) add(err error, info durable.ReportInfo) {
 	r.mu.Lock()
 	r.reports = append(r.reports, err)
+	r.infos = append(r.infos, info)
 	r.mu.Unlock()
 }
 
@@ -204,6 +206,24 @@ func (r *reportLog) all() []error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]error(nil), r.reports...)
+}
+
+func (r *reportLog) allInfos() []durable.ReportInfo {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]durable.ReportInfo(nil), r.infos...)
+}
+
+// infoOf is the info of the first report with message, if any.
+func (r *reportLog) infoOf(message string) (durable.ReportInfo, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, err := range r.reports {
+		if err.Error() == message {
+			return r.infos[i], true
+		}
+	}
+	return durable.ReportInfo{}, false
 }
 
 // stepState is the checkpoint of a one-phase task.
