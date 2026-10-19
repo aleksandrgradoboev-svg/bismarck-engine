@@ -619,7 +619,14 @@ type HarnessSettings struct {
 	// document state observes stays in memory after its last use. Default
 	// ten minutes; 0 drops one right after use; a very long one keeps them.
 	DocumentRetention *time.Duration
+	// RestartLimit is how many restarts in a row without progress park a
+	// task (spec §5.4); default DefaultRestartLimit, negative never parks
+	// (pi's Infinity).
+	RestartLimit *int
 }
+
+// DefaultRestartLimit is the restarts in a row after which a task is parked.
+const DefaultRestartLimit = 5
 
 // Settings is the resolved settings: every field over its built-in default.
 type Settings struct {
@@ -633,6 +640,8 @@ type Settings struct {
 	FollowUpMode      QueueMode
 	ContextRetention  time.Duration
 	DocumentRetention time.Duration
+	// RestartLimit is negative when tasks are never parked.
+	RestartLimit int
 }
 
 // The built-in defaults.
@@ -699,5 +708,6 @@ func resolveSettings(s HarnessSettings) Settings {
 		FollowUpMode:      orMode(s.FollowUpMode, QueueOneAtATime),
 		ContextRetention:  pick(s.ContextRetention, defaultRetention),
 		DocumentRetention: documentRetention,
+		RestartLimit:      pickInt(s.RestartLimit, DefaultRestartLimit),
 	}
 }

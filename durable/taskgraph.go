@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"maps"
 	"reflect"
 	"slices"
 	"strconv"
@@ -41,6 +42,10 @@ type TaskGraphNode struct {
 	State          TaskGraphState `json:"state"`
 	// Conversations are the conversations the task owns, in ID order.
 	Conversations []ConversationID `json:"conversations"`
+	// Blocked is why the task cannot run here, when it cannot:
+	// missing_task, task_too_old, migration_failed or restart_limit. It
+	// follows registry changes.
+	Blocked string `json:"blocked,omitempty"`
 }
 
 // TaskGraphState is a live task's durable status without its checkpoint and
@@ -129,6 +134,14 @@ func (s *Session) taskGraphView() *taskGraphView {
 		// A Session already closing rejects these; attach then finds it
 		// unhealthy.
 		_, _ = s.ObserveCommits(func(publication CommitPublication, ctx context.Context) { v.advance(publication, ctx) })
+		if b := s.hooks.TaskGraphBlocking; b != nil && b.Subscribe != nil {
+			// Reasons that change without a commit are derived again on the
+			// line, so they fall between commits as in pi.
+			unsubscribe := b.Subscribe(func() {
+				go func() { _ = s.enqueue(false, func() error { v.refreshBlocked(); return nil }) }()
+			})
+			v.unsubscribe = unsubscribe
+		}
 		_, _ = s.SubscribeClose(v.close)
 		s.taskGraph = v
 	})
@@ -143,11 +156,89 @@ type taskGraphView struct {
 	mu     sync.Mutex
 	mount  *taskGraphMount
 	closed bool
+	// unsubscribe ends the subscription to blocked reason changes.
+	unsubscribe func()
+}
+
+// refreshBlocked derives every node's blocked reason again, on the line, and
+// publishes the ones that changed.
+func (v *taskGraphView) refreshBlocked() {
+	v.mu.Lock()
+	mount := v.mount
+	if mount == nil || v.closed {
+		v.mu.Unlock()
+		return
+	}
+	tasks := mount.value["tasks"].(map[string]any)
+	keys := slices.Sorted(maps.Keys(mount.subjects))
+	var ops []delta.Op
+	for _, key := range keys {
+		blocked := v.blocked(mount.subjects[key])
+		node, _ := tasks[key].(map[string]any)
+		if node == nil {
+			continue
+		}
+		current, _ := node["blocked"].(string)
+		if blocked == current {
+			continue
+		}
+		path := delta.Path{delta.Key("tasks"), delta.Key(key), delta.Key("blocked")}
+		if blocked == "" {
+			ops = append(ops, delta.Delete{Path: path})
+		} else {
+			ops = append(ops, delta.Set{Path: path, Value: blocked})
+		}
+	}
+	v.publishLocked(mount, ops, context.Background())
+}
+
+// publishLocked applies ops to the mount and hands the revision to every
+// observer, releasing v.mu; nothing happens without ops.
+func (v *taskGraphView) publishLocked(mount *taskGraphMount, ops []delta.Op, ctx context.Context) {
+	if len(ops) == 0 {
+		v.mu.Unlock()
+		return
+	}
+	value, err := delta.ApplyImmutable(mount.value, ops)
+	if err != nil {
+		v.mu.Unlock()
+		v.s.report(err)
+		return
+	}
+	mount.value = value
+	observers := slices.Clone(mount.observers)
+	v.mu.Unlock()
+	frame := context.WithoutCancel(ctx)
+	for _, observer := range observers {
+		contained(func() { observer.Advance(frame, value, ops) }, v.s.report)
+	}
 }
 
 type taskGraphMount struct {
 	value     map[string]any
 	observers []Observer
+	// subjects keep what the blocked reason reads of each live task, so a
+	// registry change can derive it again without payloads.
+	subjects map[string]TaskRecord
+}
+
+// blockedSubject is the part of a record the blocked reason reads.
+func blockedSubject(record TaskRecord) TaskRecord {
+	return TaskRecord{
+		ID: record.ID, Kind: record.Kind, Version: record.Version,
+		AbortRequested: record.AbortRequested, AbortReason: record.AbortReason,
+		Restarts: record.Restarts, State: TaskState{Status: record.State.Status},
+	}
+}
+
+// blocked is a live task's blocked reason, or "" without a deriver.
+func (v *taskGraphView) blocked(record TaskRecord) string {
+	if b := v.s.hooks.TaskGraphBlocking; b != nil && b.Blocked != nil {
+		var reason string
+		contained(func() { reason = b.Blocked(record) }, v.s.report)
+		return reason
+	}
+	return ""
 }
 
 // attach registers an observer created from the current revision, on the
@@ -160,11 +251,11 @@ func (v *taskGraphView) attach(ctx context.Context, create func(value map[string
 	mount := v.mount
 	v.mu.Unlock()
 	if mount == nil {
-		value, err := v.build(ctx)
+		value, subjects, err := v.build(ctx)
 		if err != nil {
 			return nil, err
 		}
-		mount = &taskGraphMount{value: value}
+		mount = &taskGraphMount{value: value, subjects: subjects}
 	}
 	var observer Observer
 	detach := func() {
@@ -204,14 +295,14 @@ var liveStatuses = []string{TaskPending, TaskRunning, TaskWaiting, TaskSleeping,
 
 const taskGraphPageSize = 256
 
-func (v *taskGraphView) build(ctx context.Context) (map[string]any, error) {
+func (v *taskGraphView) build(ctx context.Context) (map[string]any, map[string]TaskRecord, error) {
 	var records []TaskRecord
 	for _, status := range liveStatuses {
 		var cursor Cursor
 		for {
 			page, err := v.s.storage.ScanTasks(ctx, TaskQuery{Status: status}, taskGraphPageSize, cursor)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			records = append(records, page.Items...)
 			if page.Next == nil {
@@ -222,6 +313,7 @@ func (v *taskGraphView) build(ctx context.Context) (map[string]any, error) {
 	}
 	slices.SortFunc(records, func(a, b TaskRecord) int { return cmp.Compare(a.ID, b.ID) })
 	tasks := map[string]any{}
+	subjects := map[string]TaskRecord{}
 	for _, record := range records {
 		var owned []ConversationID
 		var cursor Cursor
@@ -229,7 +321,7 @@ func (v *taskGraphView) build(ctx context.Context) (map[string]any, error) {
 		for {
 			page, err := v.s.storage.ScanConversations(ctx, ConversationQuery{OwnerTaskID: &id}, taskGraphPageSize, cursor)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			for _, conversation := range page.Items {
 				owned = append(owned, conversation.ID)
@@ -240,9 +332,11 @@ func (v *taskGraphView) build(ctx context.Context) (map[string]any, error) {
 			cursor = page.Next
 		}
 		slices.Sort(owned)
-		tasks[graphKey(record.ID)] = nodeValue(record, conversationValues(owned))
+		subject := blockedSubject(record)
+		subjects[graphKey(record.ID)] = subject
+		tasks[graphKey(record.ID)] = nodeValue(record, conversationValues(owned), v.blocked(subject))
 	}
-	return map[string]any{"tasks": tasks}, nil
+	return map[string]any{"tasks": tasks}, subjects, nil
 }
 
 // advance derives the mount's operations from one publication, applies them,
@@ -280,13 +374,16 @@ func (v *taskGraphView) advance(publication CommitPublication, ctx context.Conte
 			}
 			ops = append(ops, delta.Delete{Path: delta.Path{delta.Key("tasks"), delta.Key(key)}})
 			changed[key] = nil
+			delete(mount.subjects, key)
 			continue
 		}
 		conversations := []any{}
 		if previous != nil {
 			conversations = previous["conversations"].([]any)
 		}
-		next := nodeValue(record, conversations)
+		subject := blockedSubject(record)
+		mount.subjects[key] = subject
+		next := nodeValue(record, conversations, v.blocked(subject))
 		if previous != nil && reflect.DeepEqual(next, previous) {
 			continue
 		}
@@ -321,29 +418,18 @@ func (v *taskGraphView) advance(publication CommitPublication, ctx context.Conte
 		slices.Sort(ids)
 		ops = append(ops, delta.Set{Path: delta.Path{delta.Key("tasks"), delta.Key(key), delta.Key("conversations")}, Value: conversationValues(ids)})
 	}
-	if len(ops) == 0 {
-		v.mu.Unlock()
-		return
-	}
-	value, err := delta.ApplyImmutable(mount.value, ops)
-	if err != nil {
-		v.mu.Unlock()
-		v.s.report(err)
-		return
-	}
-	mount.value = value
-	observers := slices.Clone(mount.observers)
-	v.mu.Unlock()
-	frame := context.WithoutCancel(ctx)
-	for _, observer := range observers {
-		contained(func() { observer.Advance(frame, value, ops) }, v.s.report)
-	}
+	v.publishLocked(mount, ops, ctx)
 }
 
 // close ends every observer as the Session closes.
 func (v *taskGraphView) close() {
 	v.mu.Lock()
 	v.closed = true
+	if v.unsubscribe != nil {
+		unsubscribe := v.unsubscribe
+		v.unsubscribe = nil
+		defer contained(unsubscribe, v.s.report)
+	}
 	var observers []Observer
 	if v.mount != nil {
 		observers = slices.Clone(v.mount.observers)
@@ -366,7 +452,7 @@ func conversationValues(ids []ConversationID) []any {
 	return out
 }
 
-func nodeValue(record TaskRecord, conversations []any) map[string]any {
+func nodeValue(record TaskRecord, conversations []any, blocked string) map[string]any {
 	node := map[string]any{
 		"id":             float64(record.ID),
 		"kind":           record.Kind,
@@ -378,6 +464,9 @@ func nodeValue(record TaskRecord, conversations []any) map[string]any {
 	}
 	if record.Owner != nil {
 		node["owner"] = float64(*record.Owner)
+	}
+	if blocked != "" {
+		node["blocked"] = blocked
 	}
 	return node
 }

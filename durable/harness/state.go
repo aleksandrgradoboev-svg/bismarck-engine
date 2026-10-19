@@ -65,18 +65,30 @@ func Fail(message string) *durable.TaskState {
 func withState(record durable.TaskRecord, state durable.TaskState) durable.TaskRecord {
 	record = record.Clone()
 	record.State = state
+	// Memos and the restart count disappear once an outcome is decided.
 	if state.Status == durable.TaskTerminal || state.Status == durable.TaskCompleting {
 		record.Memos = nil
+		record.Restarts = 0
 	}
 	return record
 }
 
+// progressed returns the record without its restart count, as after a state
+// the task committed.
+func progressed(record durable.TaskRecord) durable.TaskRecord {
+	record = record.Clone()
+	record.Restarts = 0
+	return record
+}
+
 // withAbortMark returns the record with an abort mark: "restart" for an
-// abandonment; without a reason, a request, which replaces "restart".
+// abandonment; without a reason, a request, which replaces "restart". The
+// restart count starts over: it now counts cut-offs of the abort handler.
 func withAbortMark(record durable.TaskRecord, reason string) durable.TaskRecord {
 	record = record.Clone()
 	record.AbortRequested = true
 	record.AbortReason = reason
+	record.Restarts = 0
 	return record
 }
 

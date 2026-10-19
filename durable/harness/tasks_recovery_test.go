@@ -91,6 +91,13 @@ func (c *crashable) open(t *testing.T, tasks []Task) opened {
 // one closes first.
 func (c *crashable) crash(t *testing.T, dead opened, tasks []Task) opened {
 	t.Helper()
+	return c.crashWith(t, dead, tasks, openOptions{})
+}
+
+// crashWith is crash with the new Harness's options; their storage is the
+// new process.
+func (c *crashable) crashWith(t *testing.T, dead opened, tasks []Task, options openOptions) opened {
+	t.Helper()
 	c.mu.Lock()
 	c.current.dead.Store(true)
 	held := c.commitGate
@@ -104,7 +111,8 @@ func (c *crashable) crash(t *testing.T, dead opened, tasks []Task) opened {
 		closeSoon(t, dead.h)
 	})
 	c.current = &process{controlledStorage: c.controlledStorage}
-	recovered := openRoot(t, tasks, openOptions{storage: c.current})
+	options.storage = c.current
+	recovered := openRoot(t, tasks, options)
 	// A recovered handler may block on stop too; it must end before the new
 	// Harness closes.
 	t.Cleanup(c.unblock)

@@ -319,6 +319,29 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    whose first report alone hid the scheduler's. n/a: an installer among several extensions that
    list one task, which the registry refuses.
 
+   **Catch-up to pi `1402973a`, the restart guard** (`a30c2a81`, `440a5fcd`, `5ba1cbaf`): open
+   counts every surviving `running` task as cut off (`TaskRecord.Restarts`, the last field, as pi
+   appends the key when it first counts one); a task at `HarnessSettings.RestartLimit` (default 5,
+   negative never parks, pi's `Infinity`) is parked, blocked with `restart_limit` in `Inspect`,
+   the task graph and `Wake`, until `Harness.RetryTask`. A changed state starts the count over, the
+   same checkpoint committed again does not; an abort mark starts it over too, and an abort handler
+   cut off the limit's times ends `faulted` with detail `{"reason":"restart_limit"}`. Close writes
+   the tasks it stopped back as `pending`, so only a crash counts: pi's protected `writeAtClose` is
+   passed to `SessionHooks.BeforeClose`, which alone may call it. The task graph stays in
+   `durable`; `SessionHooks.TaskGraphBlocking` gives it pi's `blocked` and `subscribeBlocked`,
+   and it derives reasons again on the line when they change without a commit. The restart limit
+   is read under the scheduler's mutex, as the registry snapshot is; a panicking settings callback
+   is reported as `host_error` and the default applies. Go's open delivers its first wake
+   synchronously before the recovery pass: pi's microtask runs before that pass's commit can fail,
+   while here the pass and a delivery goroutine would race, and a host told nothing arms no
+   recovery wakeup. Tests: `harness-blocked` whole, the close cases pi changed in `harness-tasks`.
+   Added, where pi's cases pass without the mechanism: `RetryTask` on a paused Harness (pi's case
+   has scheduling running), a registry change reaching the graph without a commit (pi's case runs
+   the task, whose commit updates it), a lowered limit parking a task at the next pass, and an
+   abort-requested task without its definition shown as not blocked. Not covered by a test: the
+   synchronous first wake, whose race the scheduler decides, and `writeAtClose`'s failed-Session
+   check, which the Storage guard repeats.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

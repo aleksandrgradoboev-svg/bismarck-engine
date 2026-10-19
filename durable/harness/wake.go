@@ -44,6 +44,9 @@ func (s *scheduler) wakeLocked() Wake {
 		if active {
 			continue
 		}
+		if s.parkedLocked(record) {
+			continue
+		}
 		// An abort invocation waits for the live work below it, which counts
 		// itself.
 		if record.AbortRequested && len(s.waitingOn(record, true)) > 0 {
