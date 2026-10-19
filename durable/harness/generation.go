@@ -499,11 +499,10 @@ func answer(ctx context.Context, rt *TaskRuntime, message ai.AssistantMessage) e
 	}); err != nil {
 		return err
 	}
-	settings := rt.Settings()
 	return rt.Commit(ctx, func(tx *durable.Tx, _ durable.TaskRecord) (*durable.TaskState, error) {
 		// Queue modes are read on the Session line, when the boundary is
-		// decided.
-		b, err := prepareBoundary(tx, rt.ConversationID, settings)
+		// decided: a change while this commit waits behind another applies.
+		b, err := prepareBoundary(tx, rt.ConversationID, rt.Settings())
 		if err != nil {
 			return nil, err
 		}

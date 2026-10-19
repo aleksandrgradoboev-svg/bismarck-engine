@@ -503,6 +503,19 @@ func (c *Conversation) Submit(ctx context.Context, draft SubmissionDraft) (*Subm
 	return c.h.submissions.submit(ctx, c.ID, draft)
 }
 
+// Reset admits a write of a pi.reset entry that starts a new context,
+// carrying handoff as a user message unless nil (an empty string is an empty
+// message, as pi tells undefined from ""). It returns after admission; while
+// the conversation is busy, the reset is placed at the next boundary.
+func (c *Conversation) Reset(ctx context.Context, handoff *string) error {
+	entry := durable.EntryDraft{Kind: durable.ResetEntry.Kind, HeadSelf: true}
+	if handoff != nil {
+		entry.Model = []ai.Message{ai.NewUserText(*handoff, c.h.tasks.now().UnixMilli())}
+	}
+	_, err := c.h.submissions.submit(ctx, c.ID, SubmissionDraft{Type: durable.SubmissionTypeWrite, Write: &entry})
+	return err
+}
+
 // Commit runs a Session commit whose Tx.CreateTask defaults to this
 // conversation.
 func (c *Conversation) Commit(ctx context.Context, change func(tx *durable.Tx) error) error {
