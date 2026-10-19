@@ -33,15 +33,17 @@ jobs:
         run: go test -count=1 ./...
       # codemode runs each VM, tool call and timer on its own goroutine, and the
       # MCP client and server manager connect in the background, and tools
-      # change the session's tool loadout while the loop reads it; the race
-      # detector needs cgo, which the Linux runner has.
-      - name: race (codemode, mcp, subagents, nested tool calls, tool registry)
+      # change the session's tool loadout while the loop reads it; the
+      # in-memory telemetry adapter records spans and measurements from
+      # concurrent goroutines; the race detector needs cgo, which the Linux
+      # runner has.
+      - name: race (codemode, mcp, subagents, nested tool calls, tool registry, telemetry)
         if: runner.os == 'Linux'
         run: |
           # The 20,000-task ownership chain tests depth, not concurrency; the
           # race detector stretches it to minutes and past its 10 s wait. The
           # test step runs it.
-          go test -race -count=1 -skip 'TestOwnershipTracksOwnershipChainsDeeperThanTheCallStack' ./codemode/... ./mcp/... ./coding/mcpext/... ./coding/toolsearch/... ./coding/subagentext/... ./chord/ ./chord/output/... ./durable/...
+          go test -race -count=1 -skip 'TestOwnershipTracksOwnershipChainsDeeperThanTheCallStack' ./codemode/... ./mcp/... ./coding/mcpext/... ./coding/toolsearch/... ./coding/subagentext/... ./chord/ ./chord/output/... ./durable/... ./telemetry/...
           # The codemode tool's time and heap-limit tests measure speed, which
           # the race detector's slowdown breaks; the test step runs them.
           go test -race -count=1 -skip 'TestOutputAtItemLimitIsLinear|TestMemoryLimit' ./coding/codemodetool/...

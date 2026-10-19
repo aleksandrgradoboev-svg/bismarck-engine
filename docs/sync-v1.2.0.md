@@ -411,8 +411,9 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    propagation case feeds the JSON carrier to a second recorder, as what it checks is that no
    recorder state is shared; a returned error and a panic stand in for pi's rejection and throw.
    Strengthened: the detached-carrier case compares with a copy taken before the mutation — in
-   pi's form a carrier shared between injections compares equal to itself. Sabotage 29 of 30;
-   the miss is the local parent ID of an extracted carrier, which no case of pi's checks.
+   pi's form a carrier shared between injections compares equal to itself. Added beyond pi: the
+   local parent ID of an extracted carrier of the recorder's own span, which no case of pi's
+   checks. Sabotage 30 of 30. CI runs `./telemetry/...` under the race detector.
 
 ## 5. Bookkeeping
 

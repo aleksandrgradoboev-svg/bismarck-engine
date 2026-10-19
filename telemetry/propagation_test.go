@@ -182,6 +182,39 @@ func TestPropagationLinksANewRootToAnExtractedRemoteTarget(t *testing.T) {
 	}
 }
 
+// Beyond pi: no pi case checks the local parent of an extracted carrier. A
+// carrier of this recorder's own span parents the child under that span's
+// ID; another recorder's carrier, and an unknown span ID, give no local
+// parent.
+func TestPropagationRecordsTheLocalParentOfAnExtractedOwnCarrier(t *testing.T) {
+	c, other := telemetry.NewInMemoryContext(), telemetry.NewInMemoryContext()
+	var own telemetry.Carrier
+	must(t, c.StartSpan(telemetry.SpanOptions{Name: "own"}, func(span telemetry.Span) error {
+		own = c.Inject(span)
+		return nil
+	}))
+	var foreign telemetry.Carrier
+	must(t, other.StartSpan(telemetry.SpanOptions{Name: "foreign"}, func(span telemetry.Span) error {
+		foreign = other.Inject(span)
+		return nil
+	}))
+	unknown := maps.Clone(own)
+	unknown["pi-memory-span"] = "99"
+	for name, carrier := range map[string]telemetry.Carrier{"local": own, "remote": foreign, "unknown": unknown} {
+		must(t, c.Extract(wire(t, carrier)).StartSpan(telemetry.SpanOptions{Name: name}, func(telemetry.Span) error { return nil }))
+	}
+	spans := c.Spans()
+	ownID := spanNamed(t, spans, "own").ID
+	if got := spanNamed(t, spans, "local"); got.ParentID != ownID || !reflect.DeepEqual(got.ParentContext, own) {
+		t.Fatalf("local child = parent %d %v, want %d %v", got.ParentID, got.ParentContext, ownID, own)
+	}
+	for _, name := range []string{"remote", "unknown"} {
+		if got := spanNamed(t, spans, name); got.ParentID != 0 || got.ParentContext == nil {
+			t.Fatalf("%s child = parent %d %v, want a remote parent without a local ID", name, got.ParentID, got.ParentContext)
+		}
+	}
+}
+
 // pi's unreadable carriers are n/a; malformed values of the memory format
 // are not.
 func TestPropagationRejectsMalformedMemoryCarriersAndNeverInspectsNoopPayloads(t *testing.T) {
