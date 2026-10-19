@@ -6,6 +6,7 @@ import (
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // Records, queries and the Storage contract (pi packages/durable/src/types.ts,
@@ -173,13 +174,16 @@ type SubmissionRecord struct {
 	ID             SubmissionID   `json:"id"`
 	ConversationID ConversationID `json:"conversationId"`
 	// RequestID is the host's deduplication key, scoped to the conversation.
-	RequestID string          `json:"requestId,omitempty"`
-	Type      string          `json:"type"`
-	Status    string          `json:"status"`
-	Entry     *EntryID        `json:"entry,omitempty"`
-	Answer    *EntryID        `json:"answer,omitempty"`
-	Reason    string          `json:"reason,omitempty"`
-	Detail    json.RawMessage `json:"detail,omitempty"`
+	RequestID string `json:"requestId,omitempty"`
+	// Trace is the adapter-owned context of the admission span; nil without
+	// propagation.
+	Trace  telemetry.Carrier `json:"trace,omitempty"`
+	Type   string            `json:"type"`
+	Status string            `json:"status"`
+	Entry  *EntryID          `json:"entry,omitempty"`
+	Answer *EntryID          `json:"answer,omitempty"`
+	Reason string            `json:"reason,omitempty"`
+	Detail json.RawMessage   `json:"detail,omitempty"`
 }
 
 // Task statuses.
@@ -279,6 +283,12 @@ type TaskRecord struct {
 	// Version is the definition version of the live input and checkpoint.
 	Version int             `json:"version"`
 	Input   json.RawMessage `json:"input"`
+	// Trace is the adapter-owned context that created the task; its phase
+	// invocations extract it as their parent. Immutable.
+	Trace telemetry.Carrier `json:"trace,omitempty"`
+	// Links are creation-time links attached to the spans of the task's
+	// first invocation. Immutable.
+	Links []telemetry.Carrier `json:"links,omitempty"`
 	// Owner is the owning task of a child task; nil for a task its
 	// conversation owns. Immutable.
 	Owner *TaskID `json:"owner,omitempty"`

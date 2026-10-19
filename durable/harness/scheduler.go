@@ -14,6 +14,7 @@ import (
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/env"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // Invocation modes.
@@ -45,6 +46,11 @@ type schedulerOptions struct {
 	// timers are the host's (Options.SetTimer).
 	timers *durable.Timers
 	report func(error, durable.ReportInfo)
+	// reportIn reports with the context of the operation the report belongs
+	// to, whose span records it.
+	reportIn reportFunc
+	// telemetry is the host's adapter (Options.Telemetry, or the no-op one).
+	telemetry telemetry.Context
 	// settleOutcome is the Harness cleanup staged in the commit that makes an
 	// outcome the scheduler wrote itself terminal.
 	settleOutcome func(tx *durable.Tx, record durable.TaskRecord, outcome durable.TaskOutcome) error
@@ -76,6 +82,29 @@ type invocation struct {
 	// ended is guarded by scheduler.mu.
 	ended bool
 	done  chan struct{}
+	// links are the task's creation-time links, attached to the spans of its
+	// first invocation only.
+	links []telemetry.Carrier
+	// record is the task's latest committed record, kept after it leaves the
+	// live index so a phase can read its outcome; fault is the outcome a step
+	// wrote. Both guarded by scheduler.mu.
+	record durable.TaskRecord
+	fault  *durable.TaskOutcome
+	// span is the running phase's span, nil between phases. pi swaps the
+	// invocation's context; ctx is read by other goroutines here, so the span
+	// is held apart and handlers get a derived context.
+	span atomic.Pointer[spanRef]
+}
+
+type spanRef struct{ span telemetry.Span }
+
+// phaseCtx is a context whose span is the running phase's, for reports and
+// events of the invocation's own code; outside a phase it carries none.
+func (inv *invocation) phaseCtx() context.Context {
+	if ref := inv.span.Load(); ref != nil {
+		return telemetry.WithSpan(context.Background(), ref.span)
+	}
+	return context.Background()
 }
 
 // invocationTimer is one timer of TaskRuntime.SetTimer; disarm is set once
@@ -129,6 +158,13 @@ type scheduler struct {
 	// afterUnlock are host calls decided under mu, such as disarming a timer,
 	// run once it is released.
 	afterUnlock []hostCall
+
+	// activeTasks and phaseDuration are durable's task metrics; resumed holds
+	// the tasks loaded at open whose first invocation in this process has not
+	// started yet.
+	activeTasks   telemetry.UpDownCounter
+	phaseDuration telemetry.Histogram
+	resumed       *set[durable.TaskID]
 
 	live             map[durable.TaskID]durable.TaskRecord
 	invocations      map[durable.TaskID]*invocation
@@ -204,8 +240,15 @@ type scheduler struct {
 }
 
 func newScheduler(options schedulerOptions) *scheduler {
+	if options.telemetry == nil {
+		options.telemetry = telemetry.NoopContext
+	}
+	metrics := durableMetrics(options.telemetry)
 	return &scheduler{
 		schedulerOptions:    options,
+		activeTasks:         metrics.UpDownCounter(MetricTasksActive),
+		phaseDuration:       metrics.Histogram(MetricPhaseDuration),
+		resumed:             newSet[durable.TaskID](),
 		live:                map[durable.TaskID]durable.TaskRecord{},
 		invocations:         map[durable.TaskID]*invocation{},
 		taskWaiters:         newWaiters[durable.TaskID, durable.TaskRecord](),
@@ -239,30 +282,44 @@ func (s *scheduler) unlock() {
 	s.afterUnlock = nil
 	s.mu.Unlock()
 	for _, call := range calls {
-		if err := s.callHost(call.run); err != nil {
+		if err := s.callHost(call.run); err != nil && !call.quiet {
 			s.report(err, call.info)
 		}
 	}
 	for _, r := range reports {
-		s.report(r.err, r.info)
+		s.reportIn(r.ctx, r.err, r.info)
 	}
 }
 
 type pendingReport struct {
+	ctx  context.Context
 	err  error
 	info durable.ReportInfo
 }
 
 // hostCall is host code decided under mu, run once it is released; a panic
-// is reported with info.
+// is reported with info. A quiet call is the telemetry adapter's, whose own
+// failures are its responsibility (pi): its panic is dropped.
 type hostCall struct {
-	run  func()
-	info durable.ReportInfo
+	run   func()
+	info  durable.ReportInfo
+	quiet bool
 }
 
 // reportLocked reports err once mu is released.
 func (s *scheduler) reportLocked(err error, info durable.ReportInfo) {
-	s.pendingReports = append(s.pendingReports, pendingReport{err, info})
+	s.reportLockedIn(context.Background(), err, info)
+}
+
+// reportLockedIn is reportLocked with the context of the operation.
+func (s *scheduler) reportLockedIn(ctx context.Context, err error, info durable.ReportInfo) {
+	s.pendingReports = append(s.pendingReports, pendingReport{ctx, err, info})
+}
+
+// measureLocked records a measurement once mu is released: the adapter is
+// host code, which never runs under mu.
+func (s *scheduler) measureLocked(record func()) {
+	s.afterUnlock = append(s.afterUnlock, hostCall{run: record, quiet: true})
 }
 
 // Reports of host callbacks the scheduler calls itself.
@@ -353,6 +410,7 @@ func (s *scheduler) open(ctx context.Context) error {
 		for _, records := range scans {
 			for _, record := range records {
 				s.track(nil, record)
+				s.resumed.add(record.ID)
 				if record.AbandonOnRestart {
 					s.abandoned.add(record.ID)
 				}
@@ -955,11 +1013,14 @@ func (s *scheduler) finalize(tx *durable.Tx) error {
 // run, so a commit of the scheduler can be refused as closed before the seal
 // here; in pi nothing runs between the two. That refusal is the close, not a
 // failure.
-func (s *scheduler) failSession(err error) {
+func (s *scheduler) failSession(err error) { s.failSessionIn(context.Background(), err) }
+
+// failSessionIn is failSession reporting with the operation's context.
+func (s *scheduler) failSessionIn(ctx context.Context, err error) {
 	if s.closing.Load() || errors.Is(err, durable.ErrSessionClosed) {
 		return
 	}
-	s.session.Fail(err)
+	s.session.FailIn(ctx, err)
 }
 
 // seal is the close listener: it runs synchronously once admission is sealed,
@@ -976,6 +1037,12 @@ func (s *scheduler) seal() {
 		err := closedError(s.session)
 		s.taskWaiters.rejectAll(err)
 		s.idleWaiters.rejectAll(err)
+		// The live tasks leave this Harness; closing stops track counting.
+		for _, record := range s.live {
+			kind := telemetry.SpanAttributes{"task": record.Kind}
+			s.measureLocked(func() { s.activeTasks.Add(-1, kind) })
+		}
+		s.resumed = newSet[durable.TaskID]()
 		s.unlock()
 		// After closing is set, a wake delivery arms nothing more.
 		s.wakeMu.Lock()
@@ -1299,6 +1366,12 @@ func (s *scheduler) createInvocation(record durable.TaskRecord, mode, extension 
 		watches:        map[*durable.DocumentWatch]struct{}{},
 		timers:         map[*invocationTimer]struct{}{},
 		done:           make(chan struct{}),
+		record:         record,
+	}
+	// Creation-time links belong to the first invocation: the task has not
+	// started yet.
+	if record.StartedAt == nil {
+		inv.links = record.Links
 	}
 	s.invocations[record.ID] = inv
 	return inv
@@ -1359,28 +1432,31 @@ func (s *scheduler) run(r reservation) {
 	state := &runState{task: r.task, snapshot: r.snapshot, extension: inv.extension}
 	ph := &phase{snapshot: func() *RegistrySnapshot { return state.snapshot }, task: func() Task { return state.task }}
 	runtime := s.newRuntime(inv, ph)
-	var previous *phaseResult
-	for {
-		current := s.step(inv, func(tx *durable.Tx, current durable.TaskRecord) decision {
-			return s.decide(tx, current, previous, state)
-		})
-		// Close may seal between the decision and dispatch.
-		if current == nil || s.closing.Load() {
-			return
-		}
-		checkpoint := current.State.Checkpoint
-		// Each phase handler resolves its agent afresh, at first use.
-		ph.reset()
-		name, err := CheckpointPhase(checkpoint)
-		if err == nil {
-			handler := state.task.Phases()[name]
-			if handler == nil {
-				err = fmt.Errorf("Task %s has no phase %s", current.Kind, name)
-			} else {
-				err = callPhase(handler, inv.ctx, current, runtime)
+	current := s.step(s.ctx, inv, func(tx *durable.Tx, current durable.TaskRecord) decision {
+		return s.decide(s.ctx, tx, current, nil, state)
+	})
+	// Close may seal between the decision and dispatch.
+	for current != nil && !s.closing.Load() {
+		task := current
+		// A phase span covers the handler and the step deciding after it.
+		current = s.phase(inv, task, func(ctx context.Context) *durable.TaskRecord {
+			checkpoint := task.State.Checkpoint
+			// Each phase handler resolves its agent afresh, at first use.
+			ph.reset()
+			name, err := CheckpointPhase(checkpoint)
+			if err == nil {
+				handler := state.task.Phases()[name]
+				if handler == nil {
+					err = fmt.Errorf("Task %s has no phase %s", task.Kind, name)
+				} else {
+					err = callPhase(handler, ctx, task, runtime)
+				}
 			}
-		}
-		previous = &phaseResult{checkpoint: checkpoint, phase: name, failure: err}
+			previous := &phaseResult{checkpoint: checkpoint, phase: name, failure: err}
+			return s.step(ctx, inv, func(tx *durable.Tx, current durable.TaskRecord) decision {
+				return s.decide(ctx, tx, current, previous, state)
+			})
+		})
 	}
 }
 
@@ -1396,7 +1472,7 @@ func callPhase(handler PhaseHandler, ctx context.Context, task *durable.TaskReco
 // decide applies the precedence rules for a run invocation, on the line.
 // Rules 1 (terminal, completing or waiting) and 2 (closing) are applied by
 // step.
-func (s *scheduler) decide(tx *durable.Tx, current durable.TaskRecord, previous *phaseResult, state *runState) decision {
+func (s *scheduler) decide(ctx context.Context, tx *durable.Tx, current durable.TaskRecord, previous *phaseResult, state *runState) decision {
 	// 3. Abort mark: end; a fresh abort invocation starts once the task's
 	// ordinary owned work is gone.
 	if current.AbortRequested {
@@ -1438,7 +1514,7 @@ func (s *scheduler) decide(tx *durable.Tx, current durable.TaskRecord, previous 
 				reason = blockedMissingTask
 			}
 			about := &durable.ReportTask{ID: current.ID, Kind: current.Kind, ConversationID: current.ConversationID}
-			s.reportLocked(fmt.Errorf("Task %d keeps running under its old %s definition", current.ID, current.Kind),
+			s.reportLockedIn(ctx, fmt.Errorf("Task %d keeps running under its old %s definition", current.ID, current.Kind),
 				taskReport(durable.ReportTaskOutdated, about, state.extension, reason))
 		}
 	}
@@ -1457,18 +1533,20 @@ func (s *scheduler) runAbort(r reservation) {
 	}
 	ph := &phase{snapshot: func() *RegistrySnapshot { return r.snapshot }, task: func() Task { return r.task }}
 	runtime := s.newRuntime(inv, ph)
-	failure := func() (err error) {
-		defer func() {
-			if p := recover(); p != nil {
-				err = panicError(p)
-			}
+	s.phase(inv, &current, func(ctx context.Context) *durable.TaskRecord {
+		failure := func() (err error) {
+			defer func() {
+				if p := recover(); p != nil {
+					err = panicError(p)
+				}
+			}()
+			return r.task.Abort(ctx, &current, runtime)
 		}()
-		return r.task.Abort(inv.ctx, &current, runtime)
-	}()
-	if failure == nil {
-		failure = fmt.Errorf("Abort handler of task %d returned without a terminal outcome", inv.taskID)
-	}
-	s.step(inv, func(*durable.Tx, durable.TaskRecord) decision { return decision{fault: failure} })
+		if failure == nil {
+			failure = fmt.Errorf("Abort handler of task %d returned without a terminal outcome", inv.taskID)
+		}
+		return s.step(ctx, inv, func(*durable.Tx, durable.TaskRecord) decision { return decision{fault: failure} })
+	})
 }
 
 // step is one synchronous decision on the Session line. A task that is no
@@ -1477,10 +1555,13 @@ func (s *scheduler) runAbort(r reservation) {
 // stage a write and returns whether the invocation continues. Ending happens
 // inside the callback, before a fault's Harness cleanup. A rejected step,
 // such as admission after close, also ends the invocation.
-func (s *scheduler) step(inv *invocation, decide func(tx *durable.Tx, current durable.TaskRecord) decision) *durable.TaskRecord {
+//
+// ctx carries the phase span the step belongs to (s.ctx before the first
+// phase); the commit runs without its cancellation (pi withoutAbortSignal).
+func (s *scheduler) step(ctx context.Context, inv *invocation, decide func(tx *durable.Tx, current durable.TaskRecord) decision) *durable.TaskRecord {
 	var result *durable.TaskRecord
 	var fault error
-	err := s.session.Commit(s.ctx, func(tx *durable.Tx) error {
+	err := s.session.Commit(context.WithoutCancel(ctx), func(tx *durable.Tx) error {
 		s.mu.Lock()
 		defer s.unlock()
 		fault = nil
@@ -1498,7 +1579,9 @@ func (s *scheduler) step(inv *invocation, decide func(tx *durable.Tx, current du
 		s.end(inv)
 		if d.fault != nil {
 			fault = d.fault
-			return s.terminate(tx, found, durable.TaskOutcome{Status: durable.OutcomeFaulted, Error: &durable.TaskOutcomeError{Message: errorMessage(d.fault)}})
+			outcome := durable.TaskOutcome{Status: durable.OutcomeFaulted, Error: &durable.TaskOutcomeError{Message: errorMessage(d.fault)}}
+			inv.fault = &outcome
+			return s.terminate(tx, found, outcome)
 		}
 		return nil
 	})
@@ -1506,7 +1589,7 @@ func (s *scheduler) step(inv *invocation, decide func(tx *durable.Tx, current du
 	// toward a breaker.
 	if err == nil && fault != nil {
 		task, extension := aboutTask(inv)
-		s.report(fault, taskReport(durable.ReportTaskFaulted, task, extension, "threw"))
+		s.reportIn(ctx, fault, taskReport(durable.ReportTaskFaulted, task, extension, "threw"))
 	}
 	if err != nil {
 		// The step writes the scheduler's own decision, a fault or a terminal
@@ -1515,7 +1598,7 @@ func (s *scheduler) step(inv *invocation, decide func(tx *durable.Tx, current du
 		s.mu.Lock()
 		s.end(inv)
 		s.unlock()
-		s.failSession(err)
+		s.failSessionIn(ctx, err)
 		return nil
 	}
 	return result

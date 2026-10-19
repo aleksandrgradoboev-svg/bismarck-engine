@@ -8,6 +8,7 @@ import (
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // Input submission behavior while the conversation is busy.
@@ -105,15 +106,42 @@ func (s *submissions) observe(publication durable.CommitPublication) {
 }
 
 // submit admits a submission in one commit; see admitSubmission.
+//
+// The admission runs in a pi.durable.submit span: an input's starts a root
+// trace of the adapter, linked to the caller's span, so the run it starts is
+// its own trace; a write's is a child of the caller's span. The commit runs
+// with the span, so its entry and settlement events land on it.
 func (s *submissions) submit(ctx context.Context, conversationID durable.ConversationID, draft SubmissionDraft) (*Submission, error) {
 	s.h.tasks.resume()
-	id, err := durable.CommitValue(ctx, s.h.Session, func(tx *durable.Tx) (durable.SubmissionID, error) {
-		return admitSubmission(tx, conversationID, draft, s.h.tasks.now().UnixMilli(), s.h.settings())
+	caller := telemetry.SpanFrom(ctx)
+	var parent telemetry.Context = caller
+	if draft.Type == durable.SubmissionTypeInput {
+		parent = s.h.telemetry
+	}
+	var submission *Submission
+	err := parent.StartSpan(telemetry.SpanOptions{Name: SpanSubmit, Attributes: telemetry.SpanAttributes{
+		"submission.type": draft.Type,
+		"conversation.id": int64(conversationID),
+	}}, func(span telemetry.Span) error {
+		if draft.Type == durable.SubmissionTypeInput {
+			span.AddLink(telemetry.SpanLink{Context: caller})
+		}
+		admitted, err := durable.CommitValue(telemetry.WithSpan(ctx, span), s.h.Session, func(tx *durable.Tx) (admission, error) {
+			return admitSubmission(tx, conversationID, draft, s.h.tasks.now().UnixMilli(), s.h.settings(), span)
+		})
+		if err != nil {
+			// Error text may carry the caller's content: the status only.
+			span.SetStatus(telemetry.SpanStatus{Code: telemetry.StatusError})
+			return err
+		}
+		span.SetAttributes(telemetry.SpanAttributes{"submission.id": int64(admitted.id), "result": admitted.status})
+		submission = &Submission{ID: admitted.id, s: s}
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &Submission{ID: id, s: s}, nil
+	return submission, nil
 }
 
 // record reads a committed submission on the line.
@@ -254,57 +282,73 @@ func (sub *Submission) Abort(ctx context.Context) (string, error) {
 // boundary. Otherwise idle input places its entry (pi.user, or the input's
 // own) and starts a run, and an idle write appends its entry and settles
 // done, or unanswered "stale" when its head reaches before the active range.
-func admitSubmission(tx *durable.Tx, conversationID durable.ConversationID, draft SubmissionDraft, now int64, settings Settings) (durable.SubmissionID, error) {
+//
+// span is the admission span of a public submission, nil for an internal
+// one: its carrier is stored as the submission's trace, and a steer links the
+// run it steers.
+func admitSubmission(tx *durable.Tx, conversationID durable.ConversationID, draft SubmissionDraft, now int64, settings Settings, span telemetry.Span) (admission, error) {
 	switch draft.Type {
 	case durable.SubmissionTypeInput:
 		if draft.Input == nil {
-			return 0, errors.New("An input submission needs Input")
+			return admission{}, errors.New("An input submission needs Input")
 		}
 		if draft.Input.Entry != nil {
 			if err := checkInputEntry(*draft.Input.Entry); err != nil {
-				return 0, err
+				return admission{}, err
 			}
 		}
 	case durable.SubmissionTypeWrite:
 		if draft.Write == nil {
-			return 0, errors.New("A write submission needs Write")
+			return admission{}, errors.New("A write submission needs Write")
 		}
 	default:
-		return 0, fmt.Errorf("Unknown submission type %q", draft.Type)
+		return admission{}, fmt.Errorf("Unknown submission type %q", draft.Type)
 	}
 	if draft.RequestID != "" {
 		existing, err := tx.SubmissionByRequest(conversationID, draft.RequestID)
 		if err != nil {
-			return 0, err
+			return admission{}, err
 		}
 		if existing != nil {
 			if existing.Type != draft.Type {
-				return 0, fmt.Errorf("Request %s already identifies a submission of type %s", draft.RequestID, existing.Type)
+				return admission{}, fmt.Errorf("Request %s already identifies a submission of type %s", draft.RequestID, existing.Type)
 			}
-			return existing.ID, nil
+			status := existing.Status
+			if status == durable.SubmissionUnanswered {
+				status = durable.SubmissionDone
+			}
+			return admission{id: existing.ID, status: status}, nil
 		}
 	}
+	var trace telemetry.Carrier
+	propagation, hasPropagation := propagationOf(span)
+	if span != nil && hasPropagation {
+		trace = propagation.Inject(span)
+	}
 	create := func(record durable.SubmissionRecord) (durable.SubmissionID, error) {
-		record.ConversationID, record.RequestID, record.Type = conversationID, draft.RequestID, draft.Type
+		record.ConversationID, record.RequestID, record.Trace, record.Type = conversationID, draft.RequestID, trace, draft.Type
 		created, err := tx.CreateSubmission(record)
 		return created.ID, err
 	}
-	appendWrite := func() (durable.SubmissionID, error) {
+	done := func(id durable.SubmissionID, err error) (admission, error) {
+		return admission{id: id, status: durable.SubmissionDone}, err
+	}
+	appendWrite := func() (admission, error) {
 		entry, err := tx.AppendEntry(conversationID, *draft.Write)
 		if err != nil {
-			return 0, err
+			return admission{}, err
 		}
 		id := entry.ID
-		return create(durable.SubmissionRecord{Status: durable.SubmissionDone, Entry: &id})
+		return done(create(durable.SubmissionRecord{Status: durable.SubmissionDone, Entry: &id}))
 	}
 	if draft.Type == durable.SubmissionTypeWrite && isDisplayOnly(*draft.Write) {
 		inbox, err := inboxDraft(tx, conversationID)
 		if err != nil {
-			return 0, err
+			return admission{}, err
 		}
 		items, err := inboxItems(inbox)
 		if err != nil {
-			return 0, err
+			return admission{}, err
 		}
 		if !hasQueuedReset(items) {
 			return appendWrite()
@@ -312,36 +356,46 @@ func admitSubmission(tx *durable.Tx, conversationID durable.ConversationID, draf
 	}
 	live, err := liveDraft(tx, conversationID)
 	if err != nil {
-		return 0, err
+		return admission{}, err
 	}
 	run, err := liveRun(live)
 	if err != nil {
-		return 0, err
+		return admission{}, err
 	}
 	busy := run != nil
+	// A steer links the run it steers; its work stays in the run's trace.
+	if busy && span != nil && hasPropagation && draft.Type == durable.SubmissionTypeInput && draft.Input.WhenBusy == WhenBusySteer {
+		task, err := tx.Task(run.TaskID)
+		if err != nil {
+			return admission{}, err
+		}
+		if task != nil && task.Trace != nil {
+			span.AddLink(telemetry.SpanLink{Context: propagation.Extract(task.Trace)})
+		}
+	}
 	if busy && draft.Type == durable.SubmissionTypeInput && draft.Input.WhenBusy == WhenBusyReject {
-		return 0, &ConversationBusyError{ConversationID: conversationID}
+		return admission{}, &ConversationBusyError{ConversationID: conversationID}
 	}
 	// A boundary reads the table, so it is prepared before the first table
 	// write; a busy one needs none.
 	var b *boundary
 	if !busy {
 		if b, err = prepareBoundary(tx, conversationID, settings); err != nil {
-			return 0, err
+			return admission{}, err
 		}
 	}
 	queued := busy
 	if b != nil {
 		items, err := inboxItems(b.inbox)
 		if err != nil {
-			return 0, err
+			return admission{}, err
 		}
 		queued = len(items) > 0
 	}
 	if queued {
 		id, err := create(durable.SubmissionRecord{Status: durable.SubmissionQueued})
 		if err != nil {
-			return 0, err
+			return admission{}, err
 		}
 		item := inboxItem{id: id, mode: modeWrite}
 		if draft.Type == durable.SubmissionTypeWrite {
@@ -361,39 +415,55 @@ func admitSubmission(tx *durable.Tx, conversationID durable.ConversationID, draf
 		if b != nil {
 			inbox = b.inbox
 		} else if inbox, err = inboxDraft(tx, conversationID); err != nil {
-			return 0, err
+			return admission{}, err
 		}
 		if err := pushInboxItem(inbox, item); err != nil {
-			return 0, err
+			return admission{}, err
 		}
 		if b == nil {
-			return id, nil
+			return admission{id: id, status: durable.SubmissionQueued}, nil
 		}
 		placed, err := applyBoundary(tx, b, true, now)
 		if err != nil {
-			return 0, err
+			return admission{}, err
 		}
 		if len(placed.users) > 0 {
 			if err := startRun(tx, conversationID, live, placed.users); err != nil {
-				return 0, err
+				return admission{}, err
 			}
 		}
-		return id, nil
+		// pi: a write is placed or stale at the boundary, both "done"; an input
+		// is placed when it is the last user item the boundary selected.
+		result := admission{id: id, status: durable.SubmissionQueued}
+		if draft.Type == durable.SubmissionTypeWrite {
+			result.status = durable.SubmissionDone
+		} else if len(placed.users) > 0 && placed.users[len(placed.users)-1] == id {
+			result.status = durable.SubmissionPlaced
+		}
+		return result, nil
 	}
 	if draft.Type == durable.SubmissionTypeWrite {
 		if isStale(b, *draft.Write) {
-			return create(durable.SubmissionRecord{Status: durable.SubmissionUnanswered, Reason: "stale"})
+			return done(create(durable.SubmissionRecord{Status: durable.SubmissionUnanswered, Reason: "stale"}))
 		}
 		return appendWrite()
 	}
 	entry, err := appendInput(tx, conversationID, draft.Input.Content, draft.Input.Entry, now)
 	if err != nil {
-		return 0, err
+		return admission{}, err
 	}
 	entryID := entry.ID
 	id, err := create(durable.SubmissionRecord{Status: durable.SubmissionPlaced, Entry: &entryID})
 	if err != nil {
-		return 0, err
+		return admission{}, err
 	}
-	return id, startRun(tx, conversationID, live, []durable.SubmissionID{id})
+	return admission{id: id, status: durable.SubmissionPlaced}, startRun(tx, conversationID, live, []durable.SubmissionID{id})
+}
+
+// admission is what admitting a submission did: its ID and the result the
+// admission span records ("queued", "placed" or "done"; a stale write is
+// "done").
+type admission struct {
+	id     durable.SubmissionID
+	status string
 }

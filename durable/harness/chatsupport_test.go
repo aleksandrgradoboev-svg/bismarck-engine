@@ -9,6 +9,7 @@ import (
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // Chat test support (pi packages/durable/test/chat-support.ts).
@@ -25,6 +26,8 @@ type chatSetup struct {
 	// decisions through setSettings.
 	settings HarnessSettings
 	now      func() time.Time
+	// telemetry is the Harness's adapter, nil for none.
+	telemetry telemetry.Context
 }
 
 func newChatSetup(t *testing.T) *chatSetup {
@@ -75,7 +78,8 @@ func (c *chatSetup) options() Options {
 			c.mu.Unlock()
 			return now()
 		},
-		OnReport: c.reports.add,
+		OnReport:  c.reports.add,
+		Telemetry: c.telemetry,
 	}
 }
 

@@ -3,11 +3,13 @@ package durable
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // Detached copies of records, for storages that keep values in memory (pi's
@@ -79,6 +81,25 @@ func (r SubmissionRecord) Clone() SubmissionRecord {
 	out.Entry = ptr(r.Entry)
 	out.Answer = ptr(r.Answer)
 	out.Detail = bytesCopy(r.Detail)
+	out.Trace = carrierCopy(r.Trace)
+	return out
+}
+
+func carrierCopy(c telemetry.Carrier) telemetry.Carrier {
+	if c == nil {
+		return nil
+	}
+	return maps.Clone(c)
+}
+
+func carriersCopy(cs []telemetry.Carrier) []telemetry.Carrier {
+	if cs == nil {
+		return nil
+	}
+	out := make([]telemetry.Carrier, len(cs))
+	for i, c := range cs {
+		out[i] = carrierCopy(c)
+	}
 	return out
 }
 
@@ -111,6 +132,8 @@ func (s TaskState) Clone() TaskState {
 func (r TaskRecord) Clone() TaskRecord {
 	out := r
 	out.Input = bytesCopy(r.Input)
+	out.Trace = carrierCopy(r.Trace)
+	out.Links = carriersCopy(r.Links)
 	out.Owner = ptr(r.Owner)
 	out.StartedAt = ptr(r.StartedAt)
 	out.EndedAt = ptr(r.EndedAt)

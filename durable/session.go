@@ -11,6 +11,7 @@ import (
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // The Session kernel (pi packages/durable/src/session/session.ts): one
@@ -81,9 +82,10 @@ type SessionOptions struct {
 // SessionHooks are what the harness adds to a Session.
 type SessionHooks struct {
 	// Report receives the Session's failure and listener errors, which never
-	// fail what ran them, with where each came from. A plain Session drops
-	// them.
-	Report func(error, ReportInfo)
+	// fail what ran them, with where each came from, and the context of the
+	// operation they belong to (context.Background when none), whose
+	// telemetry span the report is recorded on. A plain Session drops them.
+	Report func(ctx context.Context, err error, info ReportInfo)
 	// ConversationCreated runs inside every transaction that creates or
 	// forks a conversation, after the record is staged.
 	ConversationCreated func(tx *Tx, record ConversationRecord) error
@@ -292,16 +294,22 @@ func (s *Session) Failed() <-chan struct{} { return s.failed }
 // report reports a listener's failure, the default source.
 func (s *Session) report(err error) { s.reportAs(err, ListenerError) }
 
-func (s *Session) reportAs(err error, info ReportInfo) {
+func (s *Session) reportAs(err error, info ReportInfo) { s.reportIn(context.Background(), err, info) }
+
+func (s *Session) reportIn(ctx context.Context, err error, info ReportInfo) {
 	if s.hooks.Report != nil {
-		contained(func() { s.hooks.Report(err, info) }, func(error) {})
+		contained(func() { s.hooks.Report(ctx, err, info) }, func(error) {})
 	}
 }
 
 // Fail fails the Session with err; the first wins and is reported once.
 // Admission ends and close listeners run now. The Storage guard calls it;
 // the harness also calls it for a failure of its own bookkeeping.
-func (s *Session) Fail(err error) {
+func (s *Session) Fail(err error) { s.FailIn(context.Background(), err) }
+
+// FailIn is Fail reporting the failure with the context of the operation that
+// failed it (pi fail(error, context)).
+func (s *Session) FailIn(ctx context.Context, err error) {
 	s.mu.Lock()
 	if s.hasFailure {
 		s.mu.Unlock()
@@ -311,7 +319,7 @@ func (s *Session) Fail(err error) {
 	close(s.failed)
 	s.mu.Unlock()
 	s.beginClose(context.Background())
-	s.reportAs(err, ReportInfo{Type: ReportSessionFailed})
+	s.reportIn(ctx, err, ReportInfo{Type: ReportSessionFailed})
 }
 
 func (s *Session) healthy() error {
@@ -1087,35 +1095,45 @@ func (s *Session) adopt(tx *Tx, seq Seq) (documents []CommitChange, err error) {
 
 func (s *Session) publish(ctx context.Context, seq Seq, writes []StorageWrite, documents []CommitChange) {
 	s.mu.Lock()
-	if s.commitListeners.len() == 0 && s.internalListeners.len() == 0 {
-		s.mu.Unlock()
-		return
-	}
+	listening := s.commitListeners.len() > 0 || s.internalListeners.len() > 0
 	internal := s.internalListeners.snapshot()
 	host := s.commitListeners.snapshot()
 	s.mu.Unlock()
+	// The commit is durable: its committed entries and settlements are events
+	// of the commit's span, with IDs only, whether or not anyone listens.
+	span := telemetry.SpanFrom(ctx)
 	var changes []CommitChange
 	for _, w := range writes {
 		switch w := w.(type) {
 		case ConversationWrite:
 			changes = append(changes, w)
 		case EntryWrite:
+			span.AddEvent("pi.durable.entry", telemetry.SpanAttributes{"entry.id": int64(w.Value.ID), "entry.kind": w.Value.Kind})
 			changes = append(changes, w)
 		case TaskWrite:
 			changes = append(changes, w)
 		case SubmissionWrite:
+			if w.Value.Status == SubmissionDone || w.Value.Status == SubmissionUnanswered {
+				attributes := telemetry.SpanAttributes{"submission.id": int64(w.Value.ID), "status": w.Value.Status}
+				if w.Value.Answer != nil {
+					attributes["answer.entry_id"] = int64(*w.Value.Answer)
+				}
+				span.AddEvent("pi.durable.submission", attributes)
+			}
 			changes = append(changes, w)
 		}
 	}
+	if !listening {
+		return
+	}
 	changes = append(changes, documents...)
 	publication := CommitPublication{Seq: seq, Changes: changes}
-	// The commit is durable: a failing listener neither fails the commit nor
-	// skips the others.
+	// A failing listener neither fails the commit nor skips the others.
 	for _, listener := range internal {
-		contained(func() { listener(publication, ctx) }, s.Fail)
+		contained(func() { listener(publication, ctx) }, func(err error) { s.FailIn(ctx, err) })
 	}
 	for _, listener := range host {
-		contained(func() { listener(publication, ctx) }, s.report)
+		contained(func() { listener(publication, ctx) }, func(err error) { s.reportIn(ctx, err, ListenerError) })
 	}
 }
 
