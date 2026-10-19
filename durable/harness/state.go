@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
 )
@@ -27,6 +28,17 @@ func Wait(on []durable.TaskID, policy durable.JoinPolicy, checkpoint any) (*dura
 		return nil, err
 	}
 	return &durable.TaskState{Status: durable.TaskWaiting, Checkpoint: raw, On: append([]durable.TaskID(nil), on...), Policy: policy}, nil
+}
+
+// Sleep is the next state that parks a task without an invocation until the
+// Harness clock reaches until, resuming at checkpoint.
+func Sleep(until time.Time, checkpoint any) (*durable.TaskState, error) {
+	raw, err := json.Marshal(checkpoint)
+	if err != nil {
+		return nil, err
+	}
+	state := durable.SleepingState(raw, until.UnixMilli())
+	return &state, nil
 }
 
 // Complete is the next state that completes a task with result.

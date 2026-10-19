@@ -279,6 +279,30 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    holds the abort handler instead. n/a: the cases of rejected promises, thenables and another
    realm's promise.
 
+   **Catch-up to pi `1402973a`, the sleeping state** (`f75b3240`, `ec1be23e`, as of `1402973a`):
+   a task commits `{status: "sleeping", checkpoint, until}`, or calls `TaskRuntime.SleepUntil`, and
+   holds no invocation until the Harness clock reaches `until`; `TaskRuntime.Sleep` is gone, as
+   pi's `sleep` is. `TaskState.Until` is epoch milliseconds, a pointer since 0 is a valid time;
+   the API takes `time.Time`. `Options.SetTimer` arms every timer (`durable.SetTimer`, with
+   `NativeTimer` and `HostTimers`), `Options.OnWake` replaces the sleep timer, and
+   `Harness.Wake` returns `Wake{Active, At}`, a zero `At` for no sleep. A Go timer never keeps the
+   process alive, so foreground and background timers differ only in that a host may decline a
+   background one; a declined or panicking foreground timer falls back to `time.AfterFunc` and is
+   reported once. pi calls `onWake` and the host's `setTimer` from a microtask on its one thread;
+   here they are host code, which never runs under the scheduler's mutex, so a delivery computes
+   the wake under it and arms the timer or calls `OnWake` under a second mutex that orders
+   deliveries. Timers an ended invocation leaves are disarmed once the mutex is released. Without
+   `OnWake`, a delivery reads only the sleeping tasks (pi's `wake()` walks every live task): the
+   full walk on every kick timed out the 20,000-task ownership chains. `wake()` counts a reconcile
+   pass with work as active, as in `1402973a`. SQLite migration 2 rebuilds the task table with
+   pi's statements byte for byte. Tests: `harness-sleep` whole, the sleeping case of the storage
+   conformance suite and the version 1 to 2 migration; pi's NaN and Infinity sleeps have no
+   `time.Time` form, so the Go case tries -1 and a sleeping state without `until`. Added: a graph
+   first observed while a task sleeps (pi's graph case observes it before), and a host that
+   declines every foreground timer reported once across two separate sleeps (pi's two sleeps share
+   one deadline). The restart count, typed reports and the close write-back follow in their own
+   changes.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

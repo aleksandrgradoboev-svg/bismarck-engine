@@ -262,6 +262,8 @@ type openOptions struct {
 	registry Registry
 	now      func() time.Time
 	settings func() HarnessSettings
+	setTimer durable.SetTimer
+	onWake   func(Wake)
 }
 
 type opened struct {
@@ -287,7 +289,7 @@ func openRoot(t *testing.T, tasks []Task, options openOptions) opened {
 		storage = memory.New()
 	}
 	reports := &reportLog{}
-	h, err := Open(bg, storage, Options{Registry: registry, Now: options.now, Settings: options.settings, OnReport: reports.add})
+	h, err := Open(bg, storage, Options{Registry: registry, Now: options.now, Settings: options.settings, SetTimer: options.setTimer, OnWake: options.onWake, OnReport: reports.add})
 	must(t, err)
 	t.Cleanup(func() { closeSoon(t, h) })
 	root, err := h.Root(bg, nil, nil)

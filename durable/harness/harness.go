@@ -49,8 +49,24 @@ type Options struct {
 	// run init. A fork already has its copies. An error fails the creating
 	// commit.
 	ConversationCreated func(tx *durable.Tx, conversation durable.ConversationRecord) error
-	// Now is the clock; nil is time.Now.
+	// Now is the clock; nil is time.Now. Sleeping tasks store deadlines on it,
+	// so every process that opens the same storage must use the same clock.
 	Now func() time.Time
+	// SetTimer arms every timer the Harness uses: freeing idle memory
+	// (background), and, without OnWake, resuming sleeping tasks; and the
+	// timers of TaskRuntime.SetTimer. nil is durable.NativeTimer. Tests can
+	// pass fake timers; a host can keep timers off a process that should
+	// hibernate.
+	SetTimer durable.SetTimer
+	// OnWake wakes the process for sleeping tasks instead of a SetTimer timer.
+	// Without it, while scheduling runs, a timer resumes sleeping tasks when
+	// they are due. With it, the Harness arms no timer for them: it calls
+	// OnWake after open and whenever Harness.Wake changes, and the host arms
+	// its own wakeup and calls Resume when it fires. It is called on its own
+	// goroutine, one call at a time; it may call Wake and Resume, and must
+	// not block. A panic is reported, and the same wake is offered again at
+	// the next change or pass.
+	OnWake func(Wake)
 	// OnReport receives failures that do not fail the calling operation, such
 	// as a failing hook or listener, and the error that fails the Session,
 	// once. Its own panic is dropped.
@@ -107,6 +123,7 @@ func Open(ctx context.Context, storage durable.Storage, options Options) (*Harne
 		// Read at each use, as all settings are, but only this field: it is
 		// read on every commit.
 		DocumentRetention: func() time.Duration { return h.settings().DocumentRetention },
+		SetTimer:          options.SetTimer,
 		Hooks: durable.SessionHooks{
 			Report:              h.report,
 			ConversationCreated: h.conversationCreated,
@@ -125,6 +142,8 @@ func Open(ctx context.Context, storage durable.Storage, options Options) (*Harne
 		settings: h.settings,
 		env:      h.buildEnv,
 		now:      now,
+		onWake:   options.OnWake,
+		timers:   durable.HostTimers(options.SetTimer, h.report),
 		report:   h.report,
 		// pi.live and pi.inbox come with the submissions stage, and with them
 		// the cleanup of a scheduler outcome and the withdrawal of queued
@@ -152,6 +171,31 @@ func (h *Harness) Resume() error {
 	}
 	h.tasks.resume()
 	return nil
+}
+
+// Wake is when a Session next needs a running process. Active: some task can
+// run now or is running, so a process that dies must be woken again soon, for
+// example by a recovery alarm. At: the earliest sleep not yet due; zero when
+// there is none. Neither: nothing needs a process until new work is
+// submitted. Tasks blocked on a missing or unmigratable definition,
+// completing tasks, and waits on live tasks do not count; the work they wait
+// for does.
+type Wake struct {
+	Active bool
+	At     time.Time
+}
+
+// Wake says when this Session next needs a running process, from the
+// scheduler's memory; it answers also while scheduling is paused. A host that
+// wakes the process itself arms from it and calls Resume when woken; see
+// Options.OnWake.
+func (h *Harness) Wake() (Wake, error) {
+	if h.tasks.closing.Load() {
+		return Wake{}, closedError(h.Session)
+	}
+	h.tasks.mu.Lock()
+	defer h.tasks.unlock()
+	return h.tasks.wakeLocked(), nil
 }
 
 // AbortTask commits the abort mark, signals and joins an active run

@@ -181,6 +181,7 @@ func (s *scheduler) track(previous *durable.TaskRecord, record durable.TaskRecor
 	if record.State.Status == durable.TaskTerminal {
 		node := nodeOf(record)
 		delete(s.live, id)
+		s.sleeping.delete(id)
 		s.intent.delete(id)
 		s.runnable.delete(id)
 		s.finalizeChecks.delete(id)
@@ -219,6 +220,11 @@ func (s *scheduler) track(previous *durable.TaskRecord, record durable.TaskRecor
 		for _, on := range record.State.On {
 			addTo(s.waitersOn, on, id)
 		}
+	}
+	if record.State.Status == durable.TaskSleeping {
+		s.sleeping.add(id)
+	} else {
+		s.sleeping.delete(id)
 	}
 }
 
