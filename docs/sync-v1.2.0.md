@@ -452,6 +452,29 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    ok of an aborted phase (its callback never fails). Unchecked, as in pi: the context of a
    Session failure inside a step and of an outdated report.
 
+   **Durable slice 1, live and view** (snapshot `d2e7d8b7`; `view.ts`): the conversation view
+   (spec §9.3) — `Conversation.ViewState` (a `durable.DocumentState`) and `Conversation.Watch` (a
+   `durable.DocumentWatch`), whose value is the chord object `{conversation, entries, docs}`, read
+   with `DecodeConversationView`. One mount per conversation, built on the Session line by its first
+   observer and dropped with its last, advanced from commit publications: entries appended, cut at
+   a head marker to the entries from its head, documents (`pi.agent`, `pi.live`, `pi.inbox`,
+   `pi.provider`, `pi.usage`) set whole when mounted anew and otherwise by their own operations
+   under `["docs", kind]`, documents first, then entries. `ApplyImmutable` keeps the untouched parts
+   of a revision shared, as pi's case checks by reference. pi's `publication` observer and
+   `conversationViews` are kept internal for the event adapters of slice 1 (d). `live.ts`'s run
+   control came with slice 1 (b); its tool and compaction parts come with slices 2 and 3. Tests:
+   `harness-view` whole (14), `harness-live-deltas` without tools (2 of 11; the 9 that drive a tool
+   wait for slice 2). Adapted: frames are delivered off the commit, so the cases wait for the
+   frames they count, then a little longer for a frame too many. Added beyond pi: a document
+   recreated in one commit mounted whole, a keyed member of a mounted kind (another definition of
+   the kind can be a family) ignored, another conversation's documents ignored, document
+   operations before entry operations, a view state cancelled while it waits for the line.
+   Sabotage 15 of 21. Duplicate safeguards: the incarnation check (a retirement is published
+   before the recreation and unmounts first) and the closed check in attach (the line refuses
+   after close). Unreachable through the API: a panicking observer. Waiting: the publication
+   observer (slice 1 (d)). Unchecked: a root replacement of a document, and a document's
+   definition version changing under a mount.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

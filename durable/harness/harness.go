@@ -108,6 +108,7 @@ type Harness struct {
 	report      func(error, durable.ReportInfo)
 	tasks       *scheduler
 	submissions *submissions
+	views       *conversationViews
 }
 
 // Open opens a Harness over storage.
@@ -183,6 +184,10 @@ func Open(ctx context.Context, storage durable.Storage, options Options) (*Harne
 		return nil, err
 	}
 	h.submissions = submissions
+	if h.views, err = newConversationViews(h); err != nil {
+		_ = h.Close(context.WithoutCancel(ctx))
+		return nil, err
+	}
 	if err := h.tasks.open(ctx); err != nil {
 		// The caller's context may be what failed open: close without it, and
 		// return the open error. A failing Storage close fails the Session,
