@@ -140,7 +140,25 @@ func TestReportsTellExtensionListenerWakeAndTimerFailuresFromAFailedSession(t *t
 	expect("Wrapper renamed echo to renamed", durable.ReportInfo{Type: durable.ReportExtensionError, ConversationID: o.root.ID, Extension: "wraps"})
 	expect("listener", durable.ListenerError)
 	expect("alarm", durable.HostError(durable.CallbackOnWake, nil))
-	expect("no timers", durable.HostError(durable.CallbackSetTimer, nil))
+	// Both the Session's and the scheduler's timers fail, in no fixed order;
+	// each says so.
+	timerReports := func() (count int, wrong *durable.ReportInfo) {
+		errs, infos := o.reports.all(), o.reports.allInfos()
+		for i, err := range errs {
+			if err.Error() != "no timers" {
+				continue
+			}
+			count++
+			if infos[i] != durable.HostError(durable.CallbackSetTimer, nil) {
+				wrong = &infos[i]
+			}
+		}
+		return count, wrong
+	}
+	eventually(t, func() bool { count, _ := timerReports(); return count >= 2 })
+	if _, wrong := timerReports(); wrong != nil {
+		t.Fatalf("timer report %+v", *wrong)
+	}
 
 	storage.failNextCommit(errors.New("disk gone"))
 	_ = o.root.Commit(bg, func(tx *durable.Tx) error {
