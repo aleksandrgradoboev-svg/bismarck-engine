@@ -371,6 +371,27 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    submission, the outcome cleanup, and `Wait` enabling scheduling, which `Submit` does as well;
    the inbox, generation and failed-run slices cover them.
 
+   **Durable slice 1, inbox tests** (snapshot `1402973a`): `harness-failed-run-inbox` whole and
+   `harness-inbox` without the cases that run tools — steers at the postTools boundary, a reset
+   after tools, a handoff from a tool (two cases), `steeringMode: "all"`, a terminating round, and
+   the two usage cases with tool usage (one also retries) — which come with slice 2, and "usage
+   across reopen", whose partial converted after reopen is generation recovery (slice 1 (d)).
+   Added for them: `Conversation.Reset(ctx, handoff *string)`, pi's `reset`; nil is no handoff
+   and an empty string an empty message, as pi tells `undefined` from `""`. Fixed: the final
+   answer read the queue modes before its commit, not on the Session line as pi does, so a mode
+   changed while the boundary's commit waited behind another did not apply (caught by "reads
+   queue modes when the final boundary's commit runs on the Session line"). The reopen case uses
+   JSONL, as other reopen cases do. Adapted: a Go map has no prototype, so the prototype-key usage
+   case keeps that each name has its own exact total, and key order is n/a. Unlike pi, where a
+   submission wait resolves in a microtask after every commit listener, the Session wakes the
+   wait first (`ObserveCommits` runs before host listeners), so the cases that read a host
+   listener's record after a wait wait for the record itself. Two coverage notes from the
+   sabotage run (24 of 30 mutations caught): the order the boundary removes items in is not a
+   mechanism, as Chord normalizes the adopted splices; and no case of pi's checks that a head
+   write placed earlier in the same boundary advances the active range for the writes after it.
+   Expected and still uncovered: the postTools boundary (slice 2), data-only writes while busy
+   (`harness-input-entries`) and the outcome cleanup (slice 1 (d)).
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

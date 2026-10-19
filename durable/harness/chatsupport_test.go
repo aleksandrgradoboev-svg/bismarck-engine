@@ -116,6 +116,49 @@ func unanswered() (step providers.FauxResponseStep, reached <-chan struct{}) {
 	}, signal
 }
 
+// gatedStep is a faux response held until release or cancellation (pi's
+// gated): reached closes when the request was sent; cancelled, it returns
+// what the provider makes of a cancelled step.
+func gatedStep(message *ai.AssistantMessage) (step providers.FauxResponseStep, reached <-chan struct{}, release func()) {
+	signal := make(chan struct{})
+	gate := make(chan struct{})
+	var reachedOnce, releaseOnce sync.Once
+	return func(ctx context.Context, _ ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+		reachedOnce.Do(func() { close(signal) })
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return nil
+		}
+		copied := *message
+		return &copied
+	}, signal, func() { releaseOnce.Do(func() { close(gate) }) }
+}
+
+// fauxAnswer is a final answer with text, as a message for gatedStep.
+func fauxAnswer(text string) *ai.AssistantMessage {
+	return providers.FauxAssistantMessage(ai.ContentList{providers.FauxText(text)}, ai.StopStop)
+}
+
+// fauxError is a provider error message without content.
+func fauxError(message string) *ai.AssistantMessage {
+	m := providers.FauxAssistantMessage(nil, ai.StopError)
+	m.ErrorMessage = message
+	return m
+}
+
+// entryByID finds an entry of a conversation.
+func entryByID(t *testing.T, conversation *Conversation, id durable.EntryID) durable.EntryRecord {
+	t.Helper()
+	for _, entry := range chatEntries(t, conversation) {
+		if entry.ID == id {
+			return entry
+		}
+	}
+	t.Fatalf("no entry %d", id)
+	return durable.EntryRecord{}
+}
+
 // awaitSignal waits for a channel to close.
 func awaitSignal(t *testing.T, signal <-chan struct{}, what string) {
 	t.Helper()
