@@ -130,8 +130,13 @@ func Open(ctx context.Context, storage durable.Storage, options Options) (*Harne
 			Report:              h.report,
 			ConversationCreated: h.conversationCreated,
 			// Signal and join task invocations after the close listeners and
-			// before Storage closes; writes no task outcome.
-			BeforeClose: func() { h.tasks.join() },
+			// before Storage closes; writes no task outcome, only the stopped
+			// tasks back as pending.
+			BeforeClose: func(writeAtClose func(writes func() []durable.StorageWrite) error) { h.tasks.join(writeAtClose) },
+			TaskGraphBlocking: &durable.TaskGraphBlocking{
+				Blocked:   func(record durable.TaskRecord) string { return h.tasks.blockedReason(record) },
+				Subscribe: func(listener func()) func() { return h.tasks.subscribeBlocked(listener) },
+			},
 		},
 	})
 	h.tasks = newScheduler(schedulerOptions{
@@ -200,6 +205,17 @@ func (h *Harness) Wake() (Wake, error) {
 	h.tasks.mu.Lock()
 	defer h.tasks.unlock()
 	return h.tasks.wakeLocked(), nil
+}
+
+// RetryTask runs a task parked by the restart limit again (spec §5.4): it
+// clears its restart count and enables scheduling. It does nothing for a task
+// that is not parked, and fails for an unknown one. A host shows parked tasks
+// (Inspect, the task graph's Blocked) and offers this.
+func (h *Harness) RetryTask(ctx context.Context, id durable.TaskID) error {
+	if h.tasks.closing.Load() {
+		return closedError(h.Session)
+	}
+	return h.tasks.retry(ctx, id)
 }
 
 // AbortTask commits the abort mark, signals and joins an active run

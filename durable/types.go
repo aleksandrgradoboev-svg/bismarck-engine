@@ -299,6 +299,10 @@ type TaskRecord struct {
 	State     TaskState `json:"state"`
 	// Memos are small first-writer-wins values kept while the task can run.
 	Memos map[string]json.RawMessage `json:"memos,omitempty"`
+	// Restarts counts the times in a row a crash cut the task off without a
+	// state change since; a close does not count. Last, as pi appends the key
+	// when it first counts one.
+	Restarts int `json:"restarts,omitempty"`
 }
 
 // Document scope kinds.

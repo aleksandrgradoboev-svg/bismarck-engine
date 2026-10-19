@@ -173,14 +173,18 @@ func (s *controlledStorage) taskWrites(id durable.TaskID) []durable.TaskRecord {
 }
 
 // lastTaskWrites returns the task writes of the last commit.
-func (s *controlledStorage) lastTaskWrites() []durable.TaskRecord {
+func (s *controlledStorage) lastTaskWrites() []durable.TaskRecord { return s.taskWritesBack(1) }
+
+// taskWritesBack returns the task writes of the commit back from the end,
+// 1 for the last; pi's commits.at(-back).
+func (s *controlledStorage) taskWritesBack(back int) []durable.TaskRecord {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var out []durable.TaskRecord
-	if len(s.commits) == 0 {
+	if len(s.commits) < back {
 		return nil
 	}
-	for _, write := range s.commits[len(s.commits)-1] {
+	for _, write := range s.commits[len(s.commits)-back] {
 		if task, ok := write.(durable.TaskWrite); ok {
 			out = append(out, task.Value)
 		}

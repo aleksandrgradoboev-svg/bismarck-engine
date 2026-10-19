@@ -88,8 +88,27 @@ type SessionHooks struct {
 	// forks a conversation, after the record is staged.
 	ConversationCreated func(tx *Tx, record ConversationRecord) error
 	// BeforeClose runs after close seals admission and before the line
-	// closes Storage.
-	BeforeClose func()
+	// closes Storage. writeAtClose, which only it gets (pi's protected
+	// writeAtClose), runs on the line after every commit admitted before the
+	// seal has settled, and writes what writes returns then straight to
+	// Storage. Nothing is published, since the Session is closing; a failed
+	// Session writes nothing, and a failing write fails the Session.
+	BeforeClose func(writeAtClose func(writes func() []StorageWrite) error)
+	// TaskGraphBlocking derives each task graph node's blocked reason; nil
+	// leaves the nodes without one.
+	TaskGraphBlocking *TaskGraphBlocking
+}
+
+// TaskGraphBlocking is what the task graph asks the harness's scheduler:
+// a task's blocked reason, and when reasons may change without a commit.
+type TaskGraphBlocking struct {
+	// Blocked is the reason a live task cannot run here, or "". It reads the
+	// record's id, kind, version, abort fields, restart count and status.
+	Blocked func(record TaskRecord) string
+	// Subscribe calls listener when blocked reasons may have changed without
+	// a commit, such as a registry change or a failed migration; the returned
+	// function unsubscribes.
+	Subscribe func(listener func()) func()
 }
 
 type commitListener func(publication CommitPublication, ctx context.Context)
@@ -613,6 +632,26 @@ func (s *Session) Close(ctx context.Context) error {
 	}
 }
 
+// writeAtClose is SessionHooks.BeforeClose's: on the line, after every commit
+// admitted before the seal has settled, it writes what writes returns then
+// straight to Storage, publishing nothing.
+func (s *Session) writeAtClose(writes func() []StorageWrite) error {
+	return s.enqueue(false, func() error {
+		s.mu.Lock()
+		failed := s.hasFailure
+		s.mu.Unlock()
+		if failed {
+			return nil
+		}
+		batch := writes()
+		if len(batch) == 0 {
+			return nil
+		}
+		_, err := s.storage.Commit(context.Background(), batch)
+		return err
+	})
+}
+
 // beginClose starts closing once and returns when closing is done.
 func (s *Session) beginClose(ctx context.Context) <-chan struct{} {
 	s.lineMu.Lock()
@@ -641,7 +680,7 @@ func (s *Session) beginClose(ctx context.Context) <-chan struct{} {
 	cleanup := context.WithoutCancel(ctx)
 	go func() {
 		if s.hooks.BeforeClose != nil {
-			contained(s.hooks.BeforeClose, s.report)
+			contained(func() { s.hooks.BeforeClose(s.writeAtClose) }, s.report)
 		}
 		err := s.enqueue(false, func() error {
 			s.mu.Lock()

@@ -375,8 +375,13 @@ func TestCloseStopsWithoutOutcomesAndStartsNoFreshPhaseOrAbortInvocation(t *test
 	if result, err := await(t, aborting); err != nil || result != "marked" {
 		t.Fatalf("abort = %s, %v", result, err)
 	}
-	if storage.commitCount() != commits || !reflect.DeepEqual(phases.all(), []string{"one"}) || abortRan {
+	// No outcome: close writes only the stopped task back as pending, so a
+	// reopen counts no restart.
+	if storage.commitCount() != commits+1 || !reflect.DeepEqual(phases.all(), []string{"one"}) || abortRan {
 		t.Fatalf("commits %d -> %d, phases %v, abort ran %v", commits, storage.commitCount(), phases.all(), abortRan)
+	}
+	if last := storage.lastTaskWrites(); len(last) != 1 || last[0].ID != id || !last[0].AbortRequested || last[0].State.Status != durable.TaskPending || string(last[0].State.Checkpoint) != `{"phase":"two"}` {
+		t.Fatalf("last commit = %+v", last)
 	}
 	if !record.AbortRequested || record.State.Status != durable.TaskRunning || string(record.State.Checkpoint) != `{"phase":"two"}` {
 		t.Fatalf("record = %+v", record)
@@ -441,7 +446,8 @@ func TestCloseWritesNoFaultWhenItSealsWhileTheStepAfterAFailedPhaseIsQueued(t *t
 	if _, err := await(t, closing); err != nil {
 		t.Fatal(err)
 	}
-	if got := names(storage.taskWrites(id), func(r durable.TaskRecord) string { return r.State.Status }); !reflect.DeepEqual(got, []string{"pending", "running"}) {
+	// Created, reserved, and written back as pending by close: no fault.
+	if got := names(storage.taskWrites(id), func(r durable.TaskRecord) string { return r.State.Status }); !reflect.DeepEqual(got, []string{"pending", "running", "pending"}) {
 		t.Fatalf("task writes = %v", got)
 	}
 }
@@ -468,9 +474,13 @@ func TestCloseStartsNoAbortHandlerWhoseReservationSettlesWhileClosing(t *testing
 	if _, err := await(t, closing); err != nil {
 		t.Fatal(err)
 	}
-	writes := storage.lastTaskWrites()
-	if ran || len(writes) != 1 || writes[0].ID != id || !writes[0].AbortRequested || writes[0].State.Status != durable.TaskRunning {
-		t.Fatalf("ran %v, writes %+v", ran, writes)
+	// The reservation landed; close wrote the task back as pending.
+	reserved, last := storage.taskWritesBack(2), storage.lastTaskWrites()
+	if ran || len(reserved) != 1 || reserved[0].ID != id || !reserved[0].AbortRequested || reserved[0].State.Status != durable.TaskRunning {
+		t.Fatalf("ran %v, reservation %+v", ran, reserved)
+	}
+	if len(last) != 1 || last[0].ID != id || !last[0].AbortRequested || last[0].State.Status != durable.TaskPending {
+		t.Fatalf("last commit = %+v", last)
 	}
 }
 
@@ -504,8 +514,10 @@ func TestCloseFailsARuntimeCommitThatWasQueuedOnTheLineWhenCloseSealedIt(t *test
 	if _, err := await(t, closing); err != nil {
 		t.Fatal(err)
 	}
-	if got := storage.taskWrites(id); len(got) != 2 {
-		t.Fatalf("task writes = %d", len(got))
+	// Created, reserved, and written back as pending by close; the queued
+	// outcome never landed.
+	if got := names(storage.taskWrites(id), func(r durable.TaskRecord) string { return r.State.Status }); !reflect.DeepEqual(got, []string{"pending", "running", "pending"}) {
+		t.Fatalf("task writes = %v", got)
 	}
 }
 
@@ -590,8 +602,12 @@ func TestCloseJoinsAReservationThatSettlesWhileClosingWithoutStartingItsHandler(
 	if _, err := await(t, closing); err != nil {
 		t.Fatal(err)
 	}
-	writes := storage.lastTaskWrites()
-	if ran || len(writes) != 1 || writes[0].ID != id || writes[0].State.Status != durable.TaskRunning {
-		t.Fatalf("ran %v, writes %+v", ran, writes)
+	// The reservation landed; close wrote the task back as pending.
+	reserved, last := storage.taskWritesBack(2), storage.lastTaskWrites()
+	if ran || len(reserved) != 1 || reserved[0].ID != id || reserved[0].State.Status != durable.TaskRunning {
+		t.Fatalf("ran %v, reservation %+v", ran, reserved)
+	}
+	if len(last) != 1 || last[0].ID != id || last[0].State.Status != durable.TaskPending {
+		t.Fatalf("last commit = %+v", last)
 	}
 }

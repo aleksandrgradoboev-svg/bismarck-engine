@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -155,6 +156,16 @@ type scheduler struct {
 	// sleeping are the sleeping live tasks, due or not: the candidates of
 	// wakeDueLocked.
 	sleeping *set[durable.TaskID]
+	// parkedTasks are the tasks a pass left out as parked; each pass checks
+	// them again, as settings.RestartLimit may have risen.
+	parkedTasks *set[durable.TaskID]
+	// blockedListeners hear when blocked reasons may change without a
+	// commit; the task graph is one.
+	blockedListeners map[int]func()
+	nextBlocked      int
+	// snapshotReported is set once a registry snapshot that panicked for the
+	// task graph was reported; it is read per record, so only once.
+	snapshotReported bool
 
 	// wakeMu orders wake deliveries: OnWake calls and the arming of the sleep
 	// timer, which are host code and so run outside mu. It is taken before mu.
@@ -213,6 +224,8 @@ func newScheduler(options schedulerOptions) *scheduler {
 		failFastChecks:      newSet[durable.TaskID](),
 		abandoned:           newSet[durable.TaskID](),
 		sleeping:            newSet[durable.TaskID](),
+		parkedTasks:         newSet[durable.TaskID](),
+		blockedListeners:    map[int]func(){},
 		unsubscribeRegistry: func() {},
 		sealed:              make(chan struct{}),
 	}
@@ -300,8 +313,9 @@ func installerOf(snapshot *RegistrySnapshot, task Task) string {
 	return ""
 }
 
-// open loads live tasks and changes surviving running tasks back to pending.
-// It dispatches nothing.
+// open loads live tasks and changes surviving running tasks back to pending,
+// counting the restart. It dispatches nothing. A task that reaches the
+// restart limit this way is parked and reported.
 func (s *scheduler) open(ctx context.Context) error {
 	if _, err := s.session.ObserveCommits(func(publication durable.CommitPublication, _ context.Context) {
 		s.observe(publication)
@@ -312,11 +326,19 @@ func (s *scheduler) open(ctx context.Context) error {
 		return err
 	}
 	s.mu.Lock()
-	s.unsubscribeRegistry = s.registry.Subscribe(s.kick)
+	s.unsubscribeRegistry = s.registry.Subscribe(func() {
+		s.mu.Lock()
+		s.notifyBlockedLocked()
+		s.kickLocked()
+		s.unlock()
+	})
 	s.mu.Unlock()
+	var parked []durable.TaskRecord
 	err := s.session.Commit(ctx, func(tx *durable.Tx) error {
 		s.mu.Lock()
 		defer s.unlock()
+		parked = nil
+		limit := s.restartLimitLocked()
 		// Every table read before the first write.
 		var scans [][]durable.TaskRecord
 		for _, status := range []string{durable.TaskPending, durable.TaskRunning, durable.TaskWaiting, durable.TaskSleeping, durable.TaskCompleting} {
@@ -335,8 +357,13 @@ func (s *scheduler) open(ctx context.Context) error {
 					s.abandoned.add(record.ID)
 				}
 				if record.State.Status == durable.TaskRunning {
-					if err := tx.SetTask(withState(record, durable.TaskState{Status: durable.TaskPending, Checkpoint: record.State.Checkpoint})); err != nil {
+					pending := withState(record, durable.TaskState{Status: durable.TaskPending, Checkpoint: record.State.Checkpoint})
+					pending.Restarts = record.Restarts + 1
+					if err := tx.SetTask(pending); err != nil {
 						return err
+					}
+					if limit >= 0 && pending.Restarts >= limit && !record.AbortRequested {
+						parked = append(parked, pending)
 					}
 				}
 				if record.State.Status == durable.TaskWaiting && record.State.Policy == durable.JoinFailFast {
@@ -349,12 +376,22 @@ func (s *scheduler) open(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	for _, record := range parked {
+		task, extension := s.aboutRecord(record)
+		s.report(fmt.Errorf("Task %d (%s) was cut off %d times without progress; it is parked until RetryTask", record.ID, record.Kind, record.Restarts),
+			taskReport(durable.ReportTaskParked, task, extension, ""))
+	}
 	s.mu.Lock()
 	// Derive abort marks a crash left unapplied below cancelled owners, and
 	// finalize held outcomes.
 	s.cascadePending = true
+	s.unlock()
+	// The host hears of open's recovery before the pass can fail it: a host
+	// arms its recovery wakeup while the wake is active. pi's microtask runs
+	// before the pass's commit settles; here the delivery runs first.
+	s.deliverWake()
+	s.mu.Lock()
 	s.scheduleReconcile()
-	s.scheduleWakeLocked()
 	s.unlock()
 	return nil
 }
@@ -370,21 +407,31 @@ func (s *scheduler) resume() {
 	s.unlock()
 }
 
-// join signals every invocation and waits for them; it writes nothing. Close
-// calls it after every close listener has run, so waits, watches and streams
-// a task holds end with the Session's reason, not as cancelled by its signal.
-func (s *scheduler) join() {
+// join signals every invocation and waits for them, then writes the tasks
+// they ran back as pending with writeAtClose, as a close is not a crash.
+// Close calls it after every close listener has run, so waits, watches and
+// streams a task holds end with the Session's reason, not as cancelled by its
+// signal. A failed write leaves them running, counted as if cut off; the
+// Storage guard fails the Session and reports it.
+func (s *scheduler) join(writeAtClose func(writes func() []durable.StorageWrite) error) {
 	<-s.sealed
 	s.mu.Lock()
 	var done []chan struct{}
+	var stopped []durable.TaskID
 	for _, inv := range s.invocations {
 		inv.cancel(context.Canceled)
 		done = append(done, inv.done)
+		stopped = append(stopped, inv.taskID)
 	}
 	s.unlock()
 	for _, d := range done {
 		<-d
 	}
+	if len(stopped) == 0 {
+		return
+	}
+	slices.Sort(stopped)
+	_ = writeAtClose(func() []durable.StorageWrite { return s.stoppedBack(stopped) })
 }
 
 // abort commits the abort mark, or settles a task no registered definition
@@ -1003,9 +1050,15 @@ func (s *scheduler) drain() {
 func (s *scheduler) reserve() ([]reservation, error) {
 	var reservations []reservation
 	var abandoned []durable.TaskID
+	type cutOff struct {
+		record  durable.TaskRecord
+		message string
+	}
+	var faulted []cutOff
 	err := s.session.Commit(s.ctx, func(tx *durable.Tx) error {
 		s.mu.Lock()
 		defer s.unlock()
+		faulted = nil
 		if !s.enabled || s.closing.Load() {
 			return nil
 		}
@@ -1026,6 +1079,7 @@ func (s *scheduler) reserve() ([]reservation, error) {
 		// Every pass picks up sleeps whose time has come: a pass started by any
 		// change may be the first to run after a deadline.
 		s.wakeDueLocked()
+		s.unparkRaisedLocked()
 		// Taken once per pass, and only when some task is a candidate.
 		var snapshot *RegistrySnapshot
 		for _, id := range s.runnable.values() {
@@ -1046,6 +1100,18 @@ func (s *scheduler) reserve() ([]reservation, error) {
 				s.runnable.delete(id)
 				continue
 			}
+			// It returns when retry clears its restart count, or at a pass after
+			// settings.RestartLimit rose.
+			if s.parkedLocked(record) {
+				s.runnable.delete(id)
+				// Newly parked without a commit, as after a lowered limit: the
+				// graph must hear it.
+				if !s.parkedTasks.has(id) {
+					s.notifyBlockedLocked()
+				}
+				s.parkedTasks.add(id)
+				continue
+			}
 			mode := modeRun
 			if record.AbortRequested {
 				mode = modeAbort
@@ -1056,6 +1122,16 @@ func (s *scheduler) reserve() ([]reservation, error) {
 			if mode == modeRun && !record.Background && s.belowCancelled(parentOf(nodeOf(record))) {
 				s.cascadePending = true
 				s.scheduleReconcile()
+				continue
+			}
+			// An abort handler cut off the restart limit's times in a row would
+			// run forever; nothing is left to park it for.
+			if limit := s.restartLimitLocked(); mode == modeAbort && limit >= 0 && record.Restarts > 0 && record.Restarts >= limit {
+				message := fmt.Sprintf("Abort handler of task %d (%s) was cut off %d times", id, record.Kind, record.Restarts)
+				if err := s.terminate(tx, record, durable.TaskOutcome{Status: durable.OutcomeFaulted, Error: &durable.TaskOutcomeError{Message: message, Detail: json.RawMessage(`{"reason":"restart_limit"}`)}}); err != nil {
+					return err
+				}
+				faulted = append(faulted, cutOff{record: record, message: message})
 				continue
 			}
 			if snapshot == nil {
@@ -1094,6 +1170,10 @@ func (s *scheduler) reserve() ([]reservation, error) {
 		}
 		s.unlock()
 		return nil, err
+	}
+	for _, f := range faulted {
+		task, extension := s.aboutRecord(f.record)
+		s.report(errors.New(f.message), taskReport(durable.ReportTaskFaulted, task, extension, blockedRestartLimit))
 	}
 	s.mu.Lock()
 	// Marked, or already marked or gone: done with them. Reserve again, now
@@ -1143,7 +1223,9 @@ func (s *scheduler) resolve(record durable.TaskRecord, snapshot *RegistrySnapsho
 	migrated, err := migrate(task, record)
 	if err != nil {
 		s.failedMigrations[record.ID] = failedMigration{task: task, err: err}
-		// Blocked now without a commit: the host's wake must hear it.
+		// Blocked now without a commit: the graph and the host's wake must
+		// hear it.
+		s.notifyBlockedLocked()
 		s.scheduleWakeLocked()
 		about := &durable.ReportTask{ID: record.ID, Kind: record.Kind, ConversationID: record.ConversationID}
 		s.reportLocked(err, taskReport(durable.ReportMigrationFailed, about, installerOf(snapshot, task), ""))
@@ -1490,7 +1572,20 @@ func (s *scheduler) commitState(tx *durable.Tx, inv *invocation, current durable
 	default:
 		return fmt.Errorf("Task %d cannot commit the state %s", current.ID, next.Status)
 	}
+	// A state the task committed that differs from its current one is
+	// progress: its restart count starts over. The same checkpoint committed
+	// again, for example as intent before an effect, is not.
+	if current.Restarts > 0 && !sameState(current.State, next) {
+		current = progressed(current)
+	}
 	return tx.SetTask(withState(current, next))
+}
+
+// sameState reports structurally equal states; object key order is ignored.
+func sameState(a, b durable.TaskState) bool {
+	left, errA := json.Marshal(a)
+	right, errB := json.Marshal(b)
+	return errA == nil && errB == nil && jsonEqual(left, right)
 }
 
 // validateWait checks that a wait names existing tasks, and failFast only
@@ -1745,6 +1840,10 @@ func (s *scheduler) inspectTask(record durable.TaskRecord, snapshot *RegistrySna
 	}
 	if s.notDue(record) {
 		inspection.Kind, inspection.Until = "sleeping", time.UnixMilli(*record.State.Until)
+		return inspection
+	}
+	if s.parkedLocked(record) {
+		inspection.Kind, inspection.Reason = "blocked", blockedRestartLimit
 		return inspection
 	}
 	task, migrates, reason, err := s.fit(record, snapshot.Task(record.Kind))
