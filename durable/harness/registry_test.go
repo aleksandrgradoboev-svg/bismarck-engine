@@ -160,7 +160,7 @@ func TestSettingsKeepTheDefaultOfAnUnsetProgressInterval(t *testing.T) {
 
 // resolve resolves state against snapshot and settings, collecting reports.
 func resolve(state *AgentState, snapshot *RegistrySnapshot, settings HarnessSettings, reports *[]error) *Agent {
-	return resolveAgent(state, snapshot, resolveSettings(settings), func(err error) {
+	return resolveAgent(state, snapshot, resolveSettings(settings), func(err error, _ string) {
 		if reports != nil {
 			*reports = append(*reports, err)
 		}
@@ -412,11 +412,12 @@ func TestAgentCollectsHooksOfTheSelectedExtensionsAndAppliesFieldDefaults(t *tes
 	first, second, onYield := &struct{ n int }{1}, &struct{ n int }{2}, &struct{ n int }{3}
 	must(t, local.Install(&Extension{Name: "a", Hooks: []HookRegistration{Hook(toolTask, first), Hook(generationTask, onYield)}}))
 	must(t, local.Install(&Extension{Name: "b", Hooks: []HookRegistration{Hook(toolTask, second)}}))
-	if got := agentHooks(resolve(nil, local.Snapshot(), HarnessSettings{}, nil), "pi.tool"); !reflect.DeepEqual(got, []any{first, second}) {
+	hooksA, hooksB := extensionHooks{extension: "a", handlers: first}, extensionHooks{extension: "b", handlers: second}
+	if got := agentHooks(resolve(nil, local.Snapshot(), HarnessSettings{}, nil), "pi.tool"); !reflect.DeepEqual(got, []extensionHooks{hooksA, hooksB}) {
 		t.Fatalf("hooks = %v", got)
 	}
 	ba := Exactly("b", "a")
-	if got := agentHooks(resolve(&AgentState{Extensions: &ba}, local.Snapshot(), HarnessSettings{}, nil), "pi.tool"); !reflect.DeepEqual(got, []any{second, first}) {
+	if got := agentHooks(resolve(&AgentState{Extensions: &ba}, local.Snapshot(), HarnessSettings{}, nil), "pi.tool"); !reflect.DeepEqual(got, []extensionHooks{hooksB, hooksA}) {
 		t.Fatalf("hooks = %v", got)
 	}
 	b := Exactly("b")

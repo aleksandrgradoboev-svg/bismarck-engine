@@ -960,6 +960,9 @@ func TestHandoverToANewerVersionWhoseMigrationFailsLeavesTheTaskBlocked(t *testi
 	}))
 	close(gate)
 	eventually(t, func() bool { return len(o.reports.all()) == 1 })
+	if info := o.reports.allInfos()[0]; info.Type != durable.ReportMigrationFailed || info.Task == nil || info.Task.ID != o.id {
+		t.Fatalf("report = %+v", info)
+	}
 	schedulerQuiet(t, o.h)
 	if record := getTask(t, o.h, o.id); record.Version != 1 || record.State.Status != durable.TaskPending || string(record.State.Checkpoint) != `{"phase":"b"}` {
 		t.Fatalf("record = %s", jsonOf(t, record))
@@ -991,9 +994,14 @@ func TestHandoverKeepsRunningUnderTheOldDefinitionWhenTheReplacementIsMissingOrC
 	if got := log.all(); !reflect.DeepEqual(got, []string{"old:a start", "old:a end", "old:b start", "old:b end", "old:c"}) {
 		t.Fatalf("log = %v", got)
 	}
-	got := reportTexts(o.reports)
-	if len(got) != 2 || !strings.HasSuffix(got[0], ": missing_task") || !strings.HasSuffix(got[1], ": incompatible_task") {
-		t.Fatalf("reports = %v", got)
+	infos := o.reports.allInfos()
+	if len(infos) != 2 {
+		t.Fatalf("reports = %v", reportTexts(o.reports))
+	}
+	for i, reason := range []string{"missing_task", "incompatible_task"} {
+		if info := infos[i]; info.Type != durable.ReportTaskOutdated || info.Task == nil || info.Task.ID != o.id || info.Reason != reason {
+			t.Fatalf("report %d = %+v, want task_outdated of task %d with reason %s", i, info, o.id, reason)
+		}
 	}
 	must(t, o.h.Close(bg))
 }

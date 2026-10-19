@@ -43,7 +43,7 @@ type schedulerOptions struct {
 	onWake func(Wake)
 	// timers are the host's (Options.SetTimer).
 	timers *durable.Timers
-	report func(error)
+	report func(error, durable.ReportInfo)
 	// settleOutcome is the Harness cleanup staged in the commit that makes an
 	// outcome the scheduler wrote itself terminal.
 	settleOutcome func(tx *durable.Tx, record durable.TaskRecord, outcome durable.TaskOutcome) error
@@ -60,6 +60,11 @@ type invocation struct {
 	taskID         durable.TaskID
 	conversationID durable.ConversationID
 	mode           string
+	// kind is the task's registered name.
+	kind string
+	// extension installed the definition the invocation runs, as of its
+	// reservation; empty for a built-in task. Its task's reports name it.
+	extension string
 	// ctx is passed to handlers; cancel ends it.
 	ctx    context.Context
 	cancel context.CancelCauseFunc
@@ -119,10 +124,10 @@ type scheduler struct {
 
 	mu sync.Mutex
 	// pendingReports are reported once mu is released.
-	pendingReports []error
+	pendingReports []pendingReport
 	// afterUnlock are host calls decided under mu, such as disarming a timer,
 	// run once it is released.
-	afterUnlock []func()
+	afterUnlock []hostCall
 
 	live             map[durable.TaskID]durable.TaskRecord
 	invocations      map[durable.TaskID]*invocation
@@ -221,22 +226,79 @@ func (s *scheduler) unlock() {
 	s.afterUnlock = nil
 	s.mu.Unlock()
 	for _, call := range calls {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					s.report(panicError(r))
-				}
-			}()
-			call()
-		}()
+		if err := s.callHost(call.run); err != nil {
+			s.report(err, call.info)
+		}
 	}
-	for _, err := range reports {
-		s.report(err)
+	for _, r := range reports {
+		s.report(r.err, r.info)
 	}
 }
 
+type pendingReport struct {
+	err  error
+	info durable.ReportInfo
+}
+
+// hostCall is host code decided under mu, run once it is released; a panic
+// is reported with info.
+type hostCall struct {
+	run  func()
+	info durable.ReportInfo
+}
+
 // reportLocked reports err once mu is released.
-func (s *scheduler) reportLocked(err error) { s.pendingReports = append(s.pendingReports, err) }
+func (s *scheduler) reportLocked(err error, info durable.ReportInfo) {
+	s.pendingReports = append(s.pendingReports, pendingReport{err, info})
+}
+
+// Reports of host callbacks the scheduler calls itself.
+var (
+	registryError = durable.HostError(durable.CallbackRegistry, nil)
+	onWakeError   = durable.HostError(durable.CallbackOnWake, nil)
+	setTimerError = durable.HostError(durable.CallbackSetTimer, nil)
+)
+
+// aboutTask is what a report about the invocation's own code says of it:
+// the task, and the extension that installed the definition it ran.
+func aboutTask(inv *invocation) (*durable.ReportTask, string) {
+	return &durable.ReportTask{ID: inv.taskID, Kind: inv.kind, ConversationID: inv.conversationID}, inv.extension
+}
+
+// aboutRecord is aboutTask for a stored task without an invocation, with the
+// extension that installs its definition now, if any.
+func (s *scheduler) aboutRecord(record durable.TaskRecord) (*durable.ReportTask, string) {
+	task := &durable.ReportTask{ID: record.ID, Kind: record.Kind, ConversationID: record.ConversationID}
+	// A registry that fails is reported where it is read for scheduling; the
+	// report goes out without the name.
+	snapshot, err := s.snapshotSafely()
+	if err != nil {
+		return task, ""
+	}
+	return task, installerOf(snapshot, snapshot.Task(record.Kind))
+}
+
+// taskReport is a task report's info.
+func taskReport(typ durable.ReportType, task *durable.ReportTask, extension, reason string) durable.ReportInfo {
+	return durable.ReportInfo{Type: typ, Task: task, Extension: extension, Reason: reason}
+}
+
+// installerOf is the extension that installed task in snapshot: the last one
+// that lists it; none for a built-in task.
+func installerOf(snapshot *RegistrySnapshot, task Task) string {
+	if task == nil {
+		return ""
+	}
+	installed := snapshot.Installed()
+	for i := len(installed) - 1; i >= 0; i-- {
+		for _, listed := range installed[i].Tasks {
+			if listed == task {
+				return installed[i].Name
+			}
+		}
+	}
+	return ""
+}
 
 // open loads live tasks and changes surviving running tasks back to pending.
 // It dispatches nothing.
@@ -872,20 +934,15 @@ func (s *scheduler) seal() {
 		s.wakeMu.Lock()
 		if s.timer != nil {
 			if err := s.callHost(s.timer.disarm); err != nil {
-				s.report(err)
+				s.report(err, setTimerError)
 			}
 			s.timer = nil
 			s.timerArmed.Store(false)
 		}
 		s.wakeMu.Unlock()
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					s.report(panicError(r))
-				}
-			}()
-			unsubscribe()
-		}()
+		if err := s.callHost(unsubscribe); err != nil {
+			s.report(err, registryError)
+		}
 		close(s.sealed)
 	}()
 }
@@ -1023,7 +1080,7 @@ func (s *scheduler) reserve() ([]reservation, error) {
 			// Registered on the line, so marks and later reservations see it and
 			// close joins it; end makes it a candidate again.
 			s.runnable.delete(id)
-			reservations = append(reservations, reservation{invocation: s.createInvocation(record, mode), task: task, snapshot: snapshot})
+			reservations = append(reservations, reservation{invocation: s.createInvocation(record, mode, installerOf(snapshot, task)), task: task, snapshot: snapshot})
 		}
 		return nil
 	})
@@ -1088,7 +1145,8 @@ func (s *scheduler) resolve(record durable.TaskRecord, snapshot *RegistrySnapsho
 		s.failedMigrations[record.ID] = failedMigration{task: task, err: err}
 		// Blocked now without a commit: the host's wake must hear it.
 		s.scheduleWakeLocked()
-		s.reportLocked(err)
+		about := &durable.ReportTask{ID: record.ID, Kind: record.Kind, ConversationID: record.ConversationID}
+		s.reportLocked(err, taskReport(durable.ReportMigrationFailed, about, installerOf(snapshot, task), ""))
 		return nil, record, blockedMigrationFailed
 	}
 	return task, migrated, ""
@@ -1146,12 +1204,14 @@ func canReserve(task Task, record durable.TaskRecord) bool {
 	return task.Version() == record.Version || (task.Version() > record.Version && task.HasMigration())
 }
 
-func (s *scheduler) createInvocation(record durable.TaskRecord, mode string) *invocation {
+func (s *scheduler) createInvocation(record durable.TaskRecord, mode, extension string) *invocation {
 	ctx, cancel := context.WithCancelCause(s.ctx)
 	inv := &invocation{
 		taskID:         record.ID,
 		conversationID: record.ConversationID,
 		mode:           mode,
+		kind:           record.Kind,
+		extension:      extension,
 		ctx:            ctx,
 		cancel:         cancel,
 		watches:        map[*durable.DocumentWatch]struct{}{},
@@ -1166,7 +1226,8 @@ func (s *scheduler) start(r reservation) {
 	go func() {
 		defer func() {
 			if p := recover(); p != nil {
-				s.report(panicError(p))
+				task, extension := aboutTask(r.invocation)
+				s.report(panicError(p), taskReport(durable.ReportTaskError, task, extension, ""))
 			}
 			s.mu.Lock()
 			s.end(r.invocation)
@@ -1194,6 +1255,8 @@ type phaseResult struct {
 type runState struct {
 	task     Task
 	snapshot *RegistrySnapshot
+	// extension installed the definition the invocation runs.
+	extension string
 	// reported is the replacement definition already reported as unable to
 	// take over; reportedSet tells a reported nil from none.
 	reported    Task
@@ -1211,7 +1274,7 @@ type decision struct {
 // whether the invocation continues.
 func (s *scheduler) run(r reservation) {
 	inv := r.invocation
-	state := &runState{task: r.task, snapshot: r.snapshot}
+	state := &runState{task: r.task, snapshot: r.snapshot, extension: inv.extension}
 	ph := &phase{snapshot: func() *RegistrySnapshot { return state.snapshot }, task: func() Task { return state.task }}
 	runtime := s.newRuntime(inv, ph)
 	var previous *phaseResult
@@ -1288,11 +1351,13 @@ func (s *scheduler) decide(tx *durable.Tx, current durable.TaskRecord, previous 
 		}
 		if !state.reportedSet || state.reported != next {
 			state.reported, state.reportedSet = next, true
-			cause := "incompatible_task"
+			reason := "incompatible_task"
 			if next == nil {
-				cause = blockedMissingTask
+				reason = blockedMissingTask
 			}
-			s.reportLocked(fmt.Errorf("Task %d keeps running under its old %s definition: %s", current.ID, current.Kind, cause))
+			about := &durable.ReportTask{ID: current.ID, Kind: current.Kind, ConversationID: current.ConversationID}
+			s.reportLocked(fmt.Errorf("Task %d keeps running under its old %s definition", current.ID, current.Kind),
+				taskReport(durable.ReportTaskOutdated, about, state.extension, reason))
 		}
 	}
 	return decision{proceed: true}
@@ -1332,9 +1397,11 @@ func (s *scheduler) runAbort(r reservation) {
 // such as admission after close, also ends the invocation.
 func (s *scheduler) step(inv *invocation, decide func(tx *durable.Tx, current durable.TaskRecord) decision) *durable.TaskRecord {
 	var result *durable.TaskRecord
+	var fault error
 	err := s.session.Commit(s.ctx, func(tx *durable.Tx) error {
 		s.mu.Lock()
 		defer s.unlock()
+		fault = nil
 		found, ok := s.live[inv.taskID]
 		running := ok && found.State.Status == durable.TaskRunning
 		d := decision{}
@@ -1348,10 +1415,17 @@ func (s *scheduler) step(inv *invocation, decide func(tx *durable.Tx, current du
 		}
 		s.end(inv)
 		if d.fault != nil {
+			fault = d.fault
 			return s.terminate(tx, found, durable.TaskOutcome{Status: durable.OutcomeFaulted, Error: &durable.TaskOutcomeError{Message: errorMessage(d.fault)}})
 		}
 		return nil
 	})
+	// Reported once the fault is durable: a host may count it, for example
+	// toward a breaker.
+	if err == nil && fault != nil {
+		task, extension := aboutTask(inv)
+		s.report(fault, taskReport(durable.ReportTaskFaulted, task, extension, "threw"))
+	}
 	if err != nil {
 		// The step writes the scheduler's own decision, a fault or a terminal
 		// record; an error there would otherwise leave the task running, to be
@@ -1568,7 +1642,7 @@ func (s *scheduler) end(inv *invocation) {
 	// Disarmed once mu is released: disarming is host code.
 	for timer := range inv.timers {
 		if timer.disarm != nil {
-			s.afterUnlock = append(s.afterUnlock, timer.disarm)
+			s.afterUnlock = append(s.afterUnlock, hostCall{run: timer.disarm, info: setTimerError})
 		}
 	}
 	clear(inv.timers)

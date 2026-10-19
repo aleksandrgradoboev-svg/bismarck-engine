@@ -81,8 +81,9 @@ type SessionOptions struct {
 // SessionHooks are what the harness adds to a Session.
 type SessionHooks struct {
 	// Report receives the Session's failure and listener errors, which never
-	// fail what ran them. A plain Session drops them.
-	Report func(error)
+	// fail what ran them, with where each came from. A plain Session drops
+	// them.
+	Report func(error, ReportInfo)
 	// ConversationCreated runs inside every transaction that creates or
 	// forks a conversation, after the record is staged.
 	ConversationCreated func(tx *Tx, record ConversationRecord) error
@@ -212,7 +213,7 @@ func NewSession(storage Storage, options SessionOptions) *Session {
 		s.nowFn = time.Now
 	}
 	s.storage = &guardedStorage{backend: storage, session: s}
-	s.timers = HostTimers(options.SetTimer, s.report)
+	s.timers = HostTimers(options.SetTimer, func(err error) { s.reportAs(err, HostError(CallbackSetTimer, nil)) })
 	return s
 }
 
@@ -269,9 +270,12 @@ func (s *Session) Failure() error {
 // ended.
 func (s *Session) Failed() <-chan struct{} { return s.failed }
 
-func (s *Session) report(err error) {
+// report reports a listener's failure, the default source.
+func (s *Session) report(err error) { s.reportAs(err, ListenerError) }
+
+func (s *Session) reportAs(err error, info ReportInfo) {
 	if s.hooks.Report != nil {
-		contained(func() { s.hooks.Report(err) }, func(error) {})
+		contained(func() { s.hooks.Report(err, info) }, func(error) {})
 	}
 }
 
@@ -288,7 +292,7 @@ func (s *Session) Fail(err error) {
 	close(s.failed)
 	s.mu.Unlock()
 	s.beginClose(context.Background())
-	s.report(err)
+	s.reportAs(err, ReportInfo{Type: ReportSessionFailed})
 }
 
 func (s *Session) healthy() error {
@@ -659,7 +663,7 @@ func (s *Session) beginClose(ctx context.Context) <-chan struct{} {
 				}
 				s.mu.Unlock()
 				if first {
-					s.report(err)
+					s.reportAs(err, ReportInfo{Type: ReportSessionFailed})
 				}
 				return err
 			}
