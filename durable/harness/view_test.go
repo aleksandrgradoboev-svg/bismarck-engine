@@ -584,6 +584,118 @@ func TestViewPublishesOneFrameForACommitThatAppendsSeveralEntriesAndEditsADocume
 	recorded.watch.Stop()
 }
 
+// The cases below are beyond pi: each covers a mechanism of the mount no case
+// of pi's checks (sabotage of slice 1 (c)).
+
+// A document retired and created again in one commit is mounted whole: the
+// new incarnation's operations are relative to its own initial value.
+func TestViewMountsADocumentRecreatedInOneCommitWhole(t *testing.T) {
+	_, root := openChat(t, memory.New(), newChatSetup(t))
+	must(t, root.Commit(bg, func(tx *durable.Tx) error {
+		live, err := tx.Doc(LiveDoc.Conversation(root.ID))
+		if err != nil {
+			return err
+		}
+		return live.Set("tools", []any{})
+	}))
+	recorded := recordView(t, root)
+	must(t, root.Commit(bg, func(tx *durable.Tx) error {
+		if err := tx.RetireDoc(LiveDoc.Conversation(root.ID)); err != nil {
+			return err
+		}
+		live, err := tx.Doc(LiveDoc.Conversation(root.ID))
+		if err != nil {
+			return err
+		}
+		return live.Set("compactions", []any{})
+	}))
+	frames := recorded.settle(t, 1)
+	sameJSON(t, "pi.live", frames[0].value["docs"].(map[string]any)["pi.live"], map[string]any{"compactions": []any{}})
+	recorded.watch.Stop()
+}
+
+// A keyed member of a mounted kind is not the built-in document: the mount
+// ignores it. pi.live is no family, but another definition of the kind can
+// be, and its members commit.
+func TestViewIgnoresAKeyedMemberOfAMountedKind(t *testing.T) {
+	_, root := openChat(t, memory.New(), newChatSetup(t))
+	family := durable.MustDefineDoc(durable.DocDef{Kind: "pi.live", Version: 1, Scope: durable.ScopeConversation, History: "latest", Fork: "initial", Family: true, Initial: func(any) map[string]any { return map[string]any{} }})
+	recorded := recordView(t, root)
+	must(t, root.Commit(bg, func(tx *durable.Tx) error {
+		member, err := tx.Doc(family.Conversation(root.ID).Member("other", nil))
+		if err != nil {
+			return err
+		}
+		return member.Set("tools", []any{})
+	}))
+	noteOf(t, root, "after", nil)
+	frames := recorded.settle(t, 1)
+	if len(frames) != 1 || opsJSON(t, frames[0].ops) == "" || strings.Contains(opsJSON(t, frames[0].ops), "docs") {
+		t.Fatalf("frames = %d, first ops %q, want only the entry", len(frames), opsJSON(t, frames[0].ops))
+	}
+	recorded.watch.Stop()
+}
+
+// Another conversation's document changes do not reach a mount (pi's case
+// commits another conversation's entry only).
+func TestViewIgnoresAnotherConversationsDocuments(t *testing.T) {
+	h, root := openChat(t, memory.New(), newChatSetup(t))
+	other, err := h.CreateConversation(bg, ConversationCreateOptions{Ownership: durable.ConversationOwnership{Kind: durable.OwnershipOwnerless}})
+	must(t, err)
+	recorded := recordView(t, root)
+	must(t, other.Configure(bg, AgentChange{ThinkingLevel: Set(ai.ModelThinkingLevel("high"))}))
+	noteOf(t, root, "after", nil)
+	frames := recorded.settle(t, 1)
+	if len(frames) != 1 || strings.Contains(opsJSON(t, frames[0].ops), "docs") {
+		t.Fatalf("frames = %d, first ops %q, want only root's entry", len(frames), opsJSON(t, frames[0].ops))
+	}
+	recorded.watch.Stop()
+}
+
+// A frame lists the document operations before the entry operations, as pi
+// orders them, whatever order the commit wrote them in.
+func TestViewOrdersDocumentOperationsBeforeEntryOperations(t *testing.T) {
+	_, root := openChat(t, memory.New(), newChatSetup(t))
+	recorded := recordView(t, root)
+	must(t, root.Commit(bg, func(tx *durable.Tx) error {
+		if _, err := tx.AppendEntry(root.ID, durable.EntryDraft{Kind: "a"}); err != nil {
+			return err
+		}
+		live, err := tx.Doc(LiveDoc.Conversation(root.ID))
+		if err != nil {
+			return err
+		}
+		return live.Set("tools", []any{})
+	}))
+	frames := recorded.settle(t, 1)
+	ops := frames[0].ops
+	if len(ops) != 2 || !strings.HasPrefix(opText(t, ops[0]), `s ["docs","pi.live","tools"]`) || !strings.HasPrefix(opText(t, ops[1]), `p ["entries"]`) {
+		t.Fatalf("ops = %s, want the document op, then the entry", opsJSON(t, ops))
+	}
+	recorded.watch.Stop()
+}
+
+// A view state cancelled while it waits for the Session line is refused
+// (pi's case cancels a watch, which checks cancellation once more after
+// attaching; a state does not).
+func TestViewRejectsAStateCancelledWhileItWaitsForTheSessionLine(t *testing.T) {
+	_, root := openChat(t, memory.New(), newChatSetup(t))
+	release, blocking := holdCommitLine(t, root)
+	ctx, cancel := context.WithCancelCause(bg)
+	cancelled := async(func() (durable.DocumentState, error) { return root.ViewState(ctx) })
+	parked(t, 1, "durable.(*Session).enqueue(", "harness.(*conversationViews).attach")
+	cancel(errors.New("cancelled"))
+	release()
+	_, err := await(t, blocking)
+	must(t, err)
+	if state, err := await(t, cancelled); err == nil || err.Error() != "cancelled" {
+		if state != nil {
+			state.Dispose()
+		}
+		t.Fatalf("cancelled state = %v, want cancelled", err)
+	}
+}
+
 // Ported from pi packages/durable/test/harness-live-deltas.test.ts: the two
 // cases without tools; the others drive a tool and wait for slice 2.
 

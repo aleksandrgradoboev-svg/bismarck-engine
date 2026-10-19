@@ -465,7 +465,15 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    control came with slice 1 (b); its tool and compaction parts come with slices 2 and 3. Tests:
    `harness-view` whole (14), `harness-live-deltas` without tools (2 of 11; the 9 that drive a tool
    wait for slice 2). Adapted: frames are delivered off the commit, so the cases wait for the
-   frames they count, then a little longer for a frame too many.
+   frames they count, then a little longer for a frame too many. Added beyond pi: a document
+   recreated in one commit mounted whole, a keyed member of a mounted kind (another definition of
+   the kind can be a family) ignored, another conversation's documents ignored, document
+   operations before entry operations, a view state cancelled while it waits for the line.
+   Sabotage 15 of 21. Duplicate safeguards: the incarnation check (a retirement is published
+   before the recreation and unmounts first) and the closed check in attach (the line refuses
+   after close). Unreachable through the API: a panicking observer. Waiting: the publication
+   observer (slice 1 (d)). Unchecked: a root replacement of a document, and a document's
+   definition version changing under a mount.
 
 ## 5. Bookkeeping
 
