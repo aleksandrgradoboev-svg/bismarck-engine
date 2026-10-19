@@ -55,7 +55,7 @@ func TestResumeExtendsTheSessionsCompaction(t *testing.T) {
 	})
 	t.Cleanup(reg.Unregister)
 	var summarizations []string
-	step := func(req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+	step := func(_ context.Context, req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
 		for _, m := range req.Messages {
 			if u, ok := m.(ai.UserMessage); ok {
 				if text := ai.ContentText(u.Content); strings.HasPrefix(text, "<conversation>\n") {

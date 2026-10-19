@@ -3,9 +3,9 @@
 // built-in tasks that run the agent, over a durable.Session.
 //
 // The port arrives in stages. This one holds the registry, agent resolution,
-// settings, system prompt planning, model context derivation, and the Harness
-// with its conversation handles; task scheduling, submissions, generation,
-// tool calls and compaction follow.
+// settings, system prompt planning, model context derivation, task
+// scheduling, submissions with the inbox, and the core of generation; tool
+// calls and compaction follow.
 package harness
 
 import (
@@ -95,9 +95,10 @@ type ConversationCreateOptions struct {
 // carries.
 type Harness struct {
 	*durable.Session
-	options Options
-	report  func(error, durable.ReportInfo)
-	tasks   *scheduler
+	options     Options
+	report      func(error, durable.ReportInfo)
+	tasks       *scheduler
+	submissions *submissions
 }
 
 // Open opens a Harness over storage.
@@ -153,14 +154,19 @@ func Open(ctx context.Context, storage durable.Storage, options Options) (*Harne
 		timers: durable.HostTimers(options.SetTimer, func(err error) {
 			h.report(err, durable.HostError(durable.CallbackSetTimer, nil))
 		}),
-		report: h.report,
-		// pi.live and pi.inbox come with the submissions stage, and with them
-		// the cleanup of a scheduler outcome and the withdrawal of queued
-		// inputs.
-		settleOutcome:  func(*durable.Tx, durable.TaskRecord, durable.TaskOutcome) error { return nil },
-		withdrawInputs: func(*durable.Tx, durable.ConversationID) error { return nil },
-		ctx:            context.WithoutCancel(ctx),
+		report:        h.report,
+		settleOutcome: settleSchedulerOutcome,
+		withdrawInputs: func(tx *durable.Tx, id durable.ConversationID) error {
+			return withdrawQueuedInputs(tx, id, "aborted")
+		},
+		ctx: context.WithoutCancel(ctx),
 	})
+	submissions, err := newSubmissions(h)
+	if err != nil {
+		_ = h.Close(context.WithoutCancel(ctx))
+		return nil, err
+	}
+	h.submissions = submissions
 	if err := h.tasks.open(ctx); err != nil {
 		// The caller's context may be what failed open: close without it, and
 		// return the open error. A failing Storage close fails the Session,
@@ -341,6 +347,19 @@ func (h *Harness) buildEnv(ctx context.Context, id durable.ConversationID) (env.
 	return h.options.Env(ctx, EnvTarget{ConversationID: id, Cwd: state.Cwd, Read: h.Session})
 }
 
+// Submission returns the handle of an existing submission, or nil.
+func (h *Harness) Submission(ctx context.Context, id durable.SubmissionID) (*Submission, error) {
+	return h.submissions.get(ctx, id)
+}
+
+// AbortSubmission withdraws a queued submission and removes its inbox item:
+// SubmissionAborted, SubmissionAlreadyPlaced, SubmissionSettled, or
+// SubmissionNotFound, also for one outside conversationID when that is not
+// zero.
+func (h *Harness) AbortSubmission(ctx context.Context, id durable.SubmissionID, conversationID durable.ConversationID) (string, error) {
+	return h.submissions.abort(ctx, id, conversationID)
+}
+
 // GetTask returns the committed task record, or nil.
 func (h *Harness) GetTask(ctx context.Context, id durable.TaskID) (*durable.TaskRecord, error) {
 	var record *durable.TaskRecord
@@ -475,6 +494,13 @@ func (c *Conversation) Agent(ctx context.Context) (*Agent, error) {
 // Configure applies change in its own commit.
 func (c *Conversation) Configure(ctx context.Context, change AgentChange) error {
 	return c.h.Commit(ctx, func(tx *durable.Tx) error { return Configure(tx, c.ID, change) })
+}
+
+// Submit admits a submission in one commit and enables scheduling: idle input
+// starts a run, busy input queues behind it, and a write is appended or
+// queued (see SubmissionDraft).
+func (c *Conversation) Submit(ctx context.Context, draft SubmissionDraft) (*Submission, error) {
+	return c.h.submissions.submit(ctx, c.ID, draft)
 }
 
 // Commit runs a Session commit whose Tx.CreateTask defaults to this

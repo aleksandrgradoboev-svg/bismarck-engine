@@ -12,8 +12,9 @@ import (
 var sectionKey = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 
 // builtinTasks are the task definitions every registry holds; they are not an
-// extension and cannot be removed or replaced. The generation, tool and
-// compaction tasks join them with the stages of the port that bring them.
+// extension and cannot be removed or replaced. The generation task joins them
+// in its init; the tool and compaction tasks join with the stages of the port
+// that bring them.
 var builtinTasks []Task
 
 // Extension is a named bundle of code, installed in a registry and selected by

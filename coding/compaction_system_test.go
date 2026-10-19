@@ -51,7 +51,7 @@ func TestCompactionKeepsPromptAndToolsOnTheNextRequest(t *testing.T) {
 
 	var requests []ai.TranscriptContext
 	respond := func(text string) providers.FauxResponseStep {
-		return func(req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+		return func(_ context.Context, req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
 			requests = append(requests, req)
 			return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: text}}, ai.StopStop)
 		}
@@ -183,7 +183,7 @@ func TestCompactionDoesNotSummarizeSystemMessages(t *testing.T) {
 	sess, reg := newCompactionTestSession(t)
 	var prompts []string
 	step := func(text string) providers.FauxResponseStep {
-		return func(req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+		return func(_ context.Context, req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
 			prompts = append(prompts, userText(ai.WithoutInitialSystemMessage(req.Messages)[0]))
 			return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: text}}, ai.StopStop)
 		}
@@ -331,7 +331,7 @@ func TestCompactionWithOnlySystemHistoryDoesNothing(t *testing.T) {
 	sess, reg := newCompactionTestSession(t)
 	called := false
 	reg.SetResponses([]providers.FauxResponseStep{
-		func(ai.TranscriptContext, *ai.SimpleStreamOptions, *providers.FauxState, *ai.Model) *ai.AssistantMessage {
+		func(context.Context, ai.TranscriptContext, *ai.SimpleStreamOptions, *providers.FauxState, *ai.Model) *ai.AssistantMessage {
 			called = true
 			return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "summary"}}, ai.StopStop)
 		},
@@ -393,7 +393,7 @@ func TestCompactionSplitTurnSeedsHistoryWithPreviousSummary(t *testing.T) {
 	sess, reg := newCompactionTestSession(t)
 	var prompts []string
 	reg.SetResponses([]providers.FauxResponseStep{
-		func(req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+		func(_ context.Context, req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
 			prompts = append(prompts, userText(ai.WithoutInitialSystemMessage(req.Messages)[0]))
 			return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "PREFIX"}}, ai.StopStop)
 		},

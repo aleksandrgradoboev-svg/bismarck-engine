@@ -33,7 +33,7 @@ func TestSummarizationRequestShape(t *testing.T) {
 	var captured ai.TranscriptContext
 	var capturedMax int
 	reg.SetResponses([]providers.FauxResponseStep{
-		func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
+		func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
 			captured = req
 			if opts != nil && opts.MaxTokens != nil {
 				capturedMax = *opts.MaxTokens
@@ -190,7 +190,7 @@ func TestSummarizationRequestsMatchPiCapture(t *testing.T) {
 				maxTokens    int
 			}
 			var got []request
-			record := func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+			record := func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
 				var r request
 				if lead, ok := ai.GetInitialSystemMessage(req.Messages); ok {
 					r.systemPrompt = ai.GetSystemMessageText(lead)
@@ -265,7 +265,7 @@ func TestSummarizationMaxTokensClampedByModel(t *testing.T) {
 
 	var capturedMax int
 	reg.SetResponses([]providers.FauxResponseStep{
-		func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
+		func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
 			if opts != nil && opts.MaxTokens != nil {
 				capturedMax = *opts.MaxTokens
 			}
@@ -294,7 +294,7 @@ func TestSummarizationIsolatesRouting(t *testing.T) {
 
 	var retentions []ai.CacheRetention
 	var sessionIDs []string
-	capture := func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
+	capture := func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
 		retentions = append(retentions, opts.CacheRetention)
 		sessionIDs = append(sessionIDs, opts.SessionID)
 		return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "ok"}}, ai.StopStop)
@@ -532,7 +532,7 @@ func TestSummarizationDoesNotOverrideToolChoice(t *testing.T) {
 
 	var capturedChoice ai.ToolChoice
 	reg.SetResponses([]providers.FauxResponseStep{
-		func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
+		func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
 			if opts != nil {
 				capturedChoice = opts.ToolChoice
 			}
@@ -552,7 +552,7 @@ func TestSummarizationDoesNotOverrideToolChoice(t *testing.T) {
 
 	// Same request, but the model calls a tool: no summary survives.
 	reg.SetResponses([]providers.FauxResponseStep{
-		func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
+		func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
 			return providers.FauxAssistantMessage(ai.ContentList{
 				ai.TextContent{Text: "## Goal\nsummary"},
 				ai.ToolCall{ID: "t1", Name: "read", Arguments: map[string]any{"path": "/a"}},

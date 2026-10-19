@@ -77,12 +77,15 @@ func FauxAssistantMessage(content ai.ContentList, stopReason ai.StopReason) *ai.
 	}
 }
 
-// FauxResponseStep produces the assistant message for one stream call.
-type FauxResponseStep func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, state *FauxState, model *ai.Model) *ai.AssistantMessage
+// FauxResponseStep produces the assistant message for one stream call. ctx is
+// the request's (pi's options.signal): a step may block until it is done and
+// return nil, which fails the stream with its cause, as a rejected step does
+// in pi. A nil message without a cancelled ctx fails the stream too.
+type FauxResponseStep func(ctx context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, state *FauxState, model *ai.Model) *ai.AssistantMessage
 
 // FauxStatic wraps a fixed assistant message as a response step.
 func FauxStatic(msg *ai.AssistantMessage) FauxResponseStep {
-	return func(ai.TranscriptContext, *ai.SimpleStreamOptions, *FauxState, *ai.Model) *ai.AssistantMessage {
+	return func(context.Context, ai.TranscriptContext, *ai.SimpleStreamOptions, *FauxState, *ai.Model) *ai.AssistantMessage {
 		return msg
 	}
 }
@@ -321,7 +324,12 @@ func RegisterFauxProvider(options RegisterFauxProviderOptions) *FauxProviderRegi
 				reg.streamWithDeltas(ctx, outer, fauxDeferredMessage(model, handle))
 				return
 			}
-			reg.streamWithDeltas(ctx, outer, reg.resolveResponse(step, req, opts, model))
+			msg, err := reg.resolveResponse(ctx, step, req, opts, model)
+			if err != nil {
+				reg.failStream(outer, err, model)
+				return
+			}
+			reg.streamWithDeltas(ctx, outer, msg)
 		}()
 		return outer
 	}
@@ -339,7 +347,7 @@ func RegisterFauxProvider(options RegisterFauxProviderOptions) *FauxProviderRegi
 					return
 				}
 			}
-			message, err := reg.redeem(model, handle)
+			message, err := reg.redeem(ctx, model, handle)
 			if err != nil {
 				reg.failStream(outer, err, model)
 				return
@@ -392,22 +400,33 @@ func (r *FauxProviderRegistration) failStream(stream *ai.AssistantMessageEventSt
 }
 
 // resolveResponse runs one scripted step and finishes the message the way a
-// real provider would (identity fields plus a usage estimate).
+// real provider would (identity fields plus a usage estimate). A step that
+// returns nil fails: with ctx's cause once ctx is done, as pi's rejected step.
 func (r *FauxProviderRegistration) resolveResponse(
+	ctx context.Context,
 	step FauxResponseStep,
 	req ai.TranscriptContext,
 	opts *ai.SimpleStreamOptions,
 	model *ai.Model,
-) *ai.AssistantMessage {
-	resolved := step(req, opts, r.State, model)
+) (*ai.AssistantMessage, error) {
+	resolved := step(ctx, req, opts, r.State, model)
+	if resolved == nil {
+		if ctx.Err() != nil {
+			return nil, context.Cause(ctx)
+		}
+		return nil, fmt.Errorf("Faux response step returned no message")
+	}
 	msg := fauxClone(resolved, r.Api, r.provider, model.ID)
-	return r.withUsageEstimate(msg, req, opts)
+	return r.withUsageEstimate(msg, req, opts), nil
 }
 
 // redeem answers one FetchDeferred: the handle again while fetches are still
 // scripted as pending, otherwise the scripted response, resolved once and
 // cached so repeat fetches are idempotent.
+//
+// The step runs with the fetch's ctx: the submission's request has ended.
 func (r *FauxProviderRegistration) redeem(
+	ctx context.Context,
 	model *ai.Model,
 	handle ai.DeferredHandle,
 ) (*ai.AssistantMessage, error) {
@@ -430,7 +449,11 @@ func (r *FauxProviderRegistration) redeem(
 		return fauxDeferredMessage(model, entry.handle), nil
 	}
 	if entry.final == nil {
-		entry.final = r.resolveResponse(entry.step, entry.req, fauxRedeemOptions(entry.opts), entry.model)
+		final, err := r.resolveResponse(ctx, entry.step, entry.req, fauxRedeemOptions(entry.opts), entry.model)
+		if err != nil {
+			return nil, err
+		}
+		entry.final = final
 	}
 	return entry.final, nil
 }

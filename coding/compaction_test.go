@@ -255,7 +255,7 @@ func TestCompactionPermanentAfterSmallUsage(t *testing.T) {
 func TestCompactionKeepsAnEmptySummary(t *testing.T) {
 	sess, reg := newCompactionTestSession(t) // window 1000: compacts past 800 tokens
 	requests := 0
-	emptyReply := func(ai.TranscriptContext, *ai.SimpleStreamOptions, *providers.FauxState, *ai.Model) *ai.AssistantMessage {
+	emptyReply := func(context.Context, ai.TranscriptContext, *ai.SimpleStreamOptions, *providers.FauxState, *ai.Model) *ai.AssistantMessage {
 		requests++
 		return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: ""}}, ai.StopStop)
 	}
@@ -305,7 +305,7 @@ func TestCompactionKeepsAnEmptySummary(t *testing.T) {
 func TestCompactionDistrustsUsageFromBeforeIt(t *testing.T) {
 	sess, reg := newCompactionTestSession(t) // window 1000: compacts past 800 tokens
 	requests := 0
-	summary := func(ai.TranscriptContext, *ai.SimpleStreamOptions, *providers.FauxState, *ai.Model) *ai.AssistantMessage {
+	summary := func(context.Context, ai.TranscriptContext, *ai.SimpleStreamOptions, *providers.FauxState, *ai.Model) *ai.AssistantMessage {
 		requests++
 		return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "summary"}}, ai.StopStop)
 	}
@@ -455,7 +455,7 @@ func TestCompactionExtendsWithPreviousSummary(t *testing.T) {
 
 	var captured string
 	reg.SetResponses([]providers.FauxResponseStep{
-		func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
+		func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
 			captured = textOf(ai.WithoutInitialSystemMessage(req.Messages)[0].(ai.UserMessage).Content)
 			return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "## Goal\nupdated summary"}}, ai.StopStop)
 		},
@@ -545,7 +545,7 @@ func TestCompactionSplitTurnSummaries(t *testing.T) {
 	}
 	var calls []call
 	step := func(text string) providers.FauxResponseStep {
-		return func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
+		return func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
 			c := call{text: textOf(ai.WithoutInitialSystemMessage(req.Messages)[0].(ai.UserMessage).Content)}
 			if opts != nil && opts.MaxTokens != nil {
 				c.maxTokens = *opts.MaxTokens
@@ -603,7 +603,7 @@ func TestCompactionRoutingSessionIDForwarded(t *testing.T) {
 	sess, reg := newCompactionTestSession(t)
 	var sessionIDs []string
 	var retentions []ai.CacheRetention
-	capture := func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
+	capture := func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
 		sessionIDs = append(sessionIDs, opts.SessionID)
 		retentions = append(retentions, opts.CacheRetention)
 		return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "## Goal\nsummary"}}, ai.StopStop)
@@ -721,7 +721,7 @@ func TestSummarizationPassesReasoningAndHeaders(t *testing.T) {
 
 	var gotReasoning ai.ThinkingLevel
 	var gotHeaders ai.ProviderHeaders
-	capture := func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
+	capture := func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
 		gotReasoning = opts.Reasoning
 		gotHeaders = opts.Headers
 		return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "ok"}}, ai.StopStop)

@@ -87,7 +87,7 @@ func TestResumeContinuesConversation(t *testing.T) {
 	// Second session resumes and the model sees prior history.
 	var capturedCount int
 	reg.SetResponses([]providers.FauxResponseStep{
-		func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
+		func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
 			// The prompt rides the leading system message; count the conversation.
 			capturedCount = len(ai.WithoutInitialSystemMessage(req.Messages))
 			return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "second reply"}}, ai.StopStop)

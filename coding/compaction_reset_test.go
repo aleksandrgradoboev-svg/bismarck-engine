@@ -37,7 +37,7 @@ func TestNewTranscriptDropsTheCompaction(t *testing.T) {
 
 			summarizations := 0
 			var last []string
-			step := func(req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+			step := func(_ context.Context, req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
 				if lead, ok := ai.GetInitialSystemMessage(req.Messages); ok && ai.GetSystemMessageText(lead) == summarizationSystemPrompt {
 					summarizations++
 					return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: tc.reply}}, ai.StopStop)

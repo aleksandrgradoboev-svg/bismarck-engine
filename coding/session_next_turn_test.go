@@ -179,7 +179,7 @@ func TestSessionDeclaresPromptAcrossTurnsLikePi(t *testing.T) {
 			var requests [][]promptProjection
 			var states []requestState
 			respond := func(reply sessionPromptReply) providers.FauxResponseStep {
-				return func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, _ *providers.FauxState, model *ai.Model) *ai.AssistantMessage {
+				return func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, _ *providers.FauxState, model *ai.Model) *ai.AssistantMessage {
 					requests = append(requests, projectPromptMessages(req.Messages))
 					state := requestState{Model: model.ID, Tools: toolNames(ai.GetCurrentTools(req.Messages))}
 					if opts != nil && opts.Reasoning != "" {
