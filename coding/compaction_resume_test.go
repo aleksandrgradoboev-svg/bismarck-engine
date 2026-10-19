@@ -80,7 +80,7 @@ func TestResumedCompactionMatchesPiCapture(t *testing.T) {
 				maxTokens          int
 			}
 			var got []request
-			record := func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+			record := func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
 				lead, _ := ai.GetInitialSystemMessage(req.Messages)
 				r := request{systemPrompt: ai.GetSystemMessageText(lead), text: userText(ai.WithoutInitialSystemMessage(req.Messages)[0])}
 				if opts != nil && opts.MaxTokens != nil {
@@ -165,7 +165,7 @@ func TestResumedCompactionTriggerMatchesPi(t *testing.T) {
 			var got []triggerRequest
 			prompted := false
 			summaries := 0
-			record := func(req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+			record := func(_ context.Context, req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
 				if lead, ok := ai.GetInitialSystemMessage(req.Messages); ok && ai.GetSystemMessageText(lead) == summarizationSystemPrompt {
 					if !prompted {
 						text := userText(ai.WithoutInitialSystemMessage(req.Messages)[0])
@@ -239,7 +239,7 @@ func TestResumedCompactionPreparesWhatPiPrepares(t *testing.T) {
 			})
 			t.Cleanup(reg.Unregister)
 			requests := 0
-			step := func(ai.TranscriptContext, *ai.SimpleStreamOptions, *providers.FauxState, *ai.Model) *ai.AssistantMessage {
+			step := func(context.Context, ai.TranscriptContext, *ai.SimpleStreamOptions, *providers.FauxState, *ai.Model) *ai.AssistantMessage {
 				requests++
 				return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "SUMMARY"}}, ai.StopStop)
 			}

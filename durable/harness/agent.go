@@ -312,6 +312,25 @@ func agentHooks(agent *Agent, taskName string) []extensionHooks {
 	return handlers
 }
 
+// sectionExtension is the extension whose code a section of agent runs: the
+// last selected one that provides or wraps it; "" when none does.
+func sectionExtension(agent *Agent, key string) string {
+	found := ""
+	for _, extension := range agent.Extensions {
+		provides := false
+		for _, section := range extension.Sections {
+			provides = provides || section.Key == key
+		}
+		for _, wrap := range extension.Wraps {
+			provides = provides || (wrap.section != "" && wrap.section == key)
+		}
+		if provides {
+			found = extension.Name
+		}
+	}
+	return found
+}
+
 // resolveAgent resolves an agent from its stored state (nil: every field
 // unset), a registry snapshot, and resolved settings. A wrapper that fails or
 // renames drops its target and is reported; a wrapper without a target does
@@ -577,6 +596,73 @@ type ProgressPolicy struct {
 	OutputInterval time.Duration
 }
 
+// ConversationStreamOptions are the curated request options of generation;
+// absent fields use the ai defaults. A request stores the ones in effect when
+// its preparation committed, so a resend after recovery uses them unchanged.
+type ConversationStreamOptions struct {
+	Transport ai.Transport `json:"transport,omitempty"`
+	TimeoutMs *int         `json:"timeoutMs,omitempty"`
+	// MaxRetries are provider retries inside one request attempt.
+	MaxRetries      *int              `json:"maxRetries,omitempty"`
+	MaxRetryDelayMs *int              `json:"maxRetryDelayMs,omitempty"`
+	Headers         map[string]string `json:"headers,omitempty"`
+	Metadata        map[string]any    `json:"metadata,omitempty"`
+	CacheRetention  ai.CacheRetention `json:"cacheRetention,omitempty"`
+	// Deferred asks a capable provider for a deferred response.
+	Deferred *StreamDeferral `json:"deferred,omitempty"`
+}
+
+// StreamDeferral is pi's `deferred: true | { window }`: no Window is true.
+type StreamDeferral struct {
+	Window ai.DeferredWindow
+}
+
+// MarshalJSON writes true without a window, {"window": …} with one.
+func (d StreamDeferral) MarshalJSON() ([]byte, error) {
+	if d.Window == "" {
+		return []byte("true"), nil
+	}
+	return json.Marshal(struct {
+		Window ai.DeferredWindow `json:"window"`
+	}{d.Window})
+}
+
+// UnmarshalJSON reads true or an object. false is refused: in Go no deferral
+// is the absent field, and a pointer cannot decode itself to nil.
+func (d *StreamDeferral) UnmarshalJSON(data []byte) error {
+	var flag bool
+	if json.Unmarshal(data, &flag) == nil {
+		if !flag {
+			return errors.New("deferred: false is written as an absent field")
+		}
+		*d = StreamDeferral{}
+		return nil
+	}
+	var object struct {
+		Window ai.DeferredWindow `json:"window"`
+	}
+	if err := json.Unmarshal(data, &object); err != nil {
+		return err
+	}
+	d.Window = object.Window
+	return nil
+}
+
+// AfterFailedRun is what a failed run (model_error, no_model) does with the
+// inputs queued behind it.
+type AfterFailedRun string
+
+const (
+	// AfterFailedRunKeep leaves them queued until the next input or queued
+	// write; the default.
+	AfterFailedRunKeep AfterFailedRun = "keep"
+	// AfterFailedRunContinue starts the next run with them, as an answer
+	// would.
+	AfterFailedRunContinue AfterFailedRun = "continue"
+	// AfterFailedRunWithdraw settles them unanswered with reason run_failed.
+	AfterFailedRunWithdraw AfterFailedRun = "withdraw"
+)
+
 // QueueMode is how many queued items of one mode a boundary places.
 type QueueMode string
 
@@ -592,7 +678,9 @@ type HarnessSettings struct {
 	// Extensions is the default extension selection; nil is every installed
 	// extension, in install order.
 	Extensions []*Extension
-	Retry      struct {
+	// Stream is the request options of every generation.
+	Stream ConversationStreamOptions
+	Retry  struct {
 		Enabled       *bool
 		MaxRetries    *int
 		BaseDelay     *time.Duration
@@ -619,6 +707,9 @@ type HarnessSettings struct {
 	// document state observes stays in memory after its last use. Default
 	// ten minutes; 0 drops one right after use; a very long one keeps them.
 	DocumentRetention *time.Duration
+	// AfterFailedRun is what a failed run does with the inputs queued behind
+	// it; default AfterFailedRunKeep.
+	AfterFailedRun AfterFailedRun
 	// RestartLimit is how many restarts in a row without progress park a
 	// task (spec §5.4); default DefaultRestartLimit, negative never parks
 	// (pi's Infinity).
@@ -632,6 +723,7 @@ const DefaultRestartLimit = 5
 type Settings struct {
 	// Extensions is nil for every installed extension, in install order.
 	Extensions        []*Extension
+	Stream            ConversationStreamOptions
 	Retry             RetryPolicy
 	Compaction        CompactionPolicy
 	Progress          ProgressPolicy
@@ -640,6 +732,7 @@ type Settings struct {
 	FollowUpMode      QueueMode
 	ContextRetention  time.Duration
 	DocumentRetention time.Duration
+	AfterFailedRun    AfterFailedRun
 	// RestartLimit is negative when tasks are never parked.
 	RestartLimit int
 }
@@ -685,8 +778,13 @@ func resolveSettings(s HarnessSettings) Settings {
 	if s.DocumentRetention != nil && *s.DocumentRetention >= 0 {
 		documentRetention = *s.DocumentRetention
 	}
+	afterFailedRun := s.AfterFailedRun
+	if afterFailedRun == "" {
+		afterFailedRun = AfterFailedRunKeep
+	}
 	return Settings{
 		Extensions: s.Extensions,
+		Stream:     s.Stream,
 		Retry: RetryPolicy{
 			Enabled:       pickBool(s.Retry.Enabled, DefaultRetryPolicy.Enabled),
 			MaxRetries:    pickInt(s.Retry.MaxRetries, DefaultRetryPolicy.MaxRetries),
@@ -708,6 +806,7 @@ func resolveSettings(s HarnessSettings) Settings {
 		FollowUpMode:      orMode(s.FollowUpMode, QueueOneAtATime),
 		ContextRetention:  pick(s.ContextRetention, defaultRetention),
 		DocumentRetention: documentRetention,
+		AfterFailedRun:    afterFailedRun,
 		RestartLimit:      pickInt(s.RestartLimit, DefaultRestartLimit),
 	}
 }

@@ -312,7 +312,7 @@ func TestFauxProviderRedeemsWithSubmissionOptions(t *testing.T) {
 
 	var seen *ai.SimpleStreamOptions
 	reg.SetResponses([]FauxResponseStep{
-		func(_ ai.TranscriptContext, opts *ai.SimpleStreamOptions, _ *FauxState, _ *ai.Model) *ai.AssistantMessage {
+		func(_ context.Context, _ ai.TranscriptContext, opts *ai.SimpleStreamOptions, _ *FauxState, _ *ai.Model) *ai.AssistantMessage {
 			seen = opts
 			return FauxAssistantMessage(ai.ContentList{FauxText("ready")}, ai.StopStop)
 		},

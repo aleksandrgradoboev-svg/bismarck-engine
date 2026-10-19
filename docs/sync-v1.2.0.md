@@ -342,6 +342,35 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    synchronous first wake, whose race the scheduler decides, and `writeAtClose`'s failed-Session
    check, which the Storage guard repeats.
 
+   **Durable slice 1, submissions** (snapshot `1402973a`; `submissions.ts`, `inbox.ts`, the run
+   control of `live.ts`, the core of `generation.ts`, `usage.ts`'s `recordUsage`, `provider.ts`'s
+   `ensureProviderSessionId`, `json.ts`'s `assignJson`): `Conversation.Submit`, `Harness.Submission`
+   and `Harness.AbortSubmission`, with one `SubmissionDraft` whose `Type` picks `Input` or `Write`,
+   a `*Submission` handle and `*ConversationBusyError`. `UserInput` keeps pi's string form of
+   content (`content: "hi"`). The inbox comes whole, since admission uses nearly all of it; an
+   inbox write keeps pi's entry draft shape, `head` as `"self"` or an ID and present-but-empty
+   `model`/`edits` counting for display-only. The scheduler's outcome cleanup and input
+   withdrawal hooks are no longer empty. `GenerationTask` joins the built-in tasks in `init`, as
+   it refers to itself through the run it continues; its checkpoint is pi's union as one struct
+   with `phase`. Ported: prepare (system entries, cutoff), request (partial throttle, provider
+   session ID, `beforeRequest`), classification, the final answer with `onYield` and the final
+   boundary, `no_model` and `model_error` failures with `afterFailedRun`, abort, and the cleanup of
+   a faulted or orphaned run. The retry, poll and tools phases, deferred responses, threshold and
+   overflow compaction fault with "not ported yet" and come with slices 2 and 3; pi-ai's
+   `isContextOverflow` is not in `ai` yet, so until compaction an overflow is an ordinary model
+   error, as in pi with compaction disabled. `Settings` gains `Stream` (pi's
+   `ConversationStreamOptions`, `deferred` as `StreamDeferral`) and `AfterFailedRun`.
+   `providers.FauxResponseStep` takes the request's `ctx` first, as pi's step gets
+   `options.signal`; a step that returns nil fails the stream with the cause, as a rejected step
+   does, and a deferred redemption runs with the fetch's `ctx`. Tests: `harness-submissions`
+   whole; the reopen case uses JSONL, as other reopen cases do; the typed-entry case keeps what
+   applies to a Go `EntryKind`, which has no data type (reading narrowed by kind is n/a). Added:
+   the answer of the scheduling case is checked to be the generation's assistant entry. Waits that
+   pi starts synchronously are marked explicitly: registered waits, close begun. Not covered here:
+   the display-only fast path (its outcome is reached the long way too), withdrawal of a queued
+   submission, the outcome cleanup, and `Wait` enabling scheduling, which `Submit` does as well;
+   the inbox, generation and failed-run slices cover them.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

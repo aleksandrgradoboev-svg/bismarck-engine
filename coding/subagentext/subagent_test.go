@@ -144,7 +144,7 @@ func (f *fixture) run(t *testing.T, params map[string]any) (agent.AgentToolResul
 
 // answer is a faux step that answers each task with reply(task).
 func answer(reply func(task string) string) providers.FauxResponseStep {
-	return func(req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+	return func(_ context.Context, req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
 		task := ""
 		for _, m := range req.Messages {
 			if u, ok := m.(ai.UserMessage); ok {

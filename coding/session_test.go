@@ -61,7 +61,7 @@ func TestSessionUsesCodingSystemPrompt(t *testing.T) {
 	defer reg.Unregister()
 	var capturedSystem string
 	reg.SetResponses([]providers.FauxResponseStep{
-		func(req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
+		func(_ context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
 			capturedSystem = ai.GetCurrentSystemPrompt(req.Messages)
 			return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "ok"}}, ai.StopStop)
 		},
@@ -112,7 +112,7 @@ func TestSessionAppendSystemPrompt(t *testing.T) {
 		reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
 		var capturedSystem string
 		reg.SetResponses([]providers.FauxResponseStep{
-			func(req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+			func(_ context.Context, req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
 				capturedSystem = ai.GetCurrentSystemPrompt(req.Messages)
 				return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "ok"}}, ai.StopStop)
 			},

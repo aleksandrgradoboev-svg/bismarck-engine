@@ -202,7 +202,7 @@ func TestSessionDeclaresPromptForTranscriptWithoutSystemMessage(t *testing.T) {
 
 	var request ai.TranscriptContext
 	reg.SetResponses([]providers.FauxResponseStep{
-		func(req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+		func(_ context.Context, req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
 			request = req
 			return providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: "ok"}}, ai.StopStop)
 		},
@@ -406,7 +406,7 @@ func TestSessionForcedPromptIsSentButNeverRecorded(t *testing.T) {
 	texts := []string{"one", "two", "three", "four"}
 	for _, text := range texts {
 		reply := providers.FauxAssistantMessage(ai.ContentList{ai.TextContent{Text: text}}, ai.StopStop)
-		steps = append(steps, func(req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+		steps = append(steps, func(_ context.Context, req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
 			requests = append(requests, req)
 			return reply
 		})
