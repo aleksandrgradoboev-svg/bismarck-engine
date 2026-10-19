@@ -5,6 +5,7 @@ import (
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // The Session half of pi packages/durable/src/types.ts: what a commit
@@ -50,6 +51,20 @@ type TaskOptions struct {
 	// later Harness abort-marks it, with reason "restart", before it runs
 	// again.
 	AbandonOnRestart bool
+	// Trace is the task's telemetry parent. Nil inherits the carrier of the
+	// commit's span (none without propagation); TraceRoot (pi's "root")
+	// stores none, so the task's phases start at the adapter root.
+	Trace     telemetry.Carrier
+	TraceRoot bool
+	// Links are attached to the spans of the task's first invocation.
+	Links []telemetry.Carrier
+	// TraceSubmissions, for the run a Harness starts with these inputs,
+	// replace Trace, TraceRoot and Links (pi's internal submissionIds): the
+	// first input's trace is the parent (none: TraceRoot), the others' traces
+	// are links. They are read from this commit's own submissions, then from
+	// Storage, past the rule that table reads precede the first table write;
+	// a trace is immutable, so either is current.
+	TraceSubmissions []SubmissionID
 }
 
 // TaskDefinition is what creating a task needs of its definition: the

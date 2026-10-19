@@ -11,6 +11,7 @@ import (
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/env"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // phase is what a runtime reads for the phase handler it serves: the phase's
@@ -134,15 +135,32 @@ func (rt *TaskRuntime) Env(ctx context.Context) (env.ExecutionEnv, error) {
 // read only through tx: the Session's and the runtime's own reads queue on
 // the line change holds, and never return.
 func (rt *TaskRuntime) Commit(ctx context.Context, change func(tx *durable.Tx, current durable.TaskRecord) (*durable.TaskState, error)) error {
-	return rt.gated(ctx, func(tx *durable.Tx, current durable.TaskRecord) error {
+	var checkpoint string
+	err := rt.gated(ctx, func(tx *durable.Tx, current durable.TaskRecord) error {
+		checkpoint = ""
 		next, err := change(tx, current)
 		if err != nil || next == nil {
 			return err
 		}
 		rt.s.mu.Lock()
 		defer rt.s.unlock()
-		return rt.s.commitState(tx, rt.inv, current, *next)
+		if err := rt.s.commitState(tx, rt.inv, current, *next); err != nil {
+			return err
+		}
+		if next.Status == durable.TaskRunning {
+			from, _ := CheckpointPhase(current.State.Checkpoint)
+			if to, _ := CheckpointPhase(next.Checkpoint); to != from {
+				checkpoint = to
+			}
+		}
+		return nil
 	})
+	// The running phase changed while the invocation continues: an event of
+	// the invocation's phase span, once committed.
+	if err == nil && checkpoint != "" {
+		telemetry.SpanFrom(rt.inv.phaseCtx()).AddEvent(EventCheckpoint, telemetry.SpanAttributes{"phase": checkpoint})
+	}
+	return err
 }
 
 // gated commits after rereading the task on the line and gating the
@@ -396,7 +414,7 @@ func (rt *TaskRuntime) Report(err error, from ...ReportFrom) error {
 			info = durable.ReportInfo{Type: durable.ReportExtensionError, Task: task, Extension: from[0].Extension}
 		}
 	}
-	rt.s.report(err, info)
+	rt.s.reportIn(rt.inv.phaseCtx(), err, info)
 	return nil
 }
 
@@ -544,7 +562,7 @@ func EachHook[H any](ctx context.Context, rt *TaskRuntime, invoke func(handlers 
 			return err
 		}
 		task, _ := aboutTask(rt.inv)
-		rt.s.report(err, durable.ReportInfo{Type: durable.ReportExtensionError, Extension: hooks.extension, Task: task})
+		rt.s.reportIn(rt.inv.phaseCtx(), err, durable.ReportInfo{Type: durable.ReportExtensionError, Extension: hooks.extension, Task: task})
 	}
 	return nil
 }

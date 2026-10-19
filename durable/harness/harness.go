@@ -20,6 +20,7 @@ import (
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/env"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // EnvTarget is what the env builder builds an environment for.
@@ -73,6 +74,10 @@ type Options struct {
 	// the scheduler, for example counting faults of one task kind toward a
 	// breaker. Its own panic is dropped.
 	OnReport func(error, durable.ReportInfo)
+	// Telemetry is the host's adapter for content-free admission and phase
+	// telemetry; its metrics and propagation are optional. Nil is
+	// telemetry.NoopContext.
+	Telemetry telemetry.Context
 }
 
 // ConversationInit runs inside the creating commit, after the creation hook
@@ -95,7 +100,11 @@ type ConversationCreateOptions struct {
 // carries.
 type Harness struct {
 	*durable.Session
-	options     Options
+	options Options
+	// telemetry is Options.Telemetry, or telemetry.NoopContext.
+	telemetry telemetry.Context
+	// reportIn reports with an operation's context; report without one.
+	reportIn    reportFunc
 	report      func(error, durable.ReportInfo)
 	tasks       *scheduler
 	submissions *submissions
@@ -119,7 +128,12 @@ func Open(ctx context.Context, storage durable.Storage, options Options) (*Harne
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("Registry lacks built-in tasks %s; create it with NewRegistry()", strings.Join(missing, ", "))
 	}
-	h := &Harness{options: options, report: safeReport(options.OnReport)}
+	adapter := options.Telemetry
+	if adapter == nil {
+		adapter = telemetry.NoopContext
+	}
+	h := &Harness{options: options, telemetry: adapter, reportIn: safeReport(options.OnReport, adapter)}
+	h.report = h.reportIn.background()
 	now := safeNow(options.Now, h.report)
 	h.Session = durable.NewSession(storage, durable.SessionOptions{
 		Now: now,
@@ -128,7 +142,7 @@ func Open(ctx context.Context, storage durable.Storage, options Options) (*Harne
 		DocumentRetention: func() time.Duration { return h.settings().DocumentRetention },
 		SetTimer:          options.SetTimer,
 		Hooks: durable.SessionHooks{
-			Report:              h.report,
+			Report:              h.reportIn,
 			ConversationCreated: h.conversationCreated,
 			// Signal and join task invocations after the close listeners and
 			// before Storage closes; writes no task outcome, only the stopped
@@ -155,6 +169,8 @@ func Open(ctx context.Context, storage durable.Storage, options Options) (*Harne
 			h.report(err, durable.HostError(durable.CallbackSetTimer, nil))
 		}),
 		report:        h.report,
+		reportIn:      h.reportIn,
+		telemetry:     adapter,
 		settleOutcome: settleSchedulerOutcome,
 		withdrawInputs: func(tx *durable.Tx, id durable.ConversationID) error {
 			return withdrawQueuedInputs(tx, id, "aborted")
@@ -326,7 +342,7 @@ func (h *Harness) resolveAgent(ctx context.Context, id durable.ConversationID, s
 		}
 	}
 	return resolveAgent(state, snapshot, h.settings(), func(err error, extension string) {
-		h.report(err, durable.ReportInfo{Type: durable.ReportExtensionError, ConversationID: id, Extension: extension})
+		h.reportIn(ctx, err, durable.ReportInfo{Type: durable.ReportExtensionError, ConversationID: id, Extension: extension})
 	}), nil
 }
 
@@ -562,18 +578,6 @@ func (c *Conversation) WaitForIdle(ctx context.Context) error {
 // Fork forks this conversation at a visible entry.
 func (c *Conversation) Fork(ctx context.Context, at durable.EntryID, options ConversationCreateOptions) (*Conversation, error) {
 	return c.h.create(ctx, createTarget{kind: "fork", ownership: options.Ownership, parentID: c.ID, at: at}, options.Agent, options.Init)
-}
-
-// safeReport returns an OnReport that cannot fail: it is the last place an
-// error goes, so its own panic is dropped.
-func safeReport(onReport func(error, durable.ReportInfo)) func(error, durable.ReportInfo) {
-	return func(err error, info durable.ReportInfo) {
-		if onReport == nil {
-			return
-		}
-		defer func() { _ = recover() }()
-		onReport(err, info)
-	}
 }
 
 // safeNow returns the host clock, falling back to time.Now when it panics: a

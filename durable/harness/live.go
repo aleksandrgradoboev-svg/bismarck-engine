@@ -87,18 +87,23 @@ func setDraftField(d *delta.Draft, key string, v any) error {
 // startRun starts a run for inputs, placed input submissions: a new
 // generation takes pi.live run.
 func startRun(tx *durable.Tx, conversationID durable.ConversationID, live *delta.Draft, inputs []durable.SubmissionID) error {
-	taskID, err := createGeneration(tx, conversationID)
+	// The run continues its first input's admission trace and links the
+	// others'.
+	taskID, err := createGeneration(tx, conversationID, inputs)
 	if err != nil {
 		return err
 	}
 	return setDraftField(live, "run", LiveRun{TaskID: taskID, Inputs: inputs})
 }
 
-// createGeneration creates a generation owned by its conversation.
-func createGeneration(tx *durable.Tx, conversationID durable.ConversationID) (durable.TaskID, error) {
+// createGeneration creates a generation owned by its conversation; with
+// inputs, its telemetry comes from their submissions, otherwise from the
+// commit's span.
+func createGeneration(tx *durable.Tx, conversationID durable.ConversationID, inputs []durable.SubmissionID) (durable.TaskID, error) {
 	return CreateTask(tx, GenerationTask, GenerationInput{}, durable.TaskOptions{
-		Ownership:      durable.TaskOwnership{Kind: durable.OwnershipConversation},
-		ConversationID: conversationID,
+		Ownership:        durable.TaskOwnership{Kind: durable.OwnershipConversation},
+		ConversationID:   conversationID,
+		TraceSubmissions: inputs,
 	})
 }
 

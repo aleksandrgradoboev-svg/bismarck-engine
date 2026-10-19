@@ -10,6 +10,7 @@ import (
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // GenerationInput is the input of a generation: none; the run's inputs live
@@ -266,6 +267,8 @@ func requestGeneration(ctx context.Context, task *generationTask, rt *TaskRuntim
 		return err
 	}
 	options := streamOptions(checkpoint.StreamOptions, sessionID, checkpoint.ThinkingLevel)
+	// The provider request is traced under the phase span.
+	options.SimpleStreamOptions.StreamOptions.TelemetryContext = telemetry.SpanFrom(ctx)
 	message, err := streamResponse(ctx, rt, model, messages, options, checkpoint.Attempt)
 	if err != nil {
 		return err
@@ -528,7 +531,7 @@ func answer(ctx context.Context, rt *TaskRuntime, message ai.AssistantMessage) e
 			if _, err := tx.AppendEntry(rt.ConversationID, durable.EntryDraft{Kind: durable.UserEntry.Kind, Model: []ai.Message{user}}); err != nil {
 				return nil, err
 			}
-			next, err := createGeneration(tx, rt.ConversationID)
+			next, err := createGeneration(tx, rt.ConversationID, nil)
 			if err != nil {
 				return nil, err
 			}

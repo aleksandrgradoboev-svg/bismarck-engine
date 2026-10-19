@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // The ownership tree of tasks and conversations (spec §5.5): a task's parent
@@ -173,6 +174,18 @@ func (s *scheduler) sweep() {
 // may run.
 func (s *scheduler) track(previous *durable.TaskRecord, record durable.TaskRecord) {
 	id := record.ID
+	if inv := s.invocations[id]; inv != nil {
+		inv.record = record
+	}
+	kind := telemetry.SpanAttributes{"task": record.Kind}
+	if record.State.Status == durable.TaskTerminal {
+		if previous != nil && !s.closing.Load() {
+			s.measureLocked(func() { s.activeTasks.Add(-1, kind) })
+		}
+		s.resumed.delete(id)
+	} else if previous == nil && !s.closing.Load() {
+		s.measureLocked(func() { s.activeTasks.Add(1, kind) })
+	}
 	if previous != nil && previous.State.Status == durable.TaskWaiting {
 		for _, on := range previous.State.On {
 			deleteFrom(s.waitersOn, on, id)

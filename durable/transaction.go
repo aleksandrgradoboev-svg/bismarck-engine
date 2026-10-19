@@ -9,6 +9,7 @@ import (
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // The transaction of one Session commit callback
@@ -517,6 +518,13 @@ func (tx *Tx) CreateTask(def TaskDefinition, input json.RawMessage, options Task
 		return 0, err
 	}
 	defer tx.endOp()
+	if len(options.TraceSubmissions) > 0 {
+		trace, links, err := tx.submissionTraces(options.TraceSubmissions)
+		if err != nil {
+			return 0, err
+		}
+		options.Trace, options.TraceRoot, options.Links = trace, trace == nil, links
+	}
 	var owner *TaskRecord
 	if options.Ownership.Kind == OwnershipTask {
 		// Validated again against the owner's final candidate at assembly.
@@ -574,6 +582,8 @@ func (tx *Tx) CreateTask(def TaskDefinition, input json.RawMessage, options Task
 		Kind:             def.Name(),
 		Version:          def.Version(),
 		Input:            input,
+		Trace:            taskTrace(tx.ctx, options),
+		Links:            options.Links,
 		Background:       options.Background,
 		AbandonOnRestart: options.AbandonOnRestart,
 		State:            TaskState{Status: TaskPending, Checkpoint: checkpoint},
@@ -1416,6 +1426,37 @@ func (tx *Tx) taskEntryLocked(id TaskID) *txTask {
 
 // currentTask is the latest candidate record, else the committed one; not a
 // caller table read.
+// submissionTraces resolves the telemetry of a run started with ids (pi
+// createTask with submissionIds): the first submission's trace, and the
+// others' as links, from this commit's submissions or else Storage.
+func (tx *Tx) submissionTraces(ids []SubmissionID) (telemetry.Carrier, []telemetry.Carrier, error) {
+	var trace telemetry.Carrier
+	var links []telemetry.Carrier
+	for i, id := range ids {
+		tx.mu.Lock()
+		record, staged := tx.submissions[id]
+		tx.mu.Unlock()
+		var carrier telemetry.Carrier
+		if staged {
+			carrier = record.Trace
+		} else {
+			stored, err := tx.storage().Submission(tx.ctx, id)
+			if err != nil {
+				return nil, nil, err
+			}
+			if stored != nil {
+				carrier = stored.Trace
+			}
+		}
+		if i == 0 {
+			trace = carrierCopy(carrier)
+		} else if carrier != nil {
+			links = append(links, carrierCopy(carrier))
+		}
+	}
+	return trace, links, nil
+}
+
 func (tx *Tx) currentTask(id TaskID) (*TaskRecord, error) {
 	tx.mu.Lock()
 	if task := tx.tasks[id]; task != nil && task.write != nil {

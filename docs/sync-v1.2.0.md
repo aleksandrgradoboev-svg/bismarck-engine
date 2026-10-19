@@ -415,6 +415,43 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    local parent ID of an extracted carrier of the recorder's own span, which no case of pi's
    checks. Sabotage 30 of 30. CI runs `./telemetry/...` under the race detector.
 
+   **Durable telemetry** (snapshot `d2e7d8b7`, the durable part of `2ec55d80`): `harness.Options.Telemetry`
+   and `TelemetrySchema` (pi `DURABLE_TELEMETRY_SCHEMA`, as data). Task and submission records
+   carry `Trace` (and a task `Links`) inside their JSON, so Storage needs no migration; JSONL keeps
+   them across a reopen. `TaskOptions` gains `Trace`, `TraceRoot` (pi's `"root"`) and `Links`; a
+   nil trace inherits the carrier of the commit's span. pi's internal `submissionIds` is
+   `TaskOptions.TraceSubmissions`: run creation resolves the inputs' traces inside `CreateTask`,
+   from the commit's own submissions or Storage, past the table-read rule, as pi does inside
+   `createTask` — outside the Tx the reads are refused after the commit's first write. The Session
+   emits `pi.durable.entry` and `pi.durable.submission` on the commit's span after a successful
+   commit, listened to or not; `SessionHooks.Report` takes the operation's context, and
+   `Session.FailIn` reports a failure with one. `pi.durable.submit` wraps a public admission (an
+   input's span a root of the adapter linked to the caller, a write's a child of the caller's;
+   the admission result, the submission's trace, a steer's link to the run it steers);
+   `pi.durable.phase` wraps each phase handler with the decision commit after it, its parent the
+   task's trace, with the first invocation's links, `resumed`, the outcome, a `task_<status>`
+   error status capped at 500 runes (pi: UTF-16 units) and the duration. The current phase span is
+   held apart from the invocation's context, which other goroutines read, and handlers get a
+   derived context; measurements decided under the scheduler's mutex are recorded after it is
+   released, as no host code runs under it. Reports go to the report counter by type and, with
+   their operation's context, to its span as fixed-field events. The provider request gets the
+   phase span. Ported: 17 of pi's 24 cases (the three statuses of the fixed-category case
+   counted). Waiting: the content-free case with nested tool parents, the steer link and the input
+   submitted inside a tool's turn (slice 2), the two compaction cases (slice 3), the codemode
+   replay (stage 5). n/a: the async listener case, as a Go commit listener returns no promise.
+   Adapted: the trace-inheritance case matches phases by task, as its two tasks run concurrently;
+   the admission case checks Storage reads and results, as a span's propagation is the adapter's
+   own and cannot be spied on through the root. Added: traces surviving a reopened JSONL Storage.
+   Added beyond pi, for mechanisms no case of pi's checks: a traceless first input starting a
+   root run, the placed or queued result behind a boundary, a duplicate's unanswered result
+   reported done, no settlement event for a queued submission, creation links on the first
+   invocation only, and one duration per phase without IDs (pi checks this in its content-free
+   case, which waits for slice 2). Sabotage 38 of 45. Expected or equivalent: the steer link
+   (slice 2), the provider request span (pi-ai's request telemetry is not ported), events only
+   with listeners (a Harness always listens), copying an immutable trace in `Clone`, the explicit
+   ok of an aborted phase (its callback never fails). Unchecked, as in pi: the context of a
+   Session failure inside a step and of an outdated report.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
