@@ -385,11 +385,11 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    case keeps that each name has its own exact total, and key order is n/a. Unlike pi, where a
    submission wait resolves in a microtask after every commit listener, the Session wakes the
    wait first (`ObserveCommits` runs before host listeners), so the cases that read a host
-   listener's record after a wait wait for the record itself. Two coverage notes from the
-   sabotage run (24 of 30 mutations caught): the order the boundary removes items in is not a
-   mechanism, as Chord normalizes the adopted splices; and no case of pi's checks that a head
-   write placed earlier in the same boundary advances the active range for the writes after it.
-   Expected and still uncovered: the postTools boundary (slice 2), data-only writes while busy
+   listener's record after a wait wait for the record itself. Added beyond pi: a head write placed
+   earlier in the same boundary advances the active range, so a later write behind it is stale —
+   no case of pi's checks it. Sabotage: 25 of 30 mutations caught; the order the boundary removes
+   items in is not a mechanism, as Chord normalizes the adopted splices. Expected and still
+   uncovered: the postTools boundary (slice 2), data-only writes while busy
    (`harness-input-entries`) and the outcome cleanup (slice 1 (d)).
 
 ## 5. Bookkeeping

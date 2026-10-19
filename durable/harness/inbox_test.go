@@ -438,6 +438,27 @@ func TestInboxMakesAHeadWriteStaleBehindAResetPlacedEarlierInTheSameBoundary(t *
 	expectUnanswered(t, "summary", submissionStatus(t, summary), "stale")
 }
 
+// Beyond pi: no pi case places two head writes at one boundary. The first
+// moves the start of the active range to its head, so the second, targeting
+// an entry before that head, is stale, though the newest marker before the
+// boundary (none here) would let it in.
+func TestInboxMakesAHeadWriteStaleBehindAHeadWritePlacedEarlierInTheSameBoundary(t *testing.T) {
+	setup := newChatSetup(t)
+	first, reached, release := gatedStep(fauxAnswer("first"))
+	setup.faux.SetResponses([]providers.FauxResponseStep{first})
+	_, root := openChat(t, memory.New(), setup)
+	older := appendPlainNote(t, root)
+	newer := appendPlainNote(t, root)
+	input := submit(t, root, inputDraft("a"))
+	awaitSignal(t, reached, "the first request")
+	advancing := submit(t, root, headWrite("summary", newer.ID))
+	behind := submit(t, root, headWrite("summary", older.ID))
+	release()
+	waitFor(t, input)
+	expectDone(t, "advancing", submissionStatus(t, advancing), nil)
+	expectUnanswered(t, "behind", submissionStatus(t, behind), "stale")
+}
+
 func TestInboxDropsAnOnYieldContinuationWhenTheFinalBoundarySelectsAFollowUp(t *testing.T) {
 	setup := newChatSetup(t)
 	first, reached, release := gatedStep(fauxAnswer("first"))
