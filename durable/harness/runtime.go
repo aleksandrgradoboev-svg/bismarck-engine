@@ -381,33 +381,74 @@ func (rt *TaskRuntime) Report(err error) error {
 	return nil
 }
 
-// Sleep returns once the Harness clock reaches until, rechecking it after
-// every timer; it fails when the invocation or ctx is cancelled.
-func (rt *TaskRuntime) Sleep(ctx context.Context, until time.Time) error {
-	if err := rt.check(); err != nil {
+// SleepUntil commits a sleep: the task holds no invocation until the Harness
+// clock reaches until, then resumes at checkpoint. It returns once the sleep
+// is stored, not when the time comes; the phase returns right after.
+// Committing the state Sleep returns is the same sleep, for one that must
+// commit together with other writes. A phase never waits for time in memory:
+// it reruns from its top after a crash or close, so work after a wait belongs
+// in the next phase.
+func (rt *TaskRuntime) SleepUntil(ctx context.Context, until time.Time, checkpoint any) error {
+	next, err := Sleep(until, checkpoint)
+	if err != nil {
 		return err
 	}
-	for {
-		select {
-		case <-rt.inv.ctx.Done():
-			return context.Cause(rt.inv.ctx)
-		case <-ctx.Done():
-			return context.Cause(ctx)
-		default:
+	return rt.gated(ctx, func(tx *durable.Tx, current durable.TaskRecord) error {
+		rt.s.mu.Lock()
+		defer rt.s.unlock()
+		return rt.s.commitState(tx, rt.inv, current, *next)
+	})
+}
+
+// SetTimer calls callback once after about delay on the Harness's timer
+// (Options.SetTimer), for pacing work inside a phase, such as throttled
+// progress commits. It is not durable: the invocation's end disarms it, and
+// after its end nothing is armed. It returns a function that disarms it.
+// Wait for time between phases with SleepUntil.
+func (rt *TaskRuntime) SetTimer(callback func(), delay time.Duration) func() {
+	s := rt.s
+	timer := &invocationTimer{}
+	s.mu.Lock()
+	if rt.inv.ended {
+		s.unlock()
+		return func() {}
+	}
+	// Registered before it is armed: a timer that fires at once still runs.
+	rt.inv.timers[timer] = struct{}{}
+	s.unlock()
+	disarm := s.timers.Foreground(func() {
+		s.mu.Lock()
+		_, armed := rt.inv.timers[timer]
+		delete(rt.inv.timers, timer)
+		ended := rt.inv.ended
+		s.unlock()
+		// An ended invocation's timers never fire.
+		if armed && !ended {
+			callback()
 		}
-		remaining := until.Sub(rt.s.now())
-		if remaining <= 0 {
-			return nil
+	}, delay)
+	s.mu.Lock()
+	_, armed := rt.inv.timers[timer]
+	ended := rt.inv.ended
+	if armed {
+		timer.disarm = disarm
+	}
+	s.unlock()
+	if !armed {
+		// The invocation ended while the host armed it, and its end found
+		// nothing to disarm yet; otherwise the timer fired already.
+		if ended {
+			disarm()
 		}
-		timer := time.NewTimer(remaining)
-		select {
-		case <-timer.C:
-		case <-rt.inv.ctx.Done():
-			timer.Stop()
-			return context.Cause(rt.inv.ctx)
-		case <-ctx.Done():
-			timer.Stop()
-			return context.Cause(ctx)
+		return func() {}
+	}
+	return func() {
+		s.mu.Lock()
+		_, armed := rt.inv.timers[timer]
+		delete(rt.inv.timers, timer)
+		s.unlock()
+		if armed {
+			disarm()
 		}
 	}
 }

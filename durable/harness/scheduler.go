@@ -39,7 +39,11 @@ type schedulerOptions struct {
 	settings func() Settings
 	env      func(ctx context.Context, id durable.ConversationID) (env.ExecutionEnv, error)
 	now      func() time.Time
-	report   func(error)
+	// onWake is Options.OnWake: it replaces the timer for sleeping tasks.
+	onWake func(Wake)
+	// timers are the host's (Options.SetTimer).
+	timers *durable.Timers
+	report func(error)
 	// settleOutcome is the Harness cleanup staged in the commit that makes an
 	// outcome the scheduler wrote itself terminal.
 	settleOutcome func(tx *durable.Tx, record durable.TaskRecord, outcome durable.TaskOutcome) error
@@ -61,9 +65,25 @@ type invocation struct {
 	cancel context.CancelCauseFunc
 	// watches acquired through the runtime; stopped at invocation end.
 	watches map[*durable.DocumentWatch]struct{}
+	// timers armed through the runtime; disarmed at invocation end.
+	timers map[*invocationTimer]struct{}
 	// ended is guarded by scheduler.mu.
 	ended bool
 	done  chan struct{}
+}
+
+// invocationTimer is one timer of TaskRuntime.SetTimer; disarm is set once
+// the host armed it.
+type invocationTimer struct {
+	disarm func()
+}
+
+// sleepTimer is the timer for the earliest sleep; fired is set when it ran,
+// so the next wake arms it again even for the same time.
+type sleepTimer struct {
+	at     time.Time
+	disarm func()
+	fired  atomic.Bool
 }
 
 type reservation struct {
@@ -100,6 +120,9 @@ type scheduler struct {
 	mu sync.Mutex
 	// pendingReports are reported once mu is released.
 	pendingReports []error
+	// afterUnlock are host calls decided under mu, such as disarming a timer,
+	// run once it is released.
+	afterUnlock []func()
 
 	live             map[durable.TaskID]durable.TaskRecord
 	invocations      map[durable.TaskID]*invocation
@@ -124,8 +147,27 @@ type scheduler struct {
 	waitersOn      map[durable.TaskID]*set[durable.TaskID]
 	failFastChecks *set[durable.TaskID]
 	abandoned      *set[durable.TaskID]
+	// sleeping are the sleeping live tasks, due or not: the candidates of
+	// wakeDueLocked.
+	sleeping *set[durable.TaskID]
+
+	// wakeMu orders wake deliveries: OnWake calls and the arming of the sleep
+	// timer, which are host code and so run outside mu. It is taken before mu.
+	wakeMu sync.Mutex
+	// timer is the timer for the earliest sleep, without OnWake while
+	// scheduling runs; guarded by wakeMu.
+	timer *sleepTimer
+	// timerArmed mirrors timer != nil for readers under mu.
+	timerArmed atomic.Bool
+	// lastWake is the last wake OnWake took, so an unchanged one is not
+	// repeated; guarded by wakeMu.
+	lastWake      *Wake
+	wakeScheduled bool
 
 	reconcileScheduled bool
+	// reconcilingWork counts the reconcile passes underway that have work:
+	// they count for Wake.Active.
+	reconcilingWork int
 	// reconciling counts reconcile passes from the moment they clear
 	// reconcileScheduled until their commit returns, so "nothing is scheduled"
 	// has no gap while a pass waits for the line.
@@ -165,6 +207,7 @@ func newScheduler(options schedulerOptions) *scheduler {
 		waitersOn:           map[durable.TaskID]*set[durable.TaskID]{},
 		failFastChecks:      newSet[durable.TaskID](),
 		abandoned:           newSet[durable.TaskID](),
+		sleeping:            newSet[durable.TaskID](),
 		unsubscribeRegistry: func() {},
 		sealed:              make(chan struct{}),
 	}
@@ -174,7 +217,19 @@ func newScheduler(options schedulerOptions) *scheduler {
 func (s *scheduler) unlock() {
 	reports := s.pendingReports
 	s.pendingReports = nil
+	calls := s.afterUnlock
+	s.afterUnlock = nil
 	s.mu.Unlock()
+	for _, call := range calls {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					s.report(panicError(r))
+				}
+			}()
+			call()
+		}()
+	}
 	for _, err := range reports {
 		s.report(err)
 	}
@@ -202,7 +257,7 @@ func (s *scheduler) open(ctx context.Context) error {
 		defer s.unlock()
 		// Every table read before the first write.
 		var scans [][]durable.TaskRecord
-		for _, status := range []string{durable.TaskPending, durable.TaskRunning, durable.TaskWaiting, durable.TaskCompleting} {
+		for _, status := range []string{durable.TaskPending, durable.TaskRunning, durable.TaskWaiting, durable.TaskSleeping, durable.TaskCompleting} {
 			records, err := scanAll(func(cursor durable.Cursor) (durable.Page[durable.TaskRecord], error) {
 				return tx.ScanTasks(durable.TaskQuery{Status: status}, scanPageSize, cursor)
 			})
@@ -237,14 +292,18 @@ func (s *scheduler) open(ctx context.Context) error {
 	// finalize held outcomes.
 	s.cascadePending = true
 	s.scheduleReconcile()
+	s.scheduleWakeLocked()
 	s.unlock()
 	return nil
 }
 
-// resume enables scheduling. Idempotent; the kick does nothing once closing.
+// resume enables scheduling, and makes sleeping tasks that are due runnable:
+// a host wakeup, such as an alarm, calls it. Idempotent; the kick does
+// nothing once closing.
 func (s *scheduler) resume() {
 	s.mu.Lock()
 	s.enabled = true
+	s.wakeDueLocked()
 	s.kickLocked()
 	s.unlock()
 }
@@ -594,9 +653,19 @@ func (s *scheduler) reconcile() {
 	s.mu.Lock()
 	s.reconcileScheduled = false
 	s.reconciling++
+	// A pass with work is work for Wake: it finalizes held outcomes and marks
+	// cascades, at open as recovery. A pass with nothing to do is not.
+	work := s.reconcileWork()
+	if work {
+		s.reconcilingWork++
+	}
 	defer func() {
 		s.mu.Lock()
 		s.reconciling--
+		if work {
+			s.reconcilingWork--
+		}
+		s.scheduleWakeLocked()
 		s.unlock()
 	}()
 	cascade := s.cascadePending
@@ -799,6 +868,16 @@ func (s *scheduler) seal() {
 		s.taskWaiters.rejectAll(err)
 		s.idleWaiters.rejectAll(err)
 		s.unlock()
+		// After closing is set, a wake delivery arms nothing more.
+		s.wakeMu.Lock()
+		if s.timer != nil {
+			if err := s.callHost(s.timer.disarm); err != nil {
+				s.report(err)
+			}
+			s.timer = nil
+			s.timerArmed.Store(false)
+		}
+		s.wakeMu.Unlock()
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -819,6 +898,7 @@ func (s *scheduler) kick() {
 }
 
 func (s *scheduler) kickLocked() {
+	s.scheduleWakeLocked()
 	s.dirty = true
 	if s.draining || !s.enabled || s.closing.Load() {
 		return
@@ -886,6 +966,9 @@ func (s *scheduler) reserve() ([]reservation, error) {
 		if _, err := s.loadScopes(false); err != nil {
 			return err
 		}
+		// Every pass picks up sleeps whose time has come: a pass started by any
+		// change may be the first to run after a deadline.
+		s.wakeDueLocked()
 		// Taken once per pass, and only when some task is a candidate.
 		var snapshot *RegistrySnapshot
 		for _, id := range s.runnable.values() {
@@ -897,6 +980,12 @@ func (s *scheduler) reserve() ([]reservation, error) {
 			// It returns once what it waits for ends, its record changes, or the
 			// work below it ends.
 			if len(s.waitingOn(record, true)) > 0 {
+				s.runnable.delete(id)
+				continue
+			}
+			// It returns at the first pass after its time comes, which the timer,
+			// resume, or any change starts.
+			if s.notDue(record) {
 				s.runnable.delete(id)
 				continue
 			}
@@ -997,6 +1086,8 @@ func (s *scheduler) resolve(record durable.TaskRecord, snapshot *RegistrySnapsho
 	migrated, err := migrate(task, record)
 	if err != nil {
 		s.failedMigrations[record.ID] = failedMigration{task: task, err: err}
+		// Blocked now without a commit: the host's wake must hear it.
+		s.scheduleWakeLocked()
 		s.reportLocked(err)
 		return nil, record, blockedMigrationFailed
 	}
@@ -1064,6 +1155,7 @@ func (s *scheduler) createInvocation(record durable.TaskRecord, mode string) *in
 		ctx:            ctx,
 		cancel:         cancel,
 		watches:        map[*durable.DocumentWatch]struct{}{},
+		timers:         map[*invocationTimer]struct{}{},
 		done:           make(chan struct{}),
 	}
 	s.invocations[record.ID] = inv
@@ -1301,6 +1393,10 @@ func (s *scheduler) commitState(tx *durable.Tx, inv *invocation, current durable
 		if err := s.validateWait(tx, inv, current, next.On, next.Policy); err != nil {
 			return err
 		}
+	case durable.TaskSleeping:
+		if err := validateSleep(inv, current.ID, next.Until); err != nil {
+			return err
+		}
 	case durable.TaskTerminal:
 		if next.Outcome == nil {
 			return fmt.Errorf("Task %d: a terminal state needs an outcome", current.ID)
@@ -1469,6 +1565,13 @@ func (s *scheduler) end(inv *invocation) {
 	for watch := range watches {
 		watch.Stop()
 	}
+	// Disarmed once mu is released: disarming is host code.
+	for timer := range inv.timers {
+		if timer.disarm != nil {
+			s.afterUnlock = append(s.afterUnlock, timer.disarm)
+		}
+	}
+	clear(inv.timers)
 	// Pending waits bound to the invocation, such as a tool's waitForTask(),
 	// fail with it.
 	inv.cancel(endedError(inv.taskID))
@@ -1515,11 +1618,13 @@ type TaskInspection struct {
 	// reserves it; Migrates when its definition is newer and has a
 	// migration), "waiting" (On lists the live tasks it waits for: the live
 	// part of its wait, or, when abort-marked, its live ordinary owned work),
-	// "completing" (outcome held until its owned work drains), or "blocked"
-	// (Reason says why; aborting it settles it as orphaned).
+	// "sleeping" (until the Harness clock reaches Until), "completing"
+	// (outcome held until its owned work drains), or "blocked" (Reason says
+	// why; aborting it settles it as orphaned).
 	Kind     string
 	Migrates bool
 	On       []durable.TaskID
+	Until    time.Time
 	Reason   string
 	Error    error
 }
@@ -1562,6 +1667,10 @@ func (s *scheduler) inspectTask(record durable.TaskRecord, snapshot *RegistrySna
 	}
 	if on := s.waitingOn(record, false); len(on) > 0 {
 		inspection.Kind, inspection.On = "waiting", on
+		return inspection
+	}
+	if s.notDue(record) {
+		inspection.Kind, inspection.Until = "sleeping", time.UnixMilli(*record.State.Until)
 		return inspection
 	}
 	task, migrates, reason, err := s.fit(record, snapshot.Task(record.Kind))

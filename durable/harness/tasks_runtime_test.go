@@ -91,7 +91,7 @@ func TestRuntimeFailsOperationsAfterTheInvocationEndsAndStopsItsWatches(t *testi
 	expectError(t, err, "invocation has ended")
 	_, err = rt.MemoOr(bg, "x", 1)
 	expectError(t, err, "invocation has ended")
-	expectError(t, rt.Sleep(bg, time.UnixMilli(0)), "invocation has ended")
+	expectError(t, rt.SleepUntil(bg, time.UnixMilli(0), map[string]string{"phase": "run"}), "invocation has ended")
 	_, err = rt.WatchDoc(bg, notes.Session())
 	expectError(t, err, "invocation has ended")
 	// The handler's own context is cancelled by now; the ended invocation
@@ -275,74 +275,6 @@ func TestRuntimeStopsAWatchWhoseAcquisitionFinishesAfterTheInvocationEnded(t *te
 	}
 	if got := waitDone(t, o.h, id); got.State.Outcome.Status != durable.OutcomeFaulted {
 		t.Fatalf("outcome = %s", outcomeJSON(t, got))
-	}
-}
-
-func TestRuntimeSleepsUntilTheHarnessClockReachesTheDeadline(t *testing.T) {
-	var clock atomicMillis
-	clock.set(1_000)
-	woke := make(chan struct{})
-	sleeper := oneStep(t, "test.sleeper", func(ctx context.Context, _ *stepTask, rt *TaskRuntime) error {
-		if err := rt.Sleep(ctx, time.UnixMilli(900)); err != nil {
-			return err
-		}
-		if err := rt.Sleep(ctx, time.UnixMilli(1_005)); err != nil {
-			return err
-		}
-		close(woke)
-		return rt.Commit(ctx, completeWith(nil))
-	}, nil)
-	o := openRoot(t, []Task{sleeper}, openOptions{now: clock.now})
-	id := start(t, o.root, sleeper, false)
-	must(t, o.h.Resume())
-	// The clock stands still, so real timers keep firing without waking the
-	// task.
-	if settledWithin(woke) {
-		t.Fatal("woke before the clock reached the deadline")
-	}
-	clock.set(1_005)
-	waitDone(t, o.h, id)
-}
-
-func TestRuntimeFailsASleepWhenTheInvocationIsSignalledOrItsOwnContextCancelled(t *testing.T) {
-	var mu sync.Mutex
-	var results []string
-	note := func(s string) {
-		mu.Lock()
-		results = append(results, s)
-		mu.Unlock()
-	}
-	sleeping := make(chan struct{})
-	signalled := oneStep(t, "test.sleep-signalled", func(ctx context.Context, _ *stepTask, rt *TaskRuntime) error {
-		close(sleeping)
-		err := rt.Sleep(ctx, time.Now().Add(time.Minute))
-		note("signalled:" + err.Error())
-		return err
-	}, nil)
-	cancelled := oneStep(t, "test.sleep-cancelled", func(ctx context.Context, _ *stepTask, rt *TaskRuntime) error {
-		sleepCtx, cancel := context.WithCancelCause(bg)
-		done := async(func() (struct{}, error) { return struct{}{}, rt.Sleep(sleepCtx, time.Now().Add(time.Minute)) })
-		cancel(errors.New("stop sleeping"))
-		_, err := await(t, done)
-		note("cancelled:" + err.Error())
-		return rt.Commit(ctx, completeWith(nil))
-	}, nil)
-	o := openRoot(t, []Task{signalled, cancelled}, openOptions{})
-	signalledID := start(t, o.root, signalled, false)
-	cancelledID := start(t, o.root, cancelled, false)
-	must(t, o.h.Resume())
-	waitDone(t, o.h, cancelledID)
-	<-sleeping
-	if _, err := o.h.AbortTask(bg, signalledID); err != nil {
-		t.Fatal(err)
-	}
-	if got := outcomeJSON(t, waitDone(t, o.h, signalledID)); got != `{"status":"aborted","reason":"test"}` {
-		t.Fatalf("outcome = %s", got)
-	}
-	mu.Lock()
-	defer mu.Unlock()
-	if want := []string{"cancelled:stop sleeping", "signalled:context canceled"}; !reflect.DeepEqual(results, want) {
-		t.Fatalf("results = %v, want %v", results, want)
 	}
 }
 

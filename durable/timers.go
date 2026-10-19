@@ -54,7 +54,7 @@ func (t *Timers) Foreground(callback func(), delay time.Duration) func() {
 		return disarm
 	}
 	if err == nil {
-		err = errors.New("HarnessOptions.setTimer declined a timer that paces work; using setTimeout")
+		err = errors.New("SetTimer declined a timer that paces work; using time.AfterFunc")
 	}
 	t.fallBack(err)
 	return NativeTimer(callback, delay, false)
