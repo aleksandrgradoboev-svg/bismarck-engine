@@ -523,6 +523,28 @@ var storageCases = []storageCase{
 		c.equal(scan(durable.TaskTerminal), []durable.TaskRecord{terminal}, "terminal scan")
 	}},
 
+	{"stores and scans sleeping tasks by status", func(c *checker) {
+		root := c.createRoot()
+		sleepingID := mint[durable.TaskID](c)
+		sleeping := pendingTask(sleepingID, root)
+		sleeping.State = durable.SleepingState(raw(`{"phase":"next"}`), 61_000)
+		sleeping.Memos = map[string]json.RawMessage{"kept": raw(`true`)}
+		c.commit(taskW(sleeping))
+		got, _ := c.s.Task(ctx, sleepingID)
+		c.equal(got, &sleeping, "sleeping")
+		scan := func(status string) []durable.TaskRecord {
+			pg, err := c.s.ScanTasks(ctx, durable.TaskQuery{Status: status}, 10, nil)
+			c.must(err)
+			return pg.Items
+		}
+		c.equal(scan(durable.TaskSleeping), []durable.TaskRecord{sleeping}, "sleeping scan")
+		running := sleeping
+		running.State = durable.TaskState{Status: durable.TaskRunning, Checkpoint: raw(`{"phase":"next"}`)}
+		c.commit(taskW(running))
+		c.equal(len(scan(durable.TaskSleeping)), 0, "sleeping scan after running")
+		c.equal(scan(durable.TaskRunning), []durable.TaskRecord{running}, "running scan")
+	}},
+
 	{"indexes request IDs per conversation and replaces complete submission records", func(c *checker) {
 		root := c.createRoot()
 		secondConversation := mint[durable.ConversationID](c)

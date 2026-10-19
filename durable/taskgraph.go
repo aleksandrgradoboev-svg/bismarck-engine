@@ -44,13 +44,15 @@ type TaskGraphNode struct {
 }
 
 // TaskGraphState is a live task's durable status without its checkpoint and
-// outcome payloads: Phase for pending, running and waiting; On and Policy for
-// waiting; Outcome, the held outcome's status, for completing.
+// outcome payloads: Phase for pending, running, waiting and sleeping; On and
+// Policy for waiting; Until for sleeping; Outcome, the held outcome's status,
+// for completing.
 type TaskGraphState struct {
 	Status  string     `json:"status"`
 	Phase   string     `json:"phase,omitempty"`
 	On      []TaskID   `json:"on,omitempty"`
 	Policy  JoinPolicy `json:"policy,omitempty"`
+	Until   *int64     `json:"until,omitempty"`
 	Outcome string     `json:"outcome,omitempty"`
 }
 
@@ -198,7 +200,7 @@ func (v *taskGraphView) attach(ctx context.Context, create func(value map[string
 }
 
 // liveStatuses are the statuses of the tasks the graph holds.
-var liveStatuses = []string{TaskPending, TaskRunning, TaskWaiting, TaskCompleting}
+var liveStatuses = []string{TaskPending, TaskRunning, TaskWaiting, TaskSleeping, TaskCompleting}
 
 const taskGraphPageSize = 256
 
@@ -390,6 +392,12 @@ func stateValue(state TaskState) map[string]any {
 			on[i] = float64(id)
 		}
 		return map[string]any{"status": TaskWaiting, "phase": phaseOf(state.Checkpoint), "on": on, "policy": string(state.Policy)}
+	case TaskSleeping:
+		var until float64
+		if state.Until != nil {
+			until = float64(*state.Until)
+		}
+		return map[string]any{"status": TaskSleeping, "phase": phaseOf(state.Checkpoint), "until": until}
 	}
 	// Terminal records never reach here: they leave the graph.
 	outcome := ""

@@ -190,6 +190,9 @@ const (
 	TaskRunning = "running"
 	// TaskWaiting: parked until every task in On is terminal.
 	TaskWaiting = "waiting"
+	// TaskSleeping: parked without an invocation until the Harness clock
+	// reaches Until; then it resumes at its Checkpoint.
+	TaskSleeping = "sleeping"
 	// TaskCompleting: outcome decided; terminal once no ordinary owned work
 	// below is live.
 	TaskCompleting = "completing"
@@ -198,7 +201,7 @@ const (
 )
 
 // TaskStatuses are the task statuses in pi's order.
-var TaskStatuses = []string{TaskPending, TaskRunning, TaskWaiting, TaskCompleting, TaskTerminal}
+var TaskStatuses = []string{TaskPending, TaskRunning, TaskWaiting, TaskSleeping, TaskCompleting, TaskTerminal}
 
 // SubmissionStatuses are the submission statuses in pi's order.
 var SubmissionStatuses = []string{SubmissionQueued, SubmissionPlaced, SubmissionDone, SubmissionUnanswered}
@@ -239,19 +242,29 @@ type TaskOutcome struct {
 }
 
 // TaskState is the complete durable execution state of a task: a Checkpoint
-// while pending, running or waiting (with On and Policy when waiting), an
-// Outcome once completing or terminal.
+// while pending, running, waiting or sleeping (with On and Policy when
+// waiting, Until when sleeping), an Outcome once completing or terminal.
 type TaskState struct {
 	Status     string          `json:"status"`
 	Checkpoint json.RawMessage `json:"checkpoint,omitempty"`
 	On         []TaskID        `json:"on,omitempty"`
 	Policy     JoinPolicy      `json:"policy,omitempty"`
-	Outcome    *TaskOutcome    `json:"outcome,omitempty"`
+	// Until is a sleep's deadline, epoch milliseconds on the Harness clock;
+	// a pointer, since 0 is a valid time.
+	Until   *int64       `json:"until,omitempty"`
+	Outcome *TaskOutcome `json:"outcome,omitempty"`
 }
 
-// Live reports whether the state can still run: pending, running or waiting.
+// Live reports whether the state can still run: pending, running, waiting or
+// sleeping.
 func (s TaskState) Live() bool {
-	return s.Status == TaskPending || s.Status == TaskRunning || s.Status == TaskWaiting
+	return s.Status == TaskPending || s.Status == TaskRunning || s.Status == TaskWaiting || s.Status == TaskSleeping
+}
+
+// SleepingState is the state of a task asleep until the Harness clock
+// reaches until, resuming at checkpoint.
+func SleepingState(checkpoint json.RawMessage, until int64) TaskState {
+	return TaskState{Status: TaskSleeping, Checkpoint: checkpoint, Until: &until}
 }
 
 // AbortReasonRestart marks a task abandoned after a restart, or below one.

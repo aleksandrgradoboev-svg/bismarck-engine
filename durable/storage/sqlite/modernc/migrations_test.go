@@ -31,6 +31,41 @@ func TestCreatesTheCurrentSchemaRepeatedly(t *testing.T) {
 	equal(t, nextSeq, int64(1), "next sequence")
 }
 
+func TestMigratesAVersion1DatabaseToStoreSleepingTasksKeepingItsTasksAndIndexes(t *testing.T) {
+	path := tempPath(t)
+	db := must(modernc.OpenDatabase(ctx, path, modernc.Options{}))
+	noErr(t, sqlite.ApplyMigrations(ctx, db, sqlite.Migrations[:1]))
+	// pi's JSON.stringify of the record, which the migration must carry over
+	// byte for byte.
+	waiting := `{"id":5,"conversationId":1,"kind":"test.task","version":1,"input":null,"background":false,"abortRequested":false,"state":{"status":"waiting","checkpoint":{"phase":"run"},"on":[],"policy":"allSettled"}}`
+	must(db.Exec("INSERT INTO tasks (id, conversation_id, kind, status, abort_requested, background, record) VALUES (5, 1, 'test.task', 'waiting', 0, 0, ?)", waiting))
+	if _, err := db.Exec("INSERT INTO tasks (id, conversation_id, kind, status, abort_requested, background, record) VALUES (6, 1, 'test.task', 'sleeping', 0, 0, '{}')"); err == nil {
+		t.Fatal("version 1 accepted a sleeping task")
+	}
+	noErr(t, db.Close())
+
+	s := must(modernc.OpenStorage(ctx, path, modernc.Options{}))
+	noErr(t, s.Close(ctx))
+	migrated := openDatabase(t, path)
+	equal(t, scalar(t, migrated, "SELECT version FROM durable_schema WHERE singleton = 1"), int64(2), "version")
+	var status, record string
+	noErr(t, migrated.QueryRow("SELECT status, record FROM tasks WHERE id = 5").Scan(&status, &record))
+	equal(t, status, "waiting", "status")
+	equal(t, record, waiting, "record")
+	must(migrated.Exec("INSERT INTO tasks (id, conversation_id, kind, status, abort_requested, background, record) VALUES (6, 1, 'test.task', 'sleeping', 0, 0, '{}')"))
+	rows := must(migrated.Query("SELECT name FROM sqlite_schema WHERE type = 'index' AND tbl_name = 'tasks' ORDER BY name"))
+	var indexes []string
+	for rows.Next() {
+		var name string
+		noErr(t, rows.Scan(&name))
+		indexes = append(indexes, name)
+	}
+	noErr(t, rows.Err())
+	noErr(t, rows.Close())
+	equal(t, indexes, []string{"tasks_by_abort_requested", "tasks_by_background", "tasks_by_conversation", "tasks_by_kind", "tasks_by_status"}, "indexes")
+	equal(t, scalar(t, migrated, "SELECT count(*) FROM sqlite_schema WHERE name = 'tasks_v2'"), int64(0), "rebuilt table")
+}
+
 func TestRejectsADatabaseNewerThanThePortableCore(t *testing.T) {
 	path := tempPath(t)
 	db := must(modernc.OpenDatabase(ctx, path, modernc.Options{}))

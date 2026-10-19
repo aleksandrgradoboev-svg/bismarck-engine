@@ -71,6 +71,9 @@ type SessionOptions struct {
 	// DocumentRetention is how long an idle document stays cached; nil or
 	// negative is ten minutes. A very long one keeps documents for good.
 	DocumentRetention func() time.Duration
+	// SetTimer arms the timers that evict idle documents; nil is
+	// NativeTimer. A host that declines one leaves eviction to commits.
+	SetTimer SetTimer
 	// Hooks are the harness's: pi's Harness subclasses the Session for them.
 	Hooks SessionHooks
 }
@@ -138,8 +141,8 @@ type idleDocument struct {
 }
 
 type documentSweep struct {
-	at    time.Time
-	timer *time.Timer
+	at     time.Time
+	disarm func()
 }
 
 // Session owns one mutation line, its records and its tracked documents.
@@ -165,6 +168,10 @@ type Session struct {
 	attached  map[DocumentID]int
 	sweep     *documentSweep
 	sweepJobs int
+	timers    *Timers
+	// timersDeclined is set once the host declined a background timer: then
+	// none is kept, and the end of each commit evicts what expired.
+	timersDeclined bool
 	// lineBusy is set while a job runs; a sweep due meanwhile runs at the
 	// job's end, still on the line (dueSweep), as pi's microtask queues it
 	// before anything that awaits the job.
@@ -205,6 +212,7 @@ func NewSession(storage Storage, options SessionOptions) *Session {
 		s.nowFn = time.Now
 	}
 	s.storage = &guardedStorage{backend: storage, session: s}
+	s.timers = HostTimers(options.SetTimer, s.report)
 	return s
 }
 
@@ -614,8 +622,8 @@ func (s *Session) beginClose(ctx context.Context) <-chan struct{} {
 	s.closing = true
 	s.closeDone = make(chan struct{})
 	done := s.closeDone
-	if s.sweep != nil && s.sweep.timer != nil {
-		s.sweep.timer.Stop()
+	if s.sweep != nil && s.sweep.disarm != nil {
+		s.sweep.disarm()
 	}
 	s.sweep = nil
 	listeners := s.closeListeners.snapshot()
@@ -823,8 +831,8 @@ func (s *Session) scheduleSweepLocked() {
 	if s.sweep != nil && !s.sweep.at.After(at) {
 		return
 	}
-	if s.sweep != nil && s.sweep.timer != nil {
-		s.sweep.timer.Stop()
+	if s.sweep != nil && s.sweep.disarm != nil {
+		s.sweep.disarm()
 	}
 	// The pending sweep stays set until its job runs, so touches while the
 	// line is busy queue no more.
@@ -856,7 +864,18 @@ func (s *Session) scheduleSweepLocked() {
 		go run()
 		return
 	}
-	sweep.timer = time.AfterFunc(delay, run)
+	if s.timersDeclined {
+		s.sweep = nil
+		return
+	}
+	// A timer that fires early sweeps nothing and arms the next one.
+	disarm := s.timers.Background(run, delay)
+	if disarm == nil {
+		s.timersDeclined = true
+		s.sweep = nil
+		return
+	}
+	sweep.disarm = disarm
 }
 
 // sweepLocked evicts the idle documents whose retention passed, oldest

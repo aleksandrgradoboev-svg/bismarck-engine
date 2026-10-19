@@ -102,6 +102,7 @@ func (s TaskState) Clone() TaskState {
 		Checkpoint: bytesCopy(s.Checkpoint),
 		On:         slices.Clone(s.On),
 		Policy:     s.Policy,
+		Until:      ptr(s.Until),
 		Outcome:    s.Outcome.Clone(),
 	}
 }
