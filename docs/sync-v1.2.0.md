@@ -557,7 +557,8 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    (found by a Windows CI flake of `TestTaskFailsAnAgentWaitWhoseCallerIsCancelled...` on PR #56;
    ported wrong since stage 4b-1). pi's `awaitWithContext` checks `signal.aborted` first; Go's
    `select` over a closed `done` and a cancelled context picks either. A probe that resolves first
-   and then waits with a cancelled caller failed 25 of 50 before and 0 of 50 after.
+   and then waits with a cancelled caller failed 25 of 50 before and 0 of 50 after; it stays as a
+   case beyond pi.
 
 ## 5. Bookkeeping
 
