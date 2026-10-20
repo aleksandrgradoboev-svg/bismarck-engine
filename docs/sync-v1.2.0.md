@@ -677,6 +677,30 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    calls end in commits of their own), a nested slot created done, and dropping another
    conversation's nested results.
 
+   **Durable slice 3a, the compaction task** (snapshot `d2e7d8b7`; `compaction.ts`, the compaction
+   parts of `live.ts`, `events.ts` and `harness.ts`, and pi-ai `utils/overflow.ts`). The
+   `pi.compaction` task (select, summarize, retry, abort), range selection, serialization, placing a
+   summary (appended for a blocking compaction, admitted as a write for a conversation-owned one),
+   `CompactionHooks.BeforeCompact`, `Conversation.Compact`, `pi.live` `compactions` and
+   `compactionFailure`, the scheduler's cleanup of a faulted or orphaned compaction,
+   `compaction_start` and `compaction_end` with the snapshot's `compactions`, per-model
+   `ModelOverrides`. In `ai`: `IsContextOverflow` (a `contextWindow` of 0 is pi's absent window),
+   `IsRecoverableLength`, `OverflowPatterns`; `EstimateMessageTokens` and `CalculateContextTokens` are
+   exported. Go forms: `CompactionDecision{Decline, Summary}` for pi's `{decline}`/`{summary}`, a nil
+   decision asking the next hook; `CompactionResult` with nil fields for absent ones;
+   `Compact(ctx, instructions *string)`, nil apart from `""`; `Settings.CompactionOverrides` beside
+   the comparable `CompactionPolicy`. A summarize phase whose first kept entry is missing from the
+   context at its tail faults, where pi's `findIndex` would summarize all but the last entry. Tests:
+   every case of `harness-compaction` that needs no generation-side compaction (65, including the
+   manual cases of the later sections) and the 20 of pi-ai `overflow.test.ts`; `context-overflow`
+   calls live providers and is not ported. The events snapshot case now checks its parts, as pi's
+   `toMatchObject` does. Beyond pi: the summarizer reads the context at the pinned tail (an edit the
+   hook commits after selection is not summarized); a steer between a call and its result is
+   summarized after the result; an answer with text and a tool call is no summary; a stop whose input
+   exceeds the window, and both usage checks without a window. Sabotage 54 of 59: `compactionFailure`
+   (kept on success, missing on failure and from the snapshot) and `compaction_end`'s error on another
+   task's end come with the background cases of slice 3b; a hook's panic is equivalent to its error.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
