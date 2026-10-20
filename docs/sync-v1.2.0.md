@@ -521,12 +521,21 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    checks how the entry is queued and placed, since `InputEntry` has no other fields, and its
    non-string kind cannot be written in Go. Adapted: batches are delivered off the commit, so the
    cases wait until no batch arrives for 50 ms. Added beyond pi: a commit while a partial is in
-   flight that leaves it unchanged sends no `message_update`. Sabotage 17 of 23. Waiting for slice 2: a turn
-   ending at a completing hold (a generation holds its outcome only while it owns live tool
+   flight that leaves it unchanged sends no `message_update`. Sabotage 17 of 23. Waiting for
+   slice 2: a turn ending at a completing hold (a generation holds its outcome only while it owns live tool
    tasks), and the thinking delta. Duplicate: the cancellation check after attaching (attach
    checks it on the line). Unchecked, as in pi: `task_failed`, the generations held at
    attachment, and a block sent whole in the same batch as its deltas. The slice 1 (c)
    sabotage's display-only fast path and outcome cleanup are now caught.
+
+   **Fix: close writes back a run that ended while closing** (found by a Windows CI flake of
+   `TestCloseStopsWithoutOutcomesAndStartsNoFreshPhaseOrAbortInvocation`, "commits 5 -> 5"). pi's
+   `close()` marks closing, seals and collects its invocations in one synchronous step; Go's seal
+   runs on its own goroutine and `join` collected the invocations only once it was done, so a run
+   that returned in between was neither stopped nor written back pending, and the next open
+   counted a restart for it. The scheduler now remembers the invocations that end after closing
+   began, and `join` writes back those with the ones it stops. A 50 ms delay before `join`
+   collects reproduced the CI failure 10 of 10 on the old code and passes 10 of 10 on the new.
 
 ## 5. Bookkeeping
 

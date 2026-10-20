@@ -166,8 +166,13 @@ type scheduler struct {
 	phaseDuration telemetry.Histogram
 	resumed       *set[durable.TaskID]
 
-	live             map[durable.TaskID]durable.TaskRecord
-	invocations      map[durable.TaskID]*invocation
+	live        map[durable.TaskID]durable.TaskRecord
+	invocations map[durable.TaskID]*invocation
+	// endedClosing are the tasks whose invocation ended after closing began.
+	// pi's close collects its invocations in the same synchronous step that
+	// marks closing; here join collects them once the seal is done, so one
+	// that ends in between is taken from here and still written back.
+	endedClosing     []durable.TaskID
 	taskWaiters      *waiters[durable.TaskID, durable.TaskRecord]
 	idleWaiters      *waiters[durable.ConversationID, struct{}]
 	failedMigrations map[durable.TaskID]failedMigration
@@ -475,7 +480,9 @@ func (s *scheduler) join(writeAtClose func(writes func() []durable.StorageWrite)
 	<-s.sealed
 	s.mu.Lock()
 	var done []chan struct{}
-	var stopped []durable.TaskID
+	// Those that ended since closing began, as pi's close would have stopped
+	// them too.
+	stopped := slices.Clone(s.endedClosing)
 	for _, inv := range s.invocations {
 		inv.cancel(context.Canceled)
 		done = append(done, inv.done)
@@ -489,6 +496,7 @@ func (s *scheduler) join(writeAtClose func(writes func() []durable.StorageWrite)
 		return
 	}
 	slices.Sort(stopped)
+	stopped = slices.Compact(stopped)
 	_ = writeAtClose(func() []durable.StorageWrite { return s.stoppedBack(stopped) })
 }
 
@@ -1806,6 +1814,9 @@ func (s *scheduler) end(inv *invocation) {
 	inv.ended = true
 	if s.invocations[inv.taskID] == inv {
 		delete(s.invocations, inv.taskID)
+		if s.closing.Load() {
+			s.endedClosing = append(s.endedClosing, inv.taskID)
+		}
 		if _, live := s.live[inv.taskID]; live {
 			s.runnable.add(inv.taskID)
 		}
