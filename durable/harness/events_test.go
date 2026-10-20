@@ -513,3 +513,26 @@ func TestEventsStartAMessageAtTheFirstCommittedPartialAndEndItWithTheConvertedEn
 		t.Fatalf("assistant starts %d, ends %d; want one of each", assistantStarts(), ends)
 	}
 }
+
+// Beyond pi: no case of pi's commits while a partial is in flight without
+// changing it. Such a commit sends no message_update.
+func TestEventsSendNoMessageUpdateForACommitThatLeavesTheInFlightPartialUnchanged(t *testing.T) {
+	_, root := openChat(t, memory.New(), newChatSetup(t))
+	_, log := listen(t, root)
+	must(t, root.Commit(bg, func(tx *durable.Tx) error {
+		live, err := liveDraft(tx, root.ID)
+		if err != nil {
+			return err
+		}
+		return setDraftField(live, "generation", LiveGeneration{Attempt: 1, Message: fauxAnswer("partial")})
+	}))
+	commitNote(t, root)
+	log.quiet(t)
+	batches := log.all()
+	if len(batches) != 2 {
+		t.Fatalf("batches = %d %v, want the partial's and the note's", len(batches), batches)
+	}
+	if got := eventTypes(batches[1]); !slices.Equal(got, []string{"entry_appended"}) {
+		t.Fatalf("note batch = %v, want only entry_appended", got)
+	}
+}
