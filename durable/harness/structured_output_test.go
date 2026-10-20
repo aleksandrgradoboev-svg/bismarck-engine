@@ -14,7 +14,7 @@ import (
 )
 
 // Ported from pi packages/durable/test/harness-structured-output.test.ts.
-// The bash case needs the tools on env (stage 5).
+// The bash case is in durable/tools, beside the bash tool it runs.
 
 func schemaOf(t *testing.T, source string) *ai.Schema {
 	t.Helper()

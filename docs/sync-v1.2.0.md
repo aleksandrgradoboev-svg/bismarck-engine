@@ -757,6 +757,31 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    image cases of 5b; the canonical key of a new file under a symlinked directory is caught on Linux
    only.
 
+   **Durable stage 5a-2, edit and shell tools** (snapshot `d2e7d8b7`; `edit.ts`, `edit-diff.ts`,
+   `bash.ts`, `index.ts`). The edit matching of the coding tool moves unchanged to
+   `internal/editmatch` (pi's coding agent and durable share this core of `edit-diff.ts`), with the
+   line-ending helpers; `coding` keeps thin wrappers. `internal/diff` ports the part of jsdiff 8.0.4
+   (BSD-3-Clause, license alongside) that edit calls: `diffLines` with its Myers variant and
+   diagonal pruning, and `createTwoFilesPatch` with file headers only; callbacks, timeouts,
+   `maxEditLength` and the ignore options are not ported. `durable/tools` adds `edit` (argument
+   repair, BOM and CRLF preserved, a display diff and a unified patch in details), `bash` and
+   `powershell` on the environment's exec (prepare, command prefix, timeouts in seconds, spill
+   diagnostic, structured output with the retained tail), and `NewCodingTools`, a fresh
+   `coding-tools` extension per call in place of pi's shared `CodingTools` value. Tests: the edit,
+   powershell and bash cases of `tools.test` (21; real PowerShell on Windows only, the symlink cases
+   on Linux only); pi asserts the patch with jsdiff's `applyPatch`, here it equals jsdiff's own patch.
+   The harness cases that run these tools (`harness-tools` coding tools 2, `harness-tools-recovery`
+   real bash 1, `harness-structured-output` bash 1) live in `durable/tools`, as the harness tests
+   cannot import the tools, through the Harness's exported API. Oracles: `internal/diff/testdata/
+   capture.mjs` runs jsdiff on 406 seeded cases (changes and patches equal byte for byte);
+   `durable/tools/testdata/capture-edit-diff.mjs` runs pi's own `edit-diff.ts` under node on those
+   and 150 long texts (display diffs and first changed lines equal). Beyond pi: the display diff
+   oracle; a zero timeout and one above the maximum are rejected; a cancelled call fails with the
+   environment's error, an environment's own abort with "Command aborted"; structured output says
+   when earlier output was dropped; the extension's name and tools. Sabotage 33 of 35: equivalent,
+   the diagonal pruning (a speed optimization; no difference on the oracle); the symlink kind in
+   edit is caught on Linux only (`Stat` is `Lstat`).
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

@@ -555,7 +555,7 @@ func editToolOps(cwd string, custom *EditOperations) agent.AgentTool {
 			var edits []editEntry
 			for _, re := range rawEdits {
 				m, _ := re.(map[string]any)
-				edits = append(edits, editEntry{oldText: fmt.Sprint(m["oldText"]), newText: fmt.Sprint(m["newText"])})
+				edits = append(edits, editEntry{OldText: fmt.Sprint(m["oldText"]), NewText: fmt.Sprint(m["newText"])})
 			}
 			abs := resolveToCwd(path, cwd)
 			// Serialize edits/writes to the same file (different files run in parallel).
@@ -654,35 +654,6 @@ func isSingleEditInput(value any) bool {
 	_, oldOK := m["oldText"].(string)
 	_, newOK := m["newText"].(string)
 	return oldOK && newOK
-}
-
-func normalizeToLF(s string) string {
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	return strings.ReplaceAll(s, "\r", "\n")
-}
-
-// detectLineEnding returns CRLF only if the first CRLF precedes the first bare
-// LF (port of edit-diff.ts detectLineEnding).
-func detectLineEnding(s string) string {
-	crlfIdx := strings.Index(s, "\r\n")
-	lfIdx := strings.Index(s, "\n")
-	if lfIdx == -1 {
-		return "\n"
-	}
-	if crlfIdx == -1 {
-		return "\n"
-	}
-	if crlfIdx < lfIdx {
-		return "\r\n"
-	}
-	return "\n"
-}
-
-func restoreLineEndings(s, ending string) string {
-	if ending == "\r\n" {
-		return strings.ReplaceAll(s, "\n", "\r\n")
-	}
-	return s
 }
 
 // ---------------------------------------------------------------------------
