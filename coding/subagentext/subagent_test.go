@@ -802,6 +802,30 @@ func TestDetachMovesARunningCall(t *testing.T) {
 	}
 }
 
+// TestDetachHandsTheHostTheUpdateMadeBeforeItRanTheCall: a moved call whose
+// subagent answered before the host ran it keeps that partial result for the
+// host, which gets it first.
+func TestDetachHandsTheHostTheUpdateMadeBeforeItRanTheCall(t *testing.T) {
+	d := newDetachFixture(t)
+	out := d.start(t, context.Background())
+	close(d.asked)
+	if o := wait(t, out); o.err != nil || !o.res.Details.(Details).Background {
+		t.Fatalf("moved = %+v (%v)", o.res, o.err)
+	}
+	close(d.gate)
+	// The subagent answers and reports while no host runs the call; were it
+	// still running, the update would reach the host live instead.
+	time.Sleep(100 * time.Millisecond)
+	var updates []string
+	res, err := (*d.runs)[0](context.Background(), func(p agent.AgentToolResult) { updates = append(updates, resultText(p)) })
+	if err != nil || resultText(res) != "done: t" {
+		t.Fatalf("run = %q (%v)", resultText(res), err)
+	}
+	if len(updates) != 1 || updates[0] != "done: t" {
+		t.Fatalf("updates = %q", updates)
+	}
+}
+
 // TestDetachedRunStopsWithTheHost: the host's context stops a moved run.
 func TestDetachedRunStopsWithTheHost(t *testing.T) {
 	d := newDetachFixture(t)

@@ -32,7 +32,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"unicode/utf8"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
@@ -524,13 +523,8 @@ func pendingResults(agents []Agent, requested []taskParam) (pending []Result, na
 func (r *runner) runDetachable(ctx context.Context, callID string, mode Mode, pending []Result, names []string, details func(Mode, []Result) Details, work BackgroundRun, onUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
 	workCtx, cancelWork := context.WithCancel(context.WithoutCancel(ctx))
 	stopAbort := context.AfterFunc(ctx, cancelWork)
-	var target atomic.Pointer[agent.ToolUpdateFunc]
-	target.Store(&onUpdate)
-	update := func(p agent.AgentToolResult) {
-		if f := target.Load(); f != nil && *f != nil {
-			(*f)(p)
-		}
-	}
+	target := &updateTarget{to: onUpdate}
+	update := target.send
 	type outcome struct {
 		res agent.AgentToolResult
 		err error
@@ -560,10 +554,10 @@ func (r *runner) runDetachable(ctx context.Context, callID string, mode Mode, pe
 		// The call was aborted as the user asked: it ends in the foreground.
 		return foreground()
 	}
-	var none agent.ToolUpdateFunc
-	target.Store(&none)
+	// Moved: what the work reports before the host runs it waits for the host.
+	target.hold()
 	err := r.opts.Background(callID, func(hostCtx context.Context, hostUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
-		target.Store(&hostUpdate)
+		target.retarget(hostUpdate)
 		stop := context.AfterFunc(hostCtx, cancelWork)
 		defer stop()
 		o := <-done
@@ -572,13 +566,56 @@ func (r *runner) runDetachable(ctx context.Context, callID string, mode Mode, pe
 	})
 	if err != nil {
 		// Refused: the call waits for its work as before, abort included.
-		target.Store(&onUpdate)
+		target.retarget(onUpdate)
 		stopAbort = context.AfterFunc(ctx, cancelWork)
 		return foreground()
 	}
 	d := details(mode, pending)
 	d.Background = true
 	return textResult(fmt.Sprintf(backgroundMoved, callID, strings.Join(names, ", ")), d), nil
+}
+
+// updateTarget forwards a detachable call's partial results: to the call's
+// onUpdate, then, once moved, to the host's. Between the move and the host
+// running the call it keeps the latest one and hands it over first, so a host
+// that runs the call later still sees where it is. Deliveries go one at a
+// time, so the kept result never arrives after a newer one.
+type updateTarget struct {
+	mu      sync.Mutex
+	to      agent.ToolUpdateFunc
+	holding bool
+	held    *agent.AgentToolResult
+}
+
+func (u *updateTarget) send(p agent.AgentToolResult) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.holding {
+		u.held = &p
+		return
+	}
+	if u.to != nil {
+		u.to(p)
+	}
+}
+
+func (u *updateTarget) hold() {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.holding, u.to = true, nil
+}
+
+// retarget sends to f from now on, the kept result first.
+func (u *updateTarget) retarget(f agent.ToolUpdateFunc) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.holding, u.to = false, f
+	if held := u.held; held != nil {
+		u.held = nil
+		if f != nil {
+			f(*held)
+		}
+	}
 }
 
 // startBackground hands a checked call to Options.Background. What would fail

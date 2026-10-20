@@ -891,6 +891,15 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    of a check without a failure run once it commits. Sabotage: without the guard the held case fails
    40 of 40 (the old case 20 of 40); without keeping taken checks until the commit, 31 of 40;
    without reserving again after it, the no-failure case stalls 6 of 6.
+   **Fix: a moved subagent call dropped the progress made before the host ran it** (`coding/
+   subagentext`, ours, not in pi; found by CI, "detach moves a running call": updates 0). Between a
+   move to the background and the host running the call, partial results went nowhere; a subagent
+   that answered meanwhile left the host nothing to show, as a single call reports once. Now the
+   latest one is kept and handed to the host first when it runs the call (or to the call's own
+   onUpdate when the host refuses), deliveries one at a time so it never follows a newer one. Case
+   beyond the PR: the host gets the update made before it ran the call. Shown by sabotage: 50 ms
+   between releasing the subagent and running the call fails the old code 10 of 10 with CI's
+   message; the new case fails on the old code 20 of 20.
 
 ## 5. Bookkeeping
 
