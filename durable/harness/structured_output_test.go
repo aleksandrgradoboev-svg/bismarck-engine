@@ -14,8 +14,7 @@ import (
 )
 
 // Ported from pi packages/durable/test/harness-structured-output.test.ts.
-// The bash case needs the tools on env (stage 5); the tool events of the
-// "stores exactly what callers and events get" case come with slice 2c-2.
+// The bash case needs the tools on env (stage 5).
 
 func schemaOf(t *testing.T, source string) *ai.Schema {
 	t.Helper()
@@ -156,7 +155,7 @@ func TestStructuredOutputGivesCallersTheBoundedOutputAsTheModelSeesItWithoutTheR
 	expectStrings(t, "codes", codes(received.Diagnostics), []string{"", "truncated"})
 }
 
-func TestStructuredOutputStoresExactlyWhatCallersGetWithoutTheModelsOutputAndKeepsAStoredNull(t *testing.T) {
+func TestStructuredOutputStoresExactlyWhatCallersAndEventsGetWithoutTheModelsOutputAndKeepsAStoredNull(t *testing.T) {
 	setup := newChatSetup(t)
 	installTool(t, setup.registry, returning("plain", ToolExecutionResult{Output: ai.ContentList{ai.TextContent{Text: "a"}}}))
 	// Go has no undefined: a stored null is the JSON null.
@@ -184,8 +183,10 @@ func TestStructuredOutputStoresExactlyWhatCallersGetWithoutTheModelsOutputAndKee
 	})
 	must(t, err)
 	defer unsubscribe()
+	_, log := listen(t, root)
 	waitFor(t, submit(t, root, inputDraft("go")))
 	must(t, h.WaitForIdle(bg))
+	log.quiet(t)
 	results := received()
 	if len(results) != 2 || string(results[0].StructuredOutput) != `"a"` || results[0].IsError || string(results[1].StructuredOutput) != "null" || results[1].IsError {
 		t.Fatalf("received = %s", jsonOf(t, results))
@@ -198,6 +199,16 @@ func TestStructuredOutputStoresExactlyWhatCallersGetWithoutTheModelsOutputAndKee
 	}
 	if jsonOf(t, stored) != jsonOf(t, want) {
 		t.Fatalf("stored = %v, want %v", stored, want)
+	}
+	// The ends of the nested calls carry the same results.
+	var ends []string
+	for _, event := range log.events() {
+		if end, ok := event.(ToolExecutionEndEvent); ok && end.ParentToolCallID != "" {
+			ends = append(ends, normalJSON(t, []byte(jsonOf(t, end.Result))))
+		}
+	}
+	if jsonOf(t, ends) != jsonOf(t, want) {
+		t.Fatalf("ends = %v, want %v", ends, want)
 	}
 }
 
