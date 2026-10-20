@@ -712,6 +712,28 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    (CI, Linux `-race`). It now waits for the views to close first. A delay before Close reproduces the
    CI failure on the old case every time and passes on the new one.
 
+   **Durable slice 3b, compaction in generation** (snapshot `d2e7d8b7`; the compaction parts of
+   `generation.ts`, `estimateContext` in `compaction.ts`). Preparation starts a background threshold
+   compaction in its commit while `pi.live` lists none, or creates a blocking one owned by the
+   generation and waits for it (`allSettled`), then prepares again; prepare checks the waited
+   compaction once: an overflow one without a summary entry fails `model_error` with the overflow's
+   text, a threshold one that did not complete fails with "Compaction failed: …" or "Compaction was
+   aborted". Classification waits for an overflow compaction (`IsContextOverflow` without a window,
+   as pi calls it) when the request's model policy is enabled and range selection finds a cut; an
+   overflow is never retried. The not-ported faults are gone. Go form: pi finds the measured answer
+   in the context by object identity; `ContextView` keeps each message's origin (unexported, nil in a
+   hand-built view, which then estimates every message, as pi's `lastIndexOf` miss does). Tests: every
+   remaining case of `harness-compaction`, the manual blocking-and-manual case missed in 3a, and the
+   two compaction cases of `harness-telemetry`. Beyond pi: no compaction task at all without a cut,
+   for a threshold and for an overflow; one summary request for two overflows (with a budget that
+   leaves a cut the second time); `estimateContext` skips an answer without usage and counts planned
+   messages, and the threshold is strict; no `generation` in `pi.live` while an overflow compaction
+   runs; another compaction's end carries no recorded failure. Sabotage 32 of 35, and slice 3a's
+   remaining misses now caught (58 of 59): equivalent, as read, a background threshold at
+   `backgroundTokens` 0 (it equals the blocking one, checked first) and the overflow context read
+   past the cutoff (only display-only entries can land meanwhile); unchecked, as in pi, the orphaned
+   compaction's text.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
