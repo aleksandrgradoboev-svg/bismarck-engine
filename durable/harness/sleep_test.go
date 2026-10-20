@@ -329,6 +329,36 @@ func TestSleepRunsADueSleepAtAnySchedulingPassBeforeItsTimerFires(t *testing.T) 
 	}
 }
 
+// Beyond pi, whose microtask computes the wake before the pass the same change
+// starts: here both run on goroutines, and a delivery late enough to find
+// the sleep due once found nothing to arm, after the pass had found it not
+// due (a CI hang of a 1 ms deferred poll).
+func TestSleepArmsTheTimerForASleepThatComesDueBetweenThePassAndTheDelivery(t *testing.T) {
+	clock := newClock(1_000)
+	timers := &fakeTimers{}
+	nap := napTask(t, 500, nil)
+	o := openRoot(t, []Task{nap}, openOptions{now: clock.now, setTimer: timers.setTimer})
+	s := o.h.tasks
+	// Deliveries wait until the pass has run and the deadline has passed.
+	s.wakeMu.Lock()
+	id := start(t, o.root, nap, false)
+	must(t, o.h.Resume())
+	eventually(t, func() bool {
+		s.mu.Lock()
+		draining := s.draining
+		s.unlock()
+		return !draining && stateOf(t, o.h, id).Status == durable.TaskSleeping
+	})
+	clock.set(1_500)
+	s.wakeMu.Unlock()
+	eventually(t, func() bool { return timers.liveWith(0) != nil })
+	timers.liveWith(0).callback()
+	eventually(t, func() bool { return stateOf(t, o.h, id).Status == durable.TaskTerminal })
+	if got := outcomeJSON(t, *getTask(t, o.h, id)); got != `{"status":"completed","result":1500}` {
+		t.Fatalf("outcome = %s", got)
+	}
+}
+
 func TestSleepDisarmsTheSleepTimerWhenTheSleepIsAbortedAndWhenTheHarnessCloses(t *testing.T) {
 	clock := newClock(1_000)
 	timers := &fakeTimers{}
