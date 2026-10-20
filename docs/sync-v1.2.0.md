@@ -537,6 +537,22 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    began, and `join` writes back those with the ones it stops. A 50 ms delay before `join`
    collects reproduced the CI failure 10 of 10 on the old code and passes 10 of 10 on the new.
 
+   **Catch-up to pi `73f8de80`** (two commits after `d2e7d8b7`; W-009 on 20.10: 1241 / 25 159 =
+   4.9%). `5c1736f8`: `checkpointWhen` is required on every document definition, with no
+   default. pi enforces that by type only; `DefineDoc` refuses a definition without
+   `CheckpointWhen`, and `durable.NeverCheckpoint` is pi's `() => false`. The test definitions
+   get it where pi's tests do; the semantics table too, so its definitions are still refused for
+   their own reasons. pi's `codemode-checkpoints` cases wait for codemode (stage 5) and the
+   nested-call document (slice 2). `61060ddf` (pi#9490) changes both command runners, which share
+   `internal/proc`: the legacy WSL launcher is matched under `SystemRoot`, the taskkill path falls
+   back to `C:\Windows` for an empty `SystemRoot` too, and the coding powershell tool finds
+   PowerShell under `ProgramFiles` and `SystemRoot`. `WinNormalize`/`WinJoin` stand in for node's
+   `path.win32` on any OS (expectations checked against node). Tests: the definition case,
+   `windows-shell-config`, `powershell-config`, `env-node`'s transport table (POSIX only, as in
+   pi) and the taskkill regression. n/a: the coding agent's `docs/windows.md` and the
+   tools-manager's `WINDIR` fallback (not ported). Sabotage 10 of 11; unchecked, as in pi: a
+   `SystemRoot` that is not drive-absolute.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
