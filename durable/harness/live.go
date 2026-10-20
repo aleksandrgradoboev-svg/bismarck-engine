@@ -109,8 +109,100 @@ type NestedToolSummary struct {
 	Error      string    `json:"error,omitempty"`
 }
 
+// CompactionStatus is the presentation of one live compaction task in
+// pi.live compactions (spec §8.7).
+type CompactionStatus struct {
+	TaskID durable.TaskID   `json:"taskId"`
+	Reason CompactionReason `json:"reason"`
+	// Blocking is whether a generation waits for it: a compaction the
+	// generation owns.
+	Blocking bool `json:"blocking"`
+	Attempt  int  `json:"attempt"`
+	// Retry is the durable backoff before the next summarization attempt.
+	Retry *LiveRetry `json:"retry,omitempty"`
+}
+
+// CompactionFailure is the newest compaction that failed since a compaction
+// last produced a summary (spec §8.7), in pi.live compactionFailure.
+type CompactionFailure struct {
+	TaskID durable.TaskID   `json:"taskId"`
+	Reason CompactionReason `json:"reason"`
+	// Error is the failed or faulted outcome's error message, or why the
+	// scheduler orphaned the task.
+	Error string `json:"error"`
+}
+
 // toolKind is the built-in tool task's kind.
 const toolKind = "pi.tool"
+
+// compactionKind is the built-in compaction task's kind.
+const compactionKind = "pi.compaction"
+
+// addCompactionStatus adds the status of a compaction task created in this
+// commit; statuses stay in task ID order.
+func addCompactionStatus(live *delta.Draft, status CompactionStatus) error {
+	value, err := toValue(status)
+	if err != nil {
+		return err
+	}
+	if !live.Has("compactions") {
+		if err := live.Set("compactions", []any{}); err != nil {
+			return err
+		}
+	}
+	_, err = live.At("compactions").Push(value)
+	return err
+}
+
+// compactionStatusDraft is the status of compaction task taskID, if listed.
+func compactionStatusDraft(live *delta.Draft, taskID durable.TaskID) *delta.Draft {
+	statuses := live.At("compactions")
+	if statuses == nil {
+		return nil
+	}
+	for i := range statuses.Len() {
+		status := statuses.At(i)
+		if id, ok := status.Get("taskId"); ok && id == float64(taskID) {
+			return status
+		}
+	}
+	return nil
+}
+
+// removeCompactionStatus removes the status of compaction task taskID, and
+// the list once empty.
+func removeCompactionStatus(live *delta.Draft, taskID durable.TaskID) error {
+	statuses := live.At("compactions")
+	if statuses == nil {
+		return nil
+	}
+	for i := range statuses.Len() {
+		if id, ok := statuses.At(i).Get("taskId"); ok && id == float64(taskID) {
+			if _, err := statuses.Splice(i, 1); err != nil {
+				return err
+			}
+			break
+		}
+	}
+	if statuses.Len() == 0 {
+		return live.Delete("compactions")
+	}
+	return nil
+}
+
+// failCompactionStatus removes the status of compaction task taskID and
+// records that it failed with message.
+func failCompactionStatus(live *delta.Draft, taskID durable.TaskID, message string) error {
+	if status := compactionStatusDraft(live, taskID); status != nil {
+		reason, _ := status.Get("reason")
+		text, _ := reason.(string)
+		failure := CompactionFailure{TaskID: taskID, Reason: CompactionReason(text), Error: message}
+		if err := setDraftField(live, "compactionFailure", failure); err != nil {
+			return err
+		}
+	}
+	return removeCompactionStatus(live, taskID)
+}
 
 // toolSlotDraft is the slot of tool task taskID, model-issued or nested, if
 // pi.live still lists it. Nested slots are found by binary search: a tool may
@@ -365,9 +457,9 @@ func recordUsage(tx *durable.Tx, conversationID durable.ConversationID, bucket, 
 // settleSchedulerOutcome is the Harness cleanup for a terminal outcome the
 // scheduler writes itself (faulted or orphaned): a run task ends its run; a
 // tool task's slot is marked done without an entry, and context derivation
-// synthesizes the missing result. Other kinds are ignored, so it never
-// creates pi.live elsewhere; compaction tasks join with their stage of the
-// port.
+// synthesizes the missing result; a compaction task's status is removed and
+// its failure recorded. Other kinds are ignored, so it never creates pi.live
+// elsewhere.
 // REMINDER: a committed generation partial becomes an aborted assistant entry
 // here, exactly as in the generation abort handler, so the transcript keeps
 // what the model produced and pi.usage counts its spend.
@@ -381,6 +473,17 @@ func settleSchedulerOutcome(tx *durable.Tx, record durable.TaskRecord, outcome d
 			return finishSlot(slot)
 		}
 		return nil
+	}
+	if record.Kind == compactionKind {
+		live, err := liveDraft(tx, record.ConversationID)
+		if err != nil {
+			return err
+		}
+		message := outcome.Reason
+		if outcome.Status == durable.OutcomeFaulted && outcome.Error != nil {
+			message = outcome.Error.Message
+		}
+		return failCompactionStatus(live, record.ID, message)
 	}
 	if !runTaskKinds[record.Kind] {
 		return nil

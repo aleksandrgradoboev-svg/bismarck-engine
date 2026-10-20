@@ -669,6 +669,38 @@ type CompactionPolicy struct {
 	BackgroundTokens int
 }
 
+// CompactionOverride is a model's compaction policy over the Harness-wide
+// one; a nil field keeps the Harness-wide value.
+type CompactionOverride struct {
+	Enabled          *bool
+	ReserveTokens    *int
+	KeepRecentTokens *int
+	BackgroundTokens *int
+}
+
+// compactionPolicy is the compaction policy for model: its override over the
+// Harness-wide policy, field by field.
+func compactionPolicy(settings Settings, model ModelRef) CompactionPolicy {
+	policy := settings.Compaction
+	override, ok := settings.CompactionOverrides[model.Provider+"/"+model.ModelID]
+	if !ok {
+		return policy
+	}
+	if override.Enabled != nil {
+		policy.Enabled = *override.Enabled
+	}
+	if override.ReserveTokens != nil {
+		policy.ReserveTokens = *override.ReserveTokens
+	}
+	if override.KeepRecentTokens != nil {
+		policy.KeepRecentTokens = *override.KeepRecentTokens
+	}
+	if override.BackgroundTokens != nil {
+		policy.BackgroundTokens = *override.BackgroundTokens
+	}
+	return policy
+}
+
 // ProgressPolicy is how often running progress is committed. Each progress
 // commit is a storage write; a host whose storage is remote can commit less
 // often, so live answers and tool output appear in larger steps.
@@ -776,6 +808,10 @@ type HarnessSettings struct {
 		ReserveTokens    *int
 		KeepRecentTokens *int
 		BackgroundTokens *int
+		// ModelOverrides is keyed by exact "provider/modelId"; each field an
+		// override sets replaces the Harness-wide one for that model, so small-
+		// and large-window models can share a Harness.
+		ModelOverrides map[string]CompactionOverride
 	}
 	Progress struct {
 		PartialInterval *time.Duration
@@ -807,17 +843,20 @@ const DefaultRestartLimit = 5
 // Settings is the resolved settings: every field over its built-in default.
 type Settings struct {
 	// Extensions is nil for every installed extension, in install order.
-	Extensions        []*Extension
-	Stream            ConversationStreamOptions
-	Retry             RetryPolicy
-	Compaction        CompactionPolicy
-	Progress          ProgressPolicy
-	ToolExecution     ToolExecutionMode
-	SteeringMode      QueueMode
-	FollowUpMode      QueueMode
-	ContextRetention  time.Duration
-	DocumentRetention time.Duration
-	AfterFailedRun    AfterFailedRun
+	Extensions []*Extension
+	Stream     ConversationStreamOptions
+	Retry      RetryPolicy
+	Compaction CompactionPolicy
+	// CompactionOverrides are HarnessSettings.Compaction.ModelOverrides; read
+	// them through compactionPolicy.
+	CompactionOverrides map[string]CompactionOverride
+	Progress            ProgressPolicy
+	ToolExecution       ToolExecutionMode
+	SteeringMode        QueueMode
+	FollowUpMode        QueueMode
+	ContextRetention    time.Duration
+	DocumentRetention   time.Duration
+	AfterFailedRun      AfterFailedRun
 	// RestartLimit is negative when tasks are never parked.
 	RestartLimit int
 }
@@ -886,6 +925,7 @@ func resolveSettings(s HarnessSettings) Settings {
 			KeepRecentTokens: pickInt(s.Compaction.KeepRecentTokens, DefaultCompactionPolicy.KeepRecentTokens),
 			BackgroundTokens: pickInt(s.Compaction.BackgroundTokens, DefaultCompactionPolicy.BackgroundTokens),
 		},
+		CompactionOverrides: s.Compaction.ModelOverrides,
 		Progress: ProgressPolicy{
 			PartialInterval: pick(s.Progress.PartialInterval, DefaultProgressPolicy.PartialInterval),
 			OutputInterval:  pick(s.Progress.OutputInterval, DefaultProgressPolicy.OutputInterval),
