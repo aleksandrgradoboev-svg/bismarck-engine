@@ -14,6 +14,7 @@ import (
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/storage/memory"
 )
 
 // Ported from pi packages/durable/test/harness-generation-recovery.test.ts.
@@ -471,5 +472,97 @@ func TestInboxKeepsUsageTotalsExactAcrossReopenCountingAPartialConvertedAfterReo
 	}
 	if total.Input != input || total.Output != output || total.TotalTokens != tokens {
 		t.Fatalf("ledger = %d/%d/%d, entries sum to %d/%d/%d", total.Input, total.Output, total.TotalTokens, input, output, tokens)
+	}
+}
+
+// Beyond pi: no case of pi's runs the poll phase before it is due. A poll
+// stored as a running phase (an earlier version slept inside it) must sleep
+// again instead of fetching.
+func TestGenerationRecoverySleepsAgainForAPollStoredAsARunningPhaseByAnEarlierVersion(t *testing.T) {
+	dir := t.TempDir()
+	setup := newChatSetupWith(t, providers.RegisterFauxProviderOptions{Deferred: &providers.FauxDeferredOptions{PollAfterMs: 60_000}})
+	now := newMsClock(setup, 1_000)
+	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText("deferred answer")})
+	h, root := openChat(t, openJSONL(t, dir), setup)
+	h.Resume()
+	setup.setSettings(func(s *HarnessSettings) { s.Stream.Deferred = &StreamDeferral{} })
+	id := submit(t, root, inputDraft("hi")).ID
+	eventually(t, func() bool {
+		generation := decodeLive(t, liveOf(t, h, root)).Generation
+		return generation != nil && generation.Deferred != nil
+	})
+	taskID := runTaskOf(t, h, root)
+	must(t, h.Close(bg))
+	storage := openJSONL(t, dir)
+	record, err := storage.Task(bg, taskID)
+	must(t, err)
+	record.State.Status = durable.TaskRunning
+	record.State.Until = nil
+	_, err = storage.Commit(bg, []durable.StorageWrite{durable.TaskWrite{Value: *record}})
+	must(t, err)
+	must(t, storage.Close(bg))
+
+	h, _ = openChat(t, openJSONL(t, dir), setup)
+	h.Resume()
+	eventually(t, func() bool { return getTask(t, h, taskID).State.Status == durable.TaskSleeping })
+	if until := getTask(t, h, taskID).State.Until; until == nil || *until != 61_000 {
+		t.Fatalf("until = %v, want 61000", until)
+	}
+	if fetches := setup.faux.State.DeferredFetchCount; fetches != 0 {
+		t.Fatalf("deferred fetches = %d, want none before the poll is due", fetches)
+	}
+	now.set(61_000)
+	h.Resume()
+	if settled := waitSubmission(t, h, id); settled.Status != durable.SubmissionDone {
+		t.Fatalf("settled = %+v, want done", settled)
+	}
+	if fetches := setup.faux.State.DeferredFetchCount; fetches != 1 {
+		t.Fatalf("deferred fetches = %d, want 1", fetches)
+	}
+}
+
+// clockBackModels steps the Harness clock back after each deferred fetch.
+type clockBackModels struct {
+	ai.Models
+	back func()
+}
+
+func (m clockBackModels) FetchDeferred(ctx context.Context, model *ai.Model, handle ai.DeferredHandle, opts *ai.ModelsDeferredFetchOptions) *ai.AssistantMessage {
+	message := m.Models.FetchDeferred(ctx, model, handle, opts)
+	m.back()
+	return message
+}
+
+// Beyond pi: pi's case polls strictly later only when two polls share a
+// millisecond. A clock stepped back during the poll makes it certain: the
+// next poll would otherwise be due no later than the one just made.
+func TestGenerationPollsAStillDeferredResultStrictlyLaterThanThePollThatReturnedIt(t *testing.T) {
+	setup := newChatSetupWith(t, providers.RegisterFauxProviderOptions{Deferred: &providers.FauxDeferredOptions{PendingFetches: 1, PollAfterMs: 1}})
+	now := newMsClock(setup, 1_000)
+	setup.models = clockBackModels{Models: setup.models, back: func() { now.set(1_000) }}
+	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText("deferred answer")})
+	setup.setSettings(func(s *HarnessSettings) { s.Stream.Deferred = &StreamDeferral{} })
+	h, root := openChat(t, memory.New(), setup)
+	h.Resume()
+	id := submit(t, root, inputDraft("hi")).ID
+	pollAt := func() int64 {
+		generation := decodeLive(t, liveOf(t, h, root)).Generation
+		if generation == nil || generation.Deferred == nil {
+			return 0
+		}
+		return generation.Deferred.PollAt
+	}
+	eventually(t, func() bool { return pollAt() == 1_001 })
+	now.set(1_001)
+	h.Resume()
+	// The poll still finds it deferred, at 1000 on the stepped-back clock.
+	eventually(t, func() bool { return pollAt() != 1_001 })
+	if got := pollAt(); got != 1_002 {
+		t.Fatalf("next poll at %d, want 1002, strictly after the poll at 1001", got)
+	}
+	now.set(1_002)
+	h.Resume()
+	if settled := waitSubmission(t, h, id); settled.Status != durable.SubmissionDone {
+		t.Fatalf("settled = %+v, want done", settled)
 	}
 }
