@@ -16,6 +16,7 @@ import (
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/env"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/harness"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // Chat is the models and registry that survive a close and reopen, like a
@@ -24,6 +25,8 @@ type Chat struct {
 	Faux     *providers.FauxProviderRegistration
 	Models   ai.Models
 	Registry harness.Registry
+	// Telemetry is the Harness's adapter; nil for none.
+	Telemetry telemetry.Context
 }
 
 // New registers a faux provider for the test's duration and returns a chat
@@ -60,7 +63,7 @@ func (c *Chat) Install(t testing.TB, name string, tools ...*harness.ToolRegistra
 // Harness closes at cleanup.
 func (c *Chat) Open(t testing.TB, storage durable.Storage, e env.ExecutionEnv) (*harness.Harness, *harness.Conversation) {
 	t.Helper()
-	options := harness.Options{Models: c.Models, Registry: c.Registry}
+	options := harness.Options{Models: c.Models, Registry: c.Registry, Telemetry: c.Telemetry}
 	if e != nil {
 		options.Env = func(context.Context, harness.EnvTarget) (env.ExecutionEnv, error) { return e, nil }
 	}

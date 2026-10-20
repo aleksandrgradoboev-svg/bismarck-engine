@@ -170,7 +170,18 @@ func TestCodemodeStoresNoOutcomeWhenTheHostClosesTheSandboxAndReplaysTheScriptAf
 
 func TestCodemodeAbortsACallStillRunningWhenTheScriptEnds(t *testing.T) {
 	c := newTestChat(t, nil, nil)
-	h, root := runOnce(t, c, `tools.hold({}); await tools.echo({ text: "a" }); return 1;`)
+	// pi's script awaits echo, which its scheduler runs after hold has
+	// started; Go runs nested tasks concurrently, so echo waits for hold to
+	// run, and hold is still running when the script ends.
+	c.chat.Install(t, "tool:afterHold", testTool("afterHold", harness.ReplayUnsafe, func(ctx context.Context, _ map[string]any, _ harness.ToolExecutionAPI) (harness.ToolExecutionResult, error) {
+		select {
+		case <-c.holds.signal().ch:
+		case <-ctx.Done():
+			return harness.ToolExecutionResult{}, context.Cause(ctx)
+		}
+		return text("after"), nil
+	}))
+	h, root := runOnce(t, c, `tools.hold({}); await tools.afterHold({}); return 1;`)
 	expectResult(t, resultOf(t, root), "1", false)
 	var hold *durable.TaskRecord
 	for _, task := range tasksOf(t, h) {

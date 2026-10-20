@@ -23,8 +23,8 @@ import (
 // content-free submit and phase spans with nested tool parents, the steer
 // link (without a postTools boundary a steer starts a run of its own), an
 // input submitted inside a tool's turn — slice 2; the two compaction cases
-// slice 3; the codemode replay stage 5. n/a: the async listener case, as a Go
-// commit listener cannot return a promise.
+// slice 3; the codemode replay is in durable/codemode. n/a: the async
+// listener case, as a Go commit listener cannot return a promise.
 
 func trackedSetup(t *testing.T) (*chatSetup, *telemetry.InMemoryContext) {
 	t.Helper()

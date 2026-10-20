@@ -801,7 +801,20 @@ func (c *call) deliverReplayed() {
 	}
 	run := c.run
 	c.mu.Unlock()
-	for _, d := range deliveries {
+	deliverAll(run, deliveries)
+}
+
+// deliverAll hands the VM a batch of results, last first. The VM applies
+// results strictly in seq order, so it starts on the batch only once its
+// first result arrives and then processes all of it before it waits again,
+// as pi's VM does with results delivered in one turn: one acknowledgment,
+// and one count commit, per batch rather than per result.
+func deliverAll(run *sandbox.Run, deliveries []delivery) {
+	for i := len(deliveries) - 1; i >= 0; i-- {
+		d := deliveries[i]
+		if run.Finished() {
+			return
+		}
 		_ = run.Deliver(d.seq, d.at, d.id, d.outcome)
 	}
 }
@@ -1371,11 +1384,7 @@ func (c *call) pump() {
 	}
 	run := c.run
 	c.mu.Unlock()
-	for _, d := range deliveries {
-		if !run.Finished() {
-			_ = run.Deliver(d.seq, d.at, d.id, d.outcome)
-		}
-	}
+	deliverAll(run, deliveries)
 	c.mu.Lock()
 	c.launchCoveredLocked()
 	c.committing = false
