@@ -563,3 +563,140 @@ func TestNewSessionError(t *testing.T) {
 		t.Fatalf("result = %q", resultText(res))
 	}
 }
+
+// backgroundFixture is a fixture whose host takes background calls: it keeps
+// the run it is handed, or refuses with refuse when set.
+func backgroundFixture(t *testing.T) (*fixture, *[]BackgroundRun, *error) {
+	f := newFixture(t)
+	var runs []BackgroundRun
+	var refuse error
+	f.opts.Background = func(callID string, run BackgroundRun) error {
+		if callID != "call-1" {
+			t.Errorf("Background got call %q", callID)
+		}
+		if refuse != nil {
+			return refuse
+		}
+		runs = append(runs, run)
+		return nil
+	}
+	return f, &runs, &refuse
+}
+
+func TestBackgroundParameterOnlyWithHost(t *testing.T) {
+	f := newFixture(t)
+	def := Definition(f.parent, f.opts)
+	if _, ok := def.Tool.Parameters.Properties["background"]; ok || strings.Contains(def.Tool.Description, "background") {
+		t.Fatal("background offered by a host that cannot run it")
+	}
+	f.opts.Background = func(string, BackgroundRun) error { return nil }
+	def = Definition(f.parent, f.opts)
+	if p := def.Tool.Parameters.Properties["background"]; p == nil || p.Type != "boolean" || slices.Contains(def.Tool.Parameters.Required, "background") {
+		t.Fatalf("background parameter = %+v", p)
+	}
+}
+
+func TestBackground(t *testing.T) {
+	f, runs, _ := backgroundFixture(t)
+	writeAgent(t, f.userDir, "scout.md", "---\nname: scout\ndescription: Recon\n---\nbody")
+	f.reg.SetResponses(steps(1, answer(func(task string) string { return "found: " + task })))
+
+	res, err := f.run(t, map[string]any{"agent": "scout", "task": "auth", "background": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Returned at once: nothing ran, and the model is told not to guess.
+	if len(f.children) != 0 || len(*runs) != 1 {
+		t.Fatalf("children %d, runs %d", len(f.children), len(*runs))
+	}
+	text := resultText(res)
+	if res.IsError || !strings.Contains(text, "Started in the background (call call-1): scout.") || !strings.Contains(text, "do not describe it, guess it") {
+		t.Fatalf("started result = %q", text)
+	}
+	d := res.Details.(Details)
+	if !d.Background || len(d.Results) != 1 || d.Results[0].ExitCode != -1 || d.Results[0].Task != "auth" || d.Results[0].AgentSource != SourceUser {
+		t.Fatalf("started details = %+v", d)
+	}
+	if res.Usage != nil {
+		t.Fatalf("started result spent %+v", res.Usage)
+	}
+
+	updates := 0
+	done, err := (*runs)[0](context.Background(), func(agent.AgentToolResult) { updates++ })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultText(done) != "found: auth" || done.Details.(Details).Background || updates == 0 {
+		t.Fatalf("run result = %q, updates %d", resultText(done), updates)
+	}
+	if done.Usage == nil || done.Usage.Output == 0 {
+		t.Fatalf("run result usage = %+v", done.Usage)
+	}
+}
+
+func TestBackgroundFalseWaits(t *testing.T) {
+	f, runs, _ := backgroundFixture(t)
+	writeAgent(t, f.userDir, "scout.md", "---\nname: scout\ndescription: Recon\n---\nbody")
+	f.reg.SetResponses(steps(1, answer(func(task string) string { return "found: " + task })))
+	res, err := f.run(t, map[string]any{"agent": "scout", "task": "auth", "background": false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*runs) != 0 || resultText(res) != "found: auth" {
+		t.Fatalf("runs %d, result %q", len(*runs), resultText(res))
+	}
+}
+
+func TestBackgroundRefusals(t *testing.T) {
+	f, runs, refuse := backgroundFixture(t)
+	writeAgent(t, f.userDir, "scout.md", "---\nname: scout\ndescription: Recon\n---\nbody")
+	writeAgent(t, f.userDir, "judge.md", "---\nname: judge\ndescription: Judge\nbackground: never\n---\nbody")
+	many := make([]any, MaxParallelTasks+1)
+	for i := range many {
+		many[i] = map[string]any{"agent": "scout", "task": "t"}
+	}
+	for _, c := range []struct {
+		params map[string]any
+		want   string
+	}{
+		{map[string]any{"agent": "ghost", "task": "t"}, `Unknown agent: "ghost". Available agents: "judge", "scout".`},
+		{map[string]any{"agent": "judge", "task": "t"}, `Agent "judge" does not run in the background: call it without background.`},
+		{map[string]any{"chain": []any{map[string]any{"agent": "scout", "task": "t"}, map[string]any{"agent": "judge", "task": "{previous}"}}}, `Agent "judge" does not run in the background`},
+		{map[string]any{"tasks": many}, "Too many parallel tasks (9). Max is 8."},
+	} {
+		c.params["background"] = true
+		res, err := f.run(t, c.params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !res.IsError || !strings.HasPrefix(resultText(res), c.want) {
+			t.Fatalf("%v: %q (error %v), want %q", c.params, resultText(res), res.IsError, c.want)
+		}
+	}
+	if len(*runs) != 0 || len(f.children) != 0 {
+		t.Fatalf("refused calls ran: runs %d, children %d", len(*runs), len(f.children))
+	}
+
+	// The host refuses: the model gets why.
+	*refuse = errors.New("two roles already run in the background")
+	res, err := f.run(t, map[string]any{"agent": "scout", "task": "t", "background": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError || resultText(res) != "two roles already run in the background" {
+		t.Fatalf("host refusal: %q (error %v)", resultText(res), res.IsError)
+	}
+}
+
+func TestNoBackgroundFromFrontmatter(t *testing.T) {
+	dir := t.TempDir()
+	writeAgent(t, dir, "a.md", "---\nname: a\ndescription: A\nbackground: never\n---\nbody")
+	writeAgent(t, dir, "b.md", "---\nname: b\ndescription: B\nbackground: allowed\n---\nbody")
+	got := map[string]bool{}
+	for _, a := range DiscoverAgents(dir, "", ScopeUser).Agents {
+		got[a.Name] = a.NoBackground
+	}
+	if !got["a"] || got["b"] {
+		t.Fatalf("NoBackground = %v", got)
+	}
+}
