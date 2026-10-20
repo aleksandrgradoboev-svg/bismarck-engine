@@ -370,3 +370,82 @@ func TestEventsReportASteerWithoutRunEventsAResetAsAnAppendedEntryAndNothingForO
 	batches := log.all()
 	expectStrings(t, "last batch", eventTypes(batches[len(batches)-1]), []string{"entry_appended", "submission"})
 }
+
+// Beyond pi, whose cases end every vanishing slot without an entry: a call
+// a sequential round never started is answered as its run ends, and its
+// end carries that result.
+func TestEventsEndACallNeverStartedInAnAbortedSequentialRoundWithItsResultEntry(t *testing.T) {
+	setup := newChatSetup(t)
+	holdTool(t, setup, make(chan struct{}), ToolExecutionResult{})
+	setup.faux.SetResponses([]providers.FauxResponseStep{fauxStep(toolCalls(call("hold", nil, "c1"), call("hold", nil, "c2")))})
+	setup.setSettings(func(s *HarnessSettings) { s.ToolExecution = ToolExecutionSequential })
+	h, root := openChat(t, memory.New(), setup)
+	_, log := listen(t, root)
+	submission := submit(t, root, inputDraft("go"))
+	toolRunning(t, h, root)
+	_, err := h.AbortTask(bg, decodeLive(t, liveOf(t, h, root)).Run.TaskID)
+	must(t, err)
+	waitFor(t, submission)
+	log.quiet(t)
+	var end *ToolExecutionEndEvent
+	for _, event := range log.events() {
+		if e, ok := event.(ToolExecutionEndEvent); ok && e.ToolCallID == "c2" {
+			end = &e
+		}
+	}
+	if end == nil || end.Entry == nil || end.Entry.Kind != durable.ToolResultEntry.Kind {
+		t.Fatalf("end of the call never started = %s", jsonOf(t, end))
+	}
+	if end.TaskID != nil {
+		t.Fatalf("task of the call never started = %d", *end.TaskID)
+	}
+}
+
+// Beyond pi, whose details are objects: a scalar compares by value, so a
+// change from 1 to 2 is an update.
+func TestEventsReportAChangeOfScalarDetails(t *testing.T) {
+	_, root := openChat(t, memory.New(), newChatSetup(t))
+	_, log := listen(t, root)
+	setDetails := func(details any) {
+		t.Helper()
+		must(t, root.Commit(bg, func(tx *durable.Tx) error {
+			live, err := liveDraft(tx, root.ID)
+			if err != nil {
+				return err
+			}
+			if live.At("tools") == nil {
+				return live.Set("tools", []any{map[string]any{"callId": "c1", "name": "t", "status": slotRunning, "details": details}})
+			}
+			return live.At("tools").At(0).Set("details", details)
+		}))
+	}
+	setDetails(float64(1))
+	setDetails(float64(2))
+	log.quiet(t)
+	batches := log.all()
+	if len(batches) != 2 {
+		t.Fatalf("batches = %s", jsonOf(t, batches))
+	}
+	if got := jsonOf(t, batches[1]); got != `[{"type":"tool_execution_update","toolCallId":"c1","toolName":"t","details":2}]` {
+		t.Fatalf("update = %s", got)
+	}
+}
+
+// Beyond pi, where the shapes are plain objects: the JSON of an output
+// change.
+func TestEventsEncodeAnOutputChangeAsASetOrATrimAndAnAppend(t *testing.T) {
+	whole := "all\n"
+	for _, c := range []struct {
+		change ToolOutputChange
+		want   string
+	}{
+		{ToolOutputChange{Set: &whole}, `{"set":"all\n"}`},
+		{ToolOutputChange{Set: new(string)}, `{"set":""}`},
+		{ToolOutputChange{TrimStart: 7, Append: "line 4\n"}, `{"trimStart":7,"append":"line 4\n"}`},
+		{ToolOutputChange{Append: "more"}, `{"append":"more"}`},
+	} {
+		if got := jsonOf(t, c.change); got != c.want {
+			t.Fatalf("%+v = %s, want %s", c.change, got, c.want)
+		}
+	}
+}

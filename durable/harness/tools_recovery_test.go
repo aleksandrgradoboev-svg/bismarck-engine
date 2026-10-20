@@ -133,6 +133,13 @@ func TestToolRecoveryAnswersAnUnsafeToolInterruptedAfterIntentWithItsDurablePart
 		t.Fatalf("text = %q", got)
 	}
 	expectIdleLive(t, h, root)
+	// Beyond pi, whose case checks only the answer: the interrupted call
+	// fails, which records cancellation intent for what it owns.
+	record, err = h.GetTask(bg, taskID)
+	must(t, err)
+	if outcome := record.State.Outcome; outcome == nil || outcome.Status != durable.OutcomeFailed {
+		t.Fatalf("outcome = %+v, want failed", outcome)
+	}
 }
 
 func TestToolRecoveryRerunsAToolOnlyWhenBothTheStoredAndTheCurrentReplayPolicyAreSafe(t *testing.T) {
@@ -431,13 +438,17 @@ func TestToolRecoveryClearsTheInterruptedAttemptsProgressBeforeASafeRerun(t *tes
 	started := []chan struct{}{make(chan struct{}), make(chan struct{})}
 	var mu sync.Mutex
 	runs := 0
+	var rerunArgs map[string]any
 	installTool(t, setup.registry, &ToolRegistration{
 		Tool:   ai.Tool{Name: "work", Description: "work", Parameters: objectSchema()},
 		Replay: ReplaySafe,
-		Execute: func(ctx context.Context, _ map[string]any, api ToolExecutionAPI) (ToolExecutionResult, error) {
+		Execute: func(ctx context.Context, args map[string]any, api ToolExecutionAPI) (ToolExecutionResult, error) {
 			mu.Lock()
 			run := runs
 			runs++
+			if run == 1 {
+				rerunArgs = args
+			}
 			mu.Unlock()
 			if run == 0 {
 				must(t, api.Diagnostic(ToolDiagnostic{Severity: "info", Message: "first a"}))
@@ -469,5 +480,12 @@ func TestToolRecoveryClearsTheInterruptedAttemptsProgressBeforeASafeRerun(t *tes
 	}
 	if got := jsonOf(t, slots[0].Details); got != `{"run":2}` {
 		t.Fatalf("details = %s", got)
+	}
+	// Beyond pi, where the intent always holds its arguments: empty ones,
+	// omitted from the stored intent, rerun as {}, not nil.
+	mu.Lock()
+	defer mu.Unlock()
+	if rerunArgs == nil {
+		t.Fatal("the rerun got nil arguments, want {}")
 	}
 }
