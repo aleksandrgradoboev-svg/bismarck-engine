@@ -501,6 +501,33 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    `pi.live` (the request phase writes it again at once, in pi as well). Unchecked, as in pi:
    the default poll wait and the backoff's cap.
 
+   **Durable slice 1, agent events** (snapshot `d2e7d8b7`; `events.ts`, `observation.ts`): pi's
+   `CommittedWatch<T>` is generic, with an optional `replace()` for the value an overflow delivers;
+   Go's becomes `durable.CommittedWatch[T]` with `CommittedWatchOptions{Replace, Retires}`, and
+   `DocumentWatch` and `WatchListener` are its type aliases for documents, so their API is
+   unchanged. `Conversation.WatchEvents` (experimental, spec §9.4) is pi's `watchEvents`: a
+   snapshot at attachment, then one batch per commit that causes events, in the spec's order,
+   translated from the view's internal publication hook; an overflow replaces the undelivered
+   batches with a snapshot of the newest view. `AgentEvent` and `MessageChange` are interfaces
+   over concrete types whose JSON carries `"type"` first, as pi's unions (one flat struct does not
+   fit: `message` is a message in `message_start` and a string in `task_failed`). Whether a
+   built-in document changed is told by the identity of its immutable value (the mount shares
+   untouched parts), as pi compares by reference; a deep comparison would drop events for a write
+   of an equal value. The tool events (`tool_execution_*`) and compaction events, and the
+   snapshot's `tools`, `nestedTools`, `compactions` and `compactionFailure`, come with slices 2
+   and 3, with the `pi.live` slots they read. Tests: `harness-events` without the cases that run a
+   tool (9 of 14, the mixed case without its tool part; the 5 wait for slice 2);
+   `harness-input-entries` without the two that hold a tool (9 of 11); its untyped-caller case
+   checks how the entry is queued and placed, since `InputEntry` has no other fields, and its
+   non-string kind cannot be written in Go. Adapted: batches are delivered off the commit, so the
+   cases wait until no batch arrives for 50 ms. Sabotage 16 of 23. Waiting for slice 2: a turn
+   ending at a completing hold (a generation holds its outcome only while it owns live tool
+   tasks), and the thinking delta. Duplicate: the cancellation check after attaching (attach
+   checks it on the line). Unchecked, as in pi: `task_failed`, the generations held at
+   attachment, a block sent whole in the same batch as its deltas, and a commit during streaming
+   that leaves the partial unchanged (it would send an empty `message_update`). The slice 1 (c)
+   sabotage's display-only fast path and outcome cleanup are now caught.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
