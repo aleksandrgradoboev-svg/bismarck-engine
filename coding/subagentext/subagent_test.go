@@ -10,7 +10,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
@@ -561,5 +563,355 @@ func TestNewSessionError(t *testing.T) {
 	}
 	if resultText(res) != "Agent failed: no seats" || !res.IsError {
 		t.Fatalf("result = %q", resultText(res))
+	}
+}
+
+// backgroundFixture is a fixture whose host takes background calls: it keeps
+// the run it is handed, or refuses with refuse when set.
+func backgroundFixture(t *testing.T) (*fixture, *[]BackgroundRun, *error) {
+	f := newFixture(t)
+	var runs []BackgroundRun
+	var refuse error
+	f.opts.Background = func(callID string, run BackgroundRun) error {
+		if callID != "call-1" {
+			t.Errorf("Background got call %q", callID)
+		}
+		if refuse != nil {
+			return refuse
+		}
+		runs = append(runs, run)
+		return nil
+	}
+	return f, &runs, &refuse
+}
+
+func TestBackgroundParameterOnlyWithHost(t *testing.T) {
+	f := newFixture(t)
+	def := Definition(f.parent, f.opts)
+	if _, ok := def.Tool.Parameters.Properties["background"]; ok || strings.Contains(def.Tool.Description, "background") {
+		t.Fatal("background offered by a host that cannot run it")
+	}
+	f.opts.Background = func(string, BackgroundRun) error { return nil }
+	def = Definition(f.parent, f.opts)
+	if p := def.Tool.Parameters.Properties["background"]; p == nil || p.Type != "boolean" || slices.Contains(def.Tool.Parameters.Required, "background") {
+		t.Fatalf("background parameter = %+v", p)
+	}
+}
+
+func TestBackground(t *testing.T) {
+	f, runs, _ := backgroundFixture(t)
+	writeAgent(t, f.userDir, "scout.md", "---\nname: scout\ndescription: Recon\n---\nbody")
+	f.reg.SetResponses(steps(1, answer(func(task string) string { return "found: " + task })))
+
+	res, err := f.run(t, map[string]any{"agent": "scout", "task": "auth", "background": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Returned at once: nothing ran, and the model is told not to guess.
+	if len(f.children) != 0 || len(*runs) != 1 {
+		t.Fatalf("children %d, runs %d", len(f.children), len(*runs))
+	}
+	text := resultText(res)
+	if res.IsError || !strings.Contains(text, "Started in the background (call call-1): scout.") || !strings.Contains(text, "do not describe it, guess it") {
+		t.Fatalf("started result = %q", text)
+	}
+	d := res.Details.(Details)
+	if !d.Background || len(d.Results) != 1 || d.Results[0].ExitCode != -1 || d.Results[0].Task != "auth" || d.Results[0].AgentSource != SourceUser {
+		t.Fatalf("started details = %+v", d)
+	}
+	if res.Usage != nil {
+		t.Fatalf("started result spent %+v", res.Usage)
+	}
+
+	updates := 0
+	done, err := (*runs)[0](context.Background(), func(agent.AgentToolResult) { updates++ })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultText(done) != "found: auth" || done.Details.(Details).Background || updates == 0 {
+		t.Fatalf("run result = %q, updates %d", resultText(done), updates)
+	}
+	if done.Usage == nil || done.Usage.Output == 0 {
+		t.Fatalf("run result usage = %+v", done.Usage)
+	}
+}
+
+func TestBackgroundFalseWaits(t *testing.T) {
+	f, runs, _ := backgroundFixture(t)
+	writeAgent(t, f.userDir, "scout.md", "---\nname: scout\ndescription: Recon\n---\nbody")
+	f.reg.SetResponses(steps(1, answer(func(task string) string { return "found: " + task })))
+	res, err := f.run(t, map[string]any{"agent": "scout", "task": "auth", "background": false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*runs) != 0 || resultText(res) != "found: auth" {
+		t.Fatalf("runs %d, result %q", len(*runs), resultText(res))
+	}
+}
+
+func TestBackgroundRefusals(t *testing.T) {
+	f, runs, refuse := backgroundFixture(t)
+	writeAgent(t, f.userDir, "scout.md", "---\nname: scout\ndescription: Recon\n---\nbody")
+	writeAgent(t, f.userDir, "judge.md", "---\nname: judge\ndescription: Judge\nbackground: never\n---\nbody")
+	many := make([]any, MaxParallelTasks+1)
+	for i := range many {
+		many[i] = map[string]any{"agent": "scout", "task": "t"}
+	}
+	for _, c := range []struct {
+		params map[string]any
+		want   string
+	}{
+		{map[string]any{"agent": "ghost", "task": "t"}, `Unknown agent: "ghost". Available agents: "judge", "scout".`},
+		{map[string]any{"agent": "judge", "task": "t"}, `Agent "judge" does not run in the background: call it without background.`},
+		{map[string]any{"chain": []any{map[string]any{"agent": "scout", "task": "t"}, map[string]any{"agent": "judge", "task": "{previous}"}}}, `Agent "judge" does not run in the background`},
+		{map[string]any{"tasks": many}, "Too many parallel tasks (9). Max is 8."},
+	} {
+		c.params["background"] = true
+		res, err := f.run(t, c.params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !res.IsError || !strings.HasPrefix(resultText(res), c.want) {
+			t.Fatalf("%v: %q (error %v), want %q", c.params, resultText(res), res.IsError, c.want)
+		}
+	}
+	if len(*runs) != 0 || len(f.children) != 0 {
+		t.Fatalf("refused calls ran: runs %d, children %d", len(*runs), len(f.children))
+	}
+
+	// The host refuses: the model gets why.
+	*refuse = errors.New("two roles already run in the background")
+	res, err := f.run(t, map[string]any{"agent": "scout", "task": "t", "background": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError || resultText(res) != "two roles already run in the background" {
+		t.Fatalf("host refusal: %q (error %v)", resultText(res), res.IsError)
+	}
+}
+
+func TestNoBackgroundFromFrontmatter(t *testing.T) {
+	dir := t.TempDir()
+	writeAgent(t, dir, "a.md", "---\nname: a\ndescription: A\nbackground: never\n---\nbody")
+	writeAgent(t, dir, "b.md", "---\nname: b\ndescription: B\nbackground: allowed\n---\nbody")
+	got := map[string]bool{}
+	for _, a := range DiscoverAgents(dir, "", ScopeUser).Agents {
+		got[a.Name] = a.NoBackground
+	}
+	if !got["a"] || got["b"] {
+		t.Fatalf("NoBackground = %v", got)
+	}
+}
+
+// detachFixture is a background fixture whose host also lets the user move a
+// call to the background: detach closes the channel Detach hands out, and
+// released counts the releases. Its agent "slow" answers once gate is closed,
+// after it has signalled started.
+type detachFixture struct {
+	*fixture
+	runs     *[]BackgroundRun
+	refuse   *error
+	asked    chan struct{}
+	released atomic.Int32
+	started  chan struct{}
+	gate     chan struct{}
+	requests atomic.Int32
+}
+
+func newDetachFixture(t *testing.T) *detachFixture {
+	f, runs, refuse := backgroundFixture(t)
+	d := &detachFixture{fixture: f, runs: runs, refuse: refuse, asked: make(chan struct{}), started: make(chan struct{}), gate: make(chan struct{})}
+	f.opts.Detach = func(callID string) (<-chan struct{}, func()) {
+		if callID != "call-1" {
+			t.Errorf("Detach got call %q", callID)
+		}
+		return d.asked, func() { d.released.Add(1) }
+	}
+	writeAgent(t, f.userDir, "slow.md", "---\nname: slow\ndescription: Slow\n---\nbody")
+	var once sync.Once
+	f.reg.SetResponses(steps(1, func(ctx context.Context, req ai.TranscriptContext, opts *ai.SimpleStreamOptions, st *providers.FauxState, m *ai.Model) *ai.AssistantMessage {
+		d.requests.Add(1)
+		once.Do(func() { close(d.started) })
+		select {
+		case <-d.gate:
+		case <-ctx.Done():
+		}
+		return answer(func(task string) string { return "done: " + task })(ctx, req, opts, st, m)
+	}))
+	return d
+}
+
+type callOutcome struct {
+	res agent.AgentToolResult
+	err error
+}
+
+func (d *detachFixture) start(t *testing.T, ctx context.Context) <-chan callOutcome {
+	out := make(chan callOutcome, 1)
+	go func() {
+		res, err := Definition(d.parent, d.opts).Tool.Execute(ctx, "call-1", map[string]any{"agent": "slow", "task": "t"}, nil)
+		out <- callOutcome{res, err}
+	}()
+	select {
+	case <-d.started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the subagent never asked the model")
+	}
+	return out
+}
+
+func wait(t *testing.T, out <-chan callOutcome) callOutcome {
+	t.Helper()
+	select {
+	case o := <-out:
+		return o
+	case <-time.After(10 * time.Second):
+		t.Fatal("the call did not return")
+	}
+	return callOutcome{}
+}
+
+// TestDetachMovesARunningCall: asked while the subagent works, the call returns
+// at once and hands the same run to the host — nothing restarts; the parent's
+// abort no longer reaches it, the host's context does not either until it
+// is cancelled, and the result is the run's.
+func TestDetachMovesARunningCall(t *testing.T) {
+	d := newDetachFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	out := d.start(t, ctx)
+	close(d.asked)
+	o := wait(t, out)
+	if o.err != nil || o.res.IsError || !strings.Contains(resultText(o.res), "The user moved this call to the background (call call-1): slow.") {
+		t.Fatalf("moved result = %q (%v)", resultText(o.res), o.err)
+	}
+	if det := o.res.Details.(Details); !det.Background || len(det.Results) != 1 || det.Results[0].ExitCode != -1 {
+		t.Fatalf("moved details = %+v", det)
+	}
+	if len(*d.runs) != 1 || d.released.Load() != 1 {
+		t.Fatalf("runs %d, releases %d", len(*d.runs), d.released.Load())
+	}
+	cancel() // the answer that made the call is stopped: the role is not
+	close(d.gate)
+	updates := 0
+	res, err := (*d.runs)[0](context.Background(), func(agent.AgentToolResult) { updates++ })
+	if err != nil || resultText(res) != "done: t" || updates == 0 || res.Usage == nil {
+		t.Fatalf("run = %q (%v), updates %d, usage %v", resultText(res), err, updates, res.Usage)
+	}
+	if n := d.requests.Load(); n != 1 || len(d.children) != 1 {
+		t.Fatalf("the run restarted: %d requests, %d children", n, len(d.children))
+	}
+}
+
+// TestDetachedRunStopsWithTheHost: the host's context stops a moved run.
+func TestDetachedRunStopsWithTheHost(t *testing.T) {
+	d := newDetachFixture(t)
+	out := d.start(t, context.Background())
+	close(d.asked)
+	wait(t, out)
+	hostCtx, stop := context.WithCancel(context.Background())
+	stop()
+	if _, err := (*d.runs)[0](hostCtx, nil); err == nil {
+		t.Fatal("a run the host stopped finished")
+	}
+}
+
+// TestDetachRefusedStaysInTheForeground: when the host refuses, the call waits
+// for its run as before and returns its result.
+func TestDetachRefusedStaysInTheForeground(t *testing.T) {
+	d := newDetachFixture(t)
+	*d.refuse = errors.New("full")
+	out := d.start(t, context.Background())
+	close(d.asked)
+	time.Sleep(50 * time.Millisecond)
+	close(d.gate)
+	o := wait(t, out)
+	if o.err != nil || resultText(o.res) != "done: t" || o.res.Usage == nil {
+		t.Fatalf("result = %q (%v)", resultText(o.res), o.err)
+	}
+
+	// Refused, the call's abort stops the run again and its updates come back.
+	d = newDetachFixture(t)
+	*d.refuse = errors.New("full")
+	ctx, cancel := context.WithCancel(context.Background())
+	var updates atomic.Int32
+	aborted := make(chan callOutcome, 1)
+	go func() {
+		res, err := Definition(d.parent, d.opts).Tool.Execute(ctx, "call-1", map[string]any{"agent": "slow", "task": "t"}, func(agent.AgentToolResult) { updates.Add(1) })
+		aborted <- callOutcome{res, err}
+	}()
+	<-d.started
+	close(d.asked)
+	time.Sleep(50 * time.Millisecond)
+	before := updates.Load()
+	cancel()
+	if o := wait(t, aborted); o.err == nil {
+		t.Fatalf("a refused move then aborted finished: %q", resultText(o.res))
+	}
+	if updates.Load() <= before {
+		t.Fatal("updates did not come back after a refused move")
+	}
+}
+
+// TestNotDetachedEndsAsUsual: a call nobody moves returns its result, its
+// abort stops it, and Detach is released either way.
+func TestNotDetachedEndsAsUsual(t *testing.T) {
+	d := newDetachFixture(t)
+	out := d.start(t, context.Background())
+	close(d.gate)
+	if o := wait(t, out); o.err != nil || resultText(o.res) != "done: t" || len(*d.runs) != 0 || d.released.Load() != 1 {
+		t.Fatalf("result = %q (%v), runs %d, releases %d", resultText(o.res), o.err, len(*d.runs), d.released.Load())
+	}
+
+	d = newDetachFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	out = d.start(t, ctx)
+	cancel()
+	if o := wait(t, out); o.err == nil || len(*d.runs) != 0 {
+		t.Fatalf("an aborted call: %v, runs %d", o.err, len(*d.runs))
+	}
+}
+
+// TestNoDetachForAgentsThatStayInTheForeground: a call of an agent marked
+// "background: never" does not ask Detach.
+func TestNoDetachForAgentsThatStayInTheForeground(t *testing.T) {
+	f, _, _ := backgroundFixture(t)
+	f.opts.Detach = func(string) (<-chan struct{}, func()) {
+		t.Error("Detach asked for an agent that stays in the foreground")
+		return nil, func() {}
+	}
+	writeAgent(t, f.userDir, "judge.md", "---\nname: judge\ndescription: Judge\nbackground: never\n---\nbody")
+	f.reg.SetResponses(steps(1, answer(func(string) string { return "ok" })))
+	if res, err := f.run(t, map[string]any{"agent": "judge", "task": "t"}); err != nil || resultText(res) != "ok" {
+		t.Fatalf("result = %q (%v)", resultText(res), err)
+	}
+}
+
+// TestAlwaysBackground: an agent marked "background: always" runs in the
+// background without the model asking, given a host that runs calls there;
+// with an agent marked never in the same call, or without such a host, it
+// runs in the foreground.
+func TestAlwaysBackground(t *testing.T) {
+	f, runs, _ := backgroundFixture(t)
+	writeAgent(t, f.userDir, "long.md", "---\nname: long\ndescription: Long\nbackground: always\n---\nbody")
+	writeAgent(t, f.userDir, "judge.md", "---\nname: judge\ndescription: Judge\nbackground: never\n---\nbody")
+	f.reg.SetResponses(steps(4, answer(func(task string) string { return "done: " + task })))
+
+	res, err := f.run(t, map[string]any{"agent": "long", "task": "t"})
+	if err != nil || len(*runs) != 1 || !res.Details.(Details).Background || !strings.HasPrefix(resultText(res), "Started in the background") {
+		t.Fatalf("always: %q (%v), runs %d", resultText(res), err, len(*runs))
+	}
+	res, err = f.run(t, map[string]any{"chain": []any{map[string]any{"agent": "long", "task": "a"}, map[string]any{"agent": "judge", "task": "b"}}})
+	if err != nil || len(*runs) != 1 || resultText(res) != "done: b" {
+		t.Fatalf("always with never: %q (%v), runs %d", resultText(res), err, len(*runs))
+	}
+	f.opts.Background = nil
+	if res, err = f.run(t, map[string]any{"agent": "long", "task": "c"}); err != nil || resultText(res) != "done: c" {
+		t.Fatalf("always without a host: %q (%v)", resultText(res), err)
+	}
+	all := DiscoverAgents(f.userDir, "", ScopeUser).Agents
+	for _, a := range all {
+		if (a.Name == "long") != a.AlwaysBackground {
+			t.Fatalf("AlwaysBackground of %s = %v", a.Name, a.AlwaysBackground)
+		}
 	}
 }

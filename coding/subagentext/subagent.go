@@ -15,6 +15,14 @@
 // Options.Confirm: without it they are refused, where pi runs them unasked
 // when it has no UI to ask with; and the tool has no confirmProjectAgents
 // parameter, with which pi lets the model itself skip the question.
+//
+// Two things are added for hosts. ChildSpec names the call a subagent runs
+// in, so a host can write to it while it works. And a host that sets
+// Options.Background lets the model start a call in the background: the call
+// returns at once and the host delivers the result later. An agent's
+// frontmatter can fix it ("background: always" or "never"), and with
+// Options.Detach the user can move a call that runs in the foreground there
+// while it runs.
 package subagentext
 
 import (
@@ -24,6 +32,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unicode/utf8"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
@@ -87,7 +96,35 @@ type Options struct {
 	// Confirm asks the user whether to run an untrusted project's agents;
 	// nil means there is no one to ask, and they are refused.
 	Confirm func(ctx context.Context, title, message string) bool
+	// Background, when set, gives the tool a background parameter. A call
+	// with background: true is checked as any other — its mode, its agents,
+	// the approval of project agents — and is then handed to Background, and
+	// its result says at once that it started. The host runs it with run, on
+	// a context of its own, and delivers the result run returns, Usage
+	// included; onUpdate there gets the partial results a call in the
+	// foreground streams. An error from Background refuses the call, and the
+	// model gets it as the result. Not in pi, whose tool calls all block.
+	Background func(callID string, run BackgroundRun) error
+	// Detach, with Background, lets the user move a call that runs in the
+	// foreground to the background while it runs. It returns what closes when
+	// the user asks for call callID, and release, called once the call no
+	// longer waits for it. Asked, the call hands its running work to
+	// Background — nothing restarts — and returns at once, as a call started
+	// in the background does. Should Background refuse, the call goes on in
+	// the foreground. Not in pi.
+	Detach func(callID string) (detach <-chan struct{}, release func())
 }
+
+// BackgroundRun runs a call handed to Options.Background.
+type BackgroundRun func(ctx context.Context, onUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error)
+
+// backgroundStarted is the result of a call started in the background. The
+// model has the call's id and nothing else, and is told not to make up the
+// rest.
+const backgroundStarted = "Started in the background (call %s): %s. The result is not available yet — do not describe it, guess it or draw conclusions from it. It will arrive in a separate message when the run ends."
+
+// backgroundMoved is the result of a call the user moved to the background.
+const backgroundMoved = "The user moved this call to the background (call %s): %s. It keeps running; the result is not available yet — do not describe it, guess it or draw conclusions from it. It will arrive in a separate message when the run ends."
 
 // UsageStats is a subagent's usage (pi UsageStats).
 type UsageStats struct {
@@ -152,6 +189,9 @@ type Details struct {
 	AgentScope       Scope    `json:"agentScope"`
 	ProjectAgentsDir *string  `json:"projectAgentsDir"`
 	Results          []Result `json:"results"`
+	// Background marks the result of a call started in the background: its
+	// Results are the tasks, none run yet.
+	Background bool `json:"background,omitempty"`
 }
 
 // Failed reports whether a run failed (pi isFailedResult).
@@ -240,24 +280,32 @@ func Definition(parent *coding.Session, opts Options) coding.ToolDefinition {
 	scope := ai.EnumOf(string(ScopeUser), string(ScopeProject), string(ScopeBoth)).
 		Describe(`Which agent directories to use. Default: "user". Use "both" to include project-local agents.`).
 		WithDefault(string(ScopeUser))
-	params := ai.Object(
+	fields := []ai.Field{
 		ai.Opt("agent", ai.String("Name of the agent to invoke (for single mode)")),
 		ai.Opt("task", ai.String("Task to delegate (for single mode)")),
 		ai.Opt("tasks", ai.ArrayOf(taskItem, "Array of {agent, task} for parallel execution")),
 		ai.Opt("chain", ai.ArrayOf(chainItem, "Array of {agent, task} for sequential execution")),
 		ai.Opt("agentScope", scope),
 		ai.Opt("cwd", ai.String("Working directory for the agent process (single mode)")),
-	)
+	}
+	if opts.Background != nil {
+		fields = append(fields, ai.Opt("background", ai.Boolean("Run the call in the background and return at once; its result arrives later in a separate message. Default false: wait for the result. Use it only when you can go on without the result.")))
+	}
+	params := ai.Object(fields...)
 	userDir := opts.UserAgentsDir
 	if userDir == "" {
 		userDir = "(none)"
 	}
-	description := strings.Join([]string{
+	lines := []string{
 		"Delegate tasks to specialized subagents with isolated context.",
 		"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
 		fmt.Sprintf(`Default agent scope is "user" (from %s).`, userDir),
 		`To enable project-local agents in .pi/agents, set agentScope: "both" (or "project").`,
-	}, " ")
+	}
+	if opts.Background != nil {
+		lines = append(lines, "With background: true the call returns at once and its result arrives later.")
+	}
+	description := strings.Join(lines, " ")
 	r := &runner{parent: parent, opts: opts}
 	return coding.ToolDefinition{
 		Tool: agent.AgentTool{
@@ -314,7 +362,11 @@ func availableAgents(agents []Agent) string {
 // with its own, as pi's session stats do, so a host's quota sees what
 // subagents spend. pi's example leaves it out.
 func (r *runner) execute(ctx context.Context, id string, params map[string]any, onUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
-	res, err := r.run(ctx, id, params, onUpdate)
+	return withUsage(r.run(ctx, id, params, onUpdate))
+}
+
+// withUsage sets res's Usage to what its subagents spent.
+func withUsage(res agent.AgentToolResult, err error) (agent.AgentToolResult, error) {
 	if d, ok := res.Details.(Details); ok && err == nil {
 		var total ai.Usage
 		spent := false
@@ -412,6 +464,155 @@ func (r *runner) run(ctx context.Context, callID string, params map[string]any, 
 		}
 	}
 
+	requested := map[Mode][]taskParam{ModeChain: chain, ModeParallel: tasks, ModeSingle: {single}}[mode]
+	work := func(ctx context.Context, onUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
+		return r.runMode(ctx, callID, agents, mode, chain, tasks, single, onUpdate, details)
+	}
+	background, _ := params["background"].(bool)
+	if !background && r.opts.Background != nil {
+		background = alwaysBackground(agents, requested)
+	}
+	if background && r.opts.Background != nil {
+		return r.startBackground(callID, agents, mode, requested, details, func(ctx context.Context, onUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
+			return withUsage(work(ctx, onUpdate))
+		}), nil
+	}
+	if r.opts.Background != nil && r.opts.Detach != nil {
+		if pending, names, ok := pendingResults(agents, requested); ok {
+			return r.runDetachable(ctx, callID, mode, pending, names, details, work, onUpdate)
+		}
+	}
+	return work(ctx, onUpdate)
+}
+
+// alwaysBackground reports whether requested runs in the background whatever
+// the model asks: an agent of it is "background: always", and none is
+// unknown or "background: never".
+func alwaysBackground(agents []Agent, requested []taskParam) bool {
+	always := false
+	for _, t := range requested {
+		k := slices.IndexFunc(agents, func(a Agent) bool { return a.Name == t.agent })
+		if k < 0 || agents[k].NoBackground {
+			return false
+		}
+		always = always || agents[k].AlwaysBackground
+	}
+	return always
+}
+
+// pendingResults are the results of requested before they run, and the
+// agents' names; ok is false when an agent is unknown or does not run in the
+// background.
+func pendingResults(agents []Agent, requested []taskParam) (pending []Result, names []string, ok bool) {
+	pending = make([]Result, len(requested))
+	names = make([]string, len(requested))
+	for i, t := range requested {
+		k := slices.IndexFunc(agents, func(a Agent) bool { return a.Name == t.agent })
+		if k < 0 || agents[k].NoBackground {
+			return nil, nil, false
+		}
+		pending[i] = Result{Agent: t.agent, AgentSource: agents[k].Source, Task: t.task, ExitCode: -1, Messages: []ai.Message{}}
+		names[i] = t.agent
+	}
+	return pending, names, true
+}
+
+// runDetachable runs a call in the foreground that the user may move to the
+// background while it runs (Options.Detach). The work runs on a context of
+// its own, which the call's abort cancels until it is moved; moved, its
+// partial results go to the host's onUpdate instead of the call's.
+func (r *runner) runDetachable(ctx context.Context, callID string, mode Mode, pending []Result, names []string, details func(Mode, []Result) Details, work BackgroundRun, onUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
+	workCtx, cancelWork := context.WithCancel(context.WithoutCancel(ctx))
+	stopAbort := context.AfterFunc(ctx, cancelWork)
+	var target atomic.Pointer[agent.ToolUpdateFunc]
+	target.Store(&onUpdate)
+	update := func(p agent.AgentToolResult) {
+		if f := target.Load(); f != nil && *f != nil {
+			(*f)(p)
+		}
+	}
+	type outcome struct {
+		res agent.AgentToolResult
+		err error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		res, err := work(workCtx, update)
+		done <- outcome{res, err}
+	}()
+	foreground := func() (agent.AgentToolResult, error) {
+		o := <-done
+		stopAbort()
+		cancelWork()
+		return o.res, o.err
+	}
+
+	detach, release := r.opts.Detach(callID)
+	defer release()
+	select {
+	case o := <-done:
+		stopAbort()
+		cancelWork()
+		return o.res, o.err
+	case <-detach:
+	}
+	if !stopAbort() {
+		// The call was aborted as the user asked: it ends in the foreground.
+		return foreground()
+	}
+	var none agent.ToolUpdateFunc
+	target.Store(&none)
+	err := r.opts.Background(callID, func(hostCtx context.Context, hostUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
+		target.Store(&hostUpdate)
+		stop := context.AfterFunc(hostCtx, cancelWork)
+		defer stop()
+		o := <-done
+		cancelWork()
+		return withUsage(o.res, o.err)
+	})
+	if err != nil {
+		// Refused: the call waits for its work as before, abort included.
+		target.Store(&onUpdate)
+		stopAbort = context.AfterFunc(ctx, cancelWork)
+		return foreground()
+	}
+	d := details(mode, pending)
+	d.Background = true
+	return textResult(fmt.Sprintf(backgroundMoved, callID, strings.Join(names, ", ")), d), nil
+}
+
+// startBackground hands a checked call to Options.Background. What would fail
+// at once fails here, before the model is told the call started: an agent that
+// does not exist, or one that does not run in the background.
+func (r *runner) startBackground(callID string, agents []Agent, mode Mode, requested []taskParam, details func(Mode, []Result) Details, run BackgroundRun) agent.AgentToolResult {
+	refuse := func(text string) agent.AgentToolResult {
+		res := textResult(text, details(mode, nil))
+		res.IsError = true
+		return res
+	}
+	if mode == ModeParallel && len(requested) > MaxParallelTasks {
+		return refuse(fmt.Sprintf("Too many parallel tasks (%d). Max is %d.", len(requested), MaxParallelTasks))
+	}
+	for _, t := range requested {
+		k := slices.IndexFunc(agents, func(a Agent) bool { return a.Name == t.agent })
+		if k < 0 {
+			return refuse(unknownAgent(t.agent, agents))
+		}
+		if agents[k].NoBackground {
+			return refuse(fmt.Sprintf("Agent %q does not run in the background: call it without background.", t.agent))
+		}
+	}
+	pending, names, _ := pendingResults(agents, requested)
+	if err := r.opts.Background(callID, run); err != nil {
+		return refuse(err.Error())
+	}
+	d := details(mode, pending)
+	d.Background = true
+	return textResult(fmt.Sprintf(backgroundStarted, callID, strings.Join(names, ", ")), d)
+}
+
+// runMode runs a checked call in mode.
+func (r *runner) runMode(ctx context.Context, callID string, agents []Agent, mode Mode, chain, tasks []taskParam, single taskParam, onUpdate agent.ToolUpdateFunc, details func(Mode, []Result) Details) (agent.AgentToolResult, error) {
 	switch mode {
 	case ModeChain:
 		return r.runChain(ctx, callID, agents, chain, onUpdate, details)
@@ -568,6 +769,19 @@ func (r *runner) runParallel(ctx context.Context, callID string, agents []Agent,
 	return textResult(text, details(ModeParallel, all)), nil
 }
 
+// unknownAgent says that agent name is not among agents (pi runSingleAgent).
+func unknownAgent(name string, agents []Agent) string {
+	names := make([]string, len(agents))
+	for j, a := range agents {
+		names[j] = `"` + a.Name + `"`
+	}
+	available := strings.Join(names, ", ")
+	if available == "" {
+		available = "none"
+	}
+	return fmt.Sprintf("Unknown agent: %q. Available agents: %s.", name, available)
+}
+
 // errAborted is returned when the call is aborted while a subagent runs (pi
 // throws "Subagent was aborted").
 var errAborted = errors.New("Subagent was aborted")
@@ -584,15 +798,7 @@ func (r *runner) runAgent(ctx context.Context, callID string, agents []Agent, t 
 	}
 	i := slices.IndexFunc(agents, func(a Agent) bool { return a.Name == t.agent })
 	if i < 0 {
-		names := make([]string, len(agents))
-		for j, a := range agents {
-			names[j] = `"` + a.Name + `"`
-		}
-		available := strings.Join(names, ", ")
-		if available == "" {
-			available = "none"
-		}
-		return fail(fmt.Sprintf("Unknown agent: %q. Available agents: %s.", t.agent, available))
+		return fail(unknownAgent(t.agent, agents))
 	}
 	def := agents[i]
 	result.AgentSource = def.Source
