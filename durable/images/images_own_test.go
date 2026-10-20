@@ -40,6 +40,9 @@ func TestImagesRoundTheScaledSideToTheNearestPixel(t *testing.T) {
 }
 
 func TestImagesShrinkByThreeQuartersAtATime(t *testing.T) {
+	if raceDetector {
+		t.Skip("encoding a noisy 2000x2000 image at every step takes minutes under the race detector")
+	}
 	limits := tools.DefaultImageLimits
 	limits.MaxBytes = 200_000
 	result := prepare(t, imagetest.NoisyPNG(2000, 2000), "image/png", limits)

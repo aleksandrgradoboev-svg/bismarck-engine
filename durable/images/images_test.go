@@ -163,6 +163,11 @@ func TestImagesReEncodeAPNGTooLargeForTheByteLimitAsJPEGAtItsSizeAndShrinkItWhen
 	if d := decoded(t, jpeg.Data); d.Width != 1100 || d.Height != 1100 {
 		t.Fatalf("decoded %dx%d", d.Width, d.Height)
 	}
+	if raceDetector {
+		// Encoding a noisy 2000x2000 image at every step takes minutes under
+		// the race detector; the test step without it runs the rest.
+		return
+	}
 	tight := tools.DefaultImageLimits
 	tight.MaxBytes = 200_000
 	shrunk := prepare(t, imagetest.NoisyPNG(2000, 2000), "image/png", tight)
