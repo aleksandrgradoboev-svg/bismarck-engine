@@ -48,8 +48,8 @@ type GenerationCheckpoint struct {
 	Overflow string `json:"overflow,omitempty"`
 	// Threshold is set when the blocking threshold started Compacted; its
 	// outcome is checked once when prepare resumes.
-	Threshold bool `json:"threshold,omitempty"`
-	Model     *ModelRef       `json:"model,omitempty"`
+	Threshold bool      `json:"threshold,omitempty"`
+	Model     *ModelRef `json:"model,omitempty"`
 	// ThinkingLevel is the request's; "off" sends no reasoning option.
 	ThinkingLevel ai.ModelThinkingLevel `json:"thinkingLevel,omitempty"`
 	// StreamOptions are the settings' request options when preparation
