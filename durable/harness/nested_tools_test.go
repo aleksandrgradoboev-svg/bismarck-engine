@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
@@ -161,13 +162,13 @@ func TestNestedToolsStoreOneDocumentPerNestedCallKeyedByItsKeyWrittenOnlyByThatC
 func TestNestedToolsRejectANestedCallOfAnAbortedCallerAndLeaveNoDocumentForIt(t *testing.T) {
 	setup := newChatSetup(t)
 	installTool(t, setup.registry, newCountingEcho().registration)
-	started, marked := make(chan struct{}), make(chan struct{})
+	started, marked := make(chan struct{}), newLatch()
 	var rejected error
 	var caller durable.TaskID
 	installTool(t, setup.registry, nestedTool("late", func(_ context.Context, _ map[string]any, api ToolExecutionAPI) (ToolExecutionResult, error) {
 		caller = api.TaskID()
 		close(started)
-		<-marked
+		<-marked.ch
 		// Its context is cancelled too, so pass one that is not: the
 		// admission itself must refuse.
 		_, rejected = api.ExecuteTool(bg, "echo", map[string]any{"text": "a"}, NestedCallOptions{})
@@ -175,6 +176,7 @@ func TestNestedToolsRejectANestedCallOfAnAbortedCallerAndLeaveNoDocumentForIt(t 
 	}))
 	setup.faux.SetResponses([]providers.FauxResponseStep{callStep("late", nil), fauxText("done")})
 	h, root := openChat(t, memory.New(), setup)
+	openAtCleanup(t, marked)
 	submission := submit(t, root, inputDraft("go"))
 	awaitSignal(t, started, "the caller")
 	must(t, h.Commit(bg, func(tx *durable.Tx) error {
@@ -186,7 +188,7 @@ func TestNestedToolsRejectANestedCallOfAnAbortedCallerAndLeaveNoDocumentForIt(t 
 		marked.AbortRequested = true
 		return tx.SetTask(marked)
 	}))
-	close(marked)
+	marked.open()
 	waitFor(t, submission)
 	if rejected == nil || !strings.Contains(rejected.Error(), "abort mark") && !strings.Contains(rejected.Error(), "aborted") && !strings.Contains(rejected.Error(), "has settled") {
 		t.Fatalf("rejected = %v", rejected)
@@ -700,20 +702,40 @@ func TestNestedToolsAbortANestedCallWhoseAdmissionWasStillCommittingWhenItsCalle
 		<-ctx.Done()
 		return ToolExecutionResult{}, context.Cause(ctx)
 	}))
+	var h *Harness
+	var caller atomic.Int64
+	entered := make(chan struct{})
+	// pi admits synchronously, so the late call's admission is underway when
+	// its caller returns. Here it is held until the caller left running, or
+	// long enough that a caller waiting for it would have.
+	hook := func(key string) {
+		if key != "late" {
+			return
+		}
+		close(entered)
+		deadline := time.Now().Add(300 * time.Millisecond)
+		for time.Now().Before(deadline) {
+			if record, err := h.GetTask(bg, durable.TaskID(caller.Load())); err == nil && record != nil && record.State.Status != durable.TaskRunning {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	beforeNestedAdmission.Store(&hook)
+	t.Cleanup(func() { beforeNestedAdmission.Store(nil) })
 	installTool(t, setup.registry, nestedTool("batch", func(ctx context.Context, _ map[string]any, api ToolExecutionAPI) (ToolExecutionResult, error) {
+		caller.Store(int64(api.TaskID()))
 		if _, err := api.ExecuteTool(ctx, "echo", map[string]any{"text": "warm"}, NestedCallOptions{Key: "warm"}); err != nil {
 			return ToolExecutionResult{}, err
 		}
-		started := make(chan struct{})
-		go func() {
-			close(started)
-			_, _ = api.ExecuteTool(ctx, "hang", map[string]any{}, NestedCallOptions{Key: "late"})
-		}()
-		<-started
+		go func() { _, _ = api.ExecuteTool(ctx, "hang", map[string]any{}, NestedCallOptions{Key: "late"}) }()
+		<-entered
 		return ToolExecutionResult{Output: ai.ContentList{}}, nil
 	}))
-	h, root, status, _ := runNested(t, setup, callStep("batch", nil), fauxText("done"))
-	if status != durable.SubmissionDone {
+	setup.faux.SetResponses([]providers.FauxResponseStep{callStep("batch", nil), fauxText("done")})
+	var root *Conversation
+	h, root = openChat(t, memory.New(), setup)
+	if status := waitFor(t, submit(t, root, inputDraft("go"))).Status; status != durable.SubmissionDone {
 		t.Fatalf("status = %s", status)
 	}
 	var late *durable.TaskRecord
@@ -722,12 +744,11 @@ func TestNestedToolsAbortANestedCallWhoseAdmissionWasStillCommittingWhenItsCalle
 			late = &task
 		}
 	}
-	// The admission may lose the race with the caller's end: then the call
-	// is refused and never made.
-	if late != nil {
-		if status, _ := toolOutcome(*late); status != durable.OutcomeAborted {
-			t.Fatalf("late outcome = %s", status)
-		}
+	if late == nil {
+		t.Fatal("the late call was never admitted: its caller settled without waiting for the admission")
+	}
+	if status, _ := toolOutcome(*late); status != durable.OutcomeAborted {
+		t.Fatalf("late outcome = %s", status)
 	}
 	expectIdleLive(t, h, root)
 }
@@ -831,7 +852,7 @@ func liveNested(t *testing.T, h *Harness, root *Conversation) []map[string]any {
 
 func TestNestedToolsCommitOnlyTheStatusOfANestedCallMadeWithoutProgressAndKeepItsOutputInTheResult(t *testing.T) {
 	setup := newChatSetup(t)
-	running, release := make(chan struct{}), make(chan struct{})
+	running, release := make(chan struct{}), newLatch()
 	installTool(t, setup.registry, nestedTool("chatty", func(ctx context.Context, _ map[string]any, api ToolExecutionAPI) (ToolExecutionResult, error) {
 		if err := api.Output([]byte("line\n"), nil); err != nil {
 			return ToolExecutionResult{}, err
@@ -843,7 +864,7 @@ func TestNestedToolsCommitOnlyTheStatusOfANestedCallMadeWithoutProgressAndKeepIt
 			return ToolExecutionResult{}, err
 		}
 		close(running)
-		<-release
+		<-release.ch
 		return ToolExecutionResult{}, nil
 	}))
 	var result NestedToolExecutionResult
@@ -854,6 +875,7 @@ func TestNestedToolsCommitOnlyTheStatusOfANestedCallMadeWithoutProgressAndKeepIt
 	}))
 	setup.faux.SetResponses([]providers.FauxResponseStep{callStep("batch", nil), fauxText("done")})
 	h, root := openChat(t, memory.New(), setup)
+	openAtCleanup(t, release)
 	submission := submit(t, root, inputDraft("go"))
 	// Details returned before this, so a progress commit would have landed
 	// already.
@@ -866,7 +888,7 @@ func TestNestedToolsCommitOnlyTheStatusOfANestedCallMadeWithoutProgressAndKeepIt
 	if got := jsonOf(t, slots[0]); got != want {
 		t.Fatalf("slot = %s, want %s", got, want)
 	}
-	close(release)
+	release.open()
 	waitFor(t, submission)
 	if string(result.StructuredOutput) != `"line\n"` || normalJSON(t, result.Details) != `{"step":1}` || jsonOf(t, result.Diagnostics) != `[{"severity":"info","message":"note"}]` {
 		t.Fatalf("result = %s", jsonOf(t, result))
@@ -875,12 +897,12 @@ func TestNestedToolsCommitOnlyTheStatusOfANestedCallMadeWithoutProgressAndKeepIt
 
 func TestNestedToolsShowANestedCallsArgumentsInItsSlotAsMadeThenUnboundedAsItRunsWithThem(t *testing.T) {
 	setup := newChatSetup(t)
-	hookEntered, hookRelease := make(chan struct{}), make(chan struct{})
-	running, release := make(chan struct{}), make(chan struct{})
+	hookEntered, hookRelease := make(chan struct{}), newLatch()
+	running, release := make(chan struct{}), newLatch()
 	large := strings.Repeat("x", 64*1024)
 	installTool(t, setup.registry, nestedTool("slow", func(context.Context, map[string]any, ToolExecutionAPI) (ToolExecutionResult, error) {
 		close(running)
-		<-release
+		<-release.ch
 		return ToolExecutionResult{Output: ai.ContentList{}}, nil
 	}))
 	installHooks(t, setup.registry, "hooks", ToolTask, &ToolHooks{BeforeTool: func(_ context.Context, call ToolHookCall, _ *TaskRuntime) (*BeforeToolDecision, error) {
@@ -888,7 +910,7 @@ func TestNestedToolsShowANestedCallsArgumentsInItsSlotAsMadeThenUnboundedAsItRun
 			return nil, nil
 		}
 		close(hookEntered)
-		<-hookRelease
+		<-hookRelease.ch
 		return &BeforeToolDecision{Arguments: map[string]any{"text": large}}, nil
 	}})
 	installTool(t, setup.registry, nestedTool("batch", func(ctx context.Context, _ map[string]any, api ToolExecutionAPI) (ToolExecutionResult, error) {
@@ -897,17 +919,18 @@ func TestNestedToolsShowANestedCallsArgumentsInItsSlotAsMadeThenUnboundedAsItRun
 	}))
 	setup.faux.SetResponses([]providers.FauxResponseStep{callStep("batch", nil), fauxText("done")})
 	h, root := openChat(t, memory.New(), setup)
+	openAtCleanup(t, hookRelease, release)
 	submission := submit(t, root, inputDraft("go"))
 	awaitSignal(t, hookEntered, "beforeTool")
 	if slot := liveNested(t, h, root)[0]; slot["status"] != slotPending || jsonOf(t, slot["arguments"]) != `{"text":"asked"}` {
 		t.Fatalf("pending slot = %s", jsonOf(t, slot))
 	}
-	close(hookRelease)
+	hookRelease.open()
 	awaitSignal(t, running, "the nested call")
 	if slot := liveNested(t, h, root)[0]; slot["status"] != slotRunning || jsonOf(t, slot["arguments"]) != jsonOf(t, map[string]any{"text": large}) {
 		t.Fatalf("running slot status = %v", slot["status"])
 	}
-	close(release)
+	release.open()
 	waitFor(t, submission)
 	// The task input keeps the arguments the call was made with.
 	for _, task := range allToolTasks(t, h, root) {
@@ -951,7 +974,7 @@ func TestNestedToolsFindEachNestedCallsSlotAfterSlotsInTheMiddleWereRemoved(t *t
 		}
 		return ToolExecutionResult{Output: ai.ContentList{}}, nil
 	}))
-	before, checked := make(chan struct{}), make(chan struct{})
+	before, checked := make(chan struct{}), newLatch()
 	var slots []string
 	installTool(t, setup.registry, nestedTool("batch", func(ctx context.Context, _ map[string]any, api ToolExecutionAPI) (ToolExecutionResult, error) {
 		// n2 makes m1 and m2 and settles, which removes them from between n2
@@ -973,15 +996,16 @@ func TestNestedToolsFindEachNestedCallsSlotAfterSlotsInTheMiddleWereRemoved(t *t
 			slots = append(slots, fmt.Sprintf("%v %v %v %v", slot["callId"], slot["status"], summary["isError"], hasDuration))
 		}
 		close(before)
-		<-checked
+		<-checked.ch
 		return ToolExecutionResult{Output: ai.ContentList{}}, nil
 	}))
 	setup.faux.SetResponses([]providers.FauxResponseStep{callStep("batch", nil), fauxText("done")})
 	_, root := openChat(t, memory.New(), setup)
+	openAtCleanup(t, checked)
 	submission := submit(t, root, inputDraft("go"))
 	awaitSignal(t, before, "the snapshot")
 	expectStrings(t, "slots", slots, []string{"c1/1 done false true", "c1/2 done false true", "c1/3 done false true", "c1/4 done false true"})
-	close(checked)
+	checked.open()
 	waitFor(t, submission)
 }
 
@@ -1031,7 +1055,7 @@ func TestNestedToolsGiveCallersWhatASchemaLessToolStreamedBeforeItThrew(t *testi
 
 func TestNestedToolsShowAFinishedNestedCallAsADoneSlotWithItsSummaryUntilItsCallerSettles(t *testing.T) {
 	setup := newChatSetup(t)
-	release, checked := make(chan struct{}), make(chan struct{})
+	release, checked := newLatch(), make(chan struct{})
 	// Diagnostics win over output for the error text, which is cut to 500
 	// characters.
 	installTool(t, setup.registry, returning("verbose", ToolExecutionResult{
@@ -1058,11 +1082,12 @@ func TestNestedToolsShowAFinishedNestedCallAsADoneSlotWithItsSummaryUntilItsCall
 			}
 		}
 		close(checked)
-		<-release
+		<-release.ch
 		return ToolExecutionResult{Output: ai.ContentList{}}, nil
 	}))
 	setup.faux.SetResponses([]providers.FauxResponseStep{callStep("batch", nil), fauxText("done")})
 	h, root := openChat(t, memory.New(), setup)
+	openAtCleanup(t, release)
 	submission := submit(t, root, inputDraft("go"))
 	awaitSignal(t, checked, "the calls")
 	var got []string
@@ -1080,9 +1105,51 @@ func TestNestedToolsShowAFinishedNestedCallAsADoneSlotWithItsSummaryUntilItsCall
 		`c1/4 done true {"error":"bad image","isError":true}`,
 		`c1/5 done true {"error":"` + strings.Repeat("e", 500) + `","isError":true}`,
 	})
-	close(release)
+	release.open()
 	waitFor(t, submission)
 	expectIdleLive(t, h, root)
+}
+
+// Beyond pi, which has no case of it: a tool that keeps its API after it
+// returned cannot make a nested call any more.
+func TestNestedToolsRejectANestedCallMadeAfterItsCallerSettled(t *testing.T) {
+	setup := newChatSetup(t)
+	installTool(t, setup.registry, newCountingEcho().registration)
+	var kept ToolExecutionAPI
+	installTool(t, setup.registry, nestedTool("keeper", func(_ context.Context, _ map[string]any, api ToolExecutionAPI) (ToolExecutionResult, error) {
+		kept = api
+		return ToolExecutionResult{Output: ai.ContentList{}}, nil
+	}))
+	h, root, _, _ := runNested(t, setup, callStep("keeper", nil), fauxText("done"))
+	_, err := kept.ExecuteTool(bg, "echo", map[string]any{"text": "late"}, NestedCallOptions{})
+	if err == nil || !strings.Contains(err.Error(), "has settled") {
+		t.Fatalf("late call = %v, want a settled call's refusal", err)
+	}
+	if tasks := allToolTasks(t, h, root); len(tasks) != 1 {
+		t.Fatalf("tool tasks = %d, want only the caller", len(tasks))
+	}
+}
+
+// latch is a channel a tool waits on; open is idempotent.
+type latch struct {
+	ch   chan struct{}
+	once sync.Once
+}
+
+func newLatch() *latch { return &latch{ch: make(chan struct{})} }
+
+func (l *latch) open() { l.once.Do(func() { close(l.ch) }) }
+
+// openAtCleanup opens latches when the test ends, before the Harness closes
+// (cleanups run last registered first, so call it after opening the
+// Harness): a failure then ends the test instead of hanging Close until the
+// test binary's timeout.
+func openAtCleanup(t *testing.T, latches ...*latch) {
+	t.Cleanup(func() {
+		for _, l := range latches {
+			l.open()
+		}
+	})
 }
 
 func TestNestedToolsMigrateVersion1ToolTaskInputToAModelIssuedCall(t *testing.T) {

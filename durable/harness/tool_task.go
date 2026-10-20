@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
@@ -92,6 +93,12 @@ type ToolTaskResult struct {
 }
 
 type toolTask = Running[ToolTaskInput, ToolTaskCheckpoint]
+
+// beforeNestedAdmission, set only by tests, runs before a nested call's
+// admission commits: goroutines start admissions in no fixed order, so a test
+// holds one there to make it commit after its caller returned, as pi's
+// synchronous admissions can.
+var beforeNestedAdmission atomic.Pointer[func(key string)]
 
 // madeNestedCalls is the memo of a tool task that made a nested call, in any
 // attempt, committed before the first admission of each attempt: only then
@@ -1496,6 +1503,9 @@ func (a *toolAPI) admit(ctx context.Context, name string, args map[string]any, k
 		a.memoDone = true
 	}
 	a.memoMu.Unlock()
+	if hook := beforeNestedAdmission.Load(); hook != nil {
+		(*hook)(key)
+	}
 	// A caller that can rerun reattaches to its nested calls after a restart;
 	// any other caller never resumes, so they are abandoned.
 	return startNestedCall(ctx, a.rt, a.call.ID, name, args, key, noProgress, a.tool.Replay != ReplaySafe)
