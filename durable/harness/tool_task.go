@@ -474,7 +474,11 @@ func publishToolProgress(ctx context.Context, rt *TaskRuntime, rep *reported, en
 			// REMINDER: assign output as one string field. Chord then diffs
 			// it into an append, or a trim plus an append for a sliding
 			// tail; replacing the slot would record the whole window.
+			// An absent output is "", as pi's `slot.output ?? ""`.
 			current, _ := slot.Get("output")
+			if current == nil {
+				current = ""
+			}
 			if current != snapshot.Text {
 				if err := slot.Set("output", snapshot.Text); err != nil {
 					return nil, err

@@ -1380,3 +1380,99 @@ func TestToolProgressAnswersAnAbortedToolWithOnlyItsDurableOutputDiscardingBuffe
 		t.Fatalf("result = %q", got)
 	}
 }
+
+// Ported from pi packages/durable/test/harness-callers.test.ts: the two
+// cases without nested calls; the three that probe executeTool come with the
+// nested calls of the port.
+
+func callerTool(name string) *ToolRegistration {
+	return &ToolRegistration{
+		Tool: ai.Tool{Name: name, Description: name, Parameters: objectSchema()},
+		Execute: func(context.Context, map[string]any, ToolExecutionAPI) (ToolExecutionResult, error) {
+			return ToolExecutionResult{Output: ai.ContentList{ai.TextContent{Text: name + " ran"}}}, nil
+		},
+	}
+}
+
+func offeredNames(t *testing.T, conversation *Conversation) []string {
+	t.Helper()
+	agent, err := conversation.Agent(bg)
+	must(t, err)
+	return toolNames(agent.Tools)
+}
+
+func TestCallersAnswerAModelIssuedCallOfAToolItWasNotOfferedAsUnavailable(t *testing.T) {
+	setup := newChatSetup(t)
+	read, bash := callerTool("read"), callerTool("bash")
+	installTool(t, setup.registry, read)
+	installTool(t, setup.registry, bash)
+	setup.faux.SetResponses([]providers.FauxResponseStep{fauxStep(toolCalls(call("bash", nil, "c1"))), fauxText("done")})
+	_, root := openChat(t, memory.New(), setup)
+	must(t, root.Configure(bg, AgentChange{ModelTools: Set(Exactly(read))}))
+	waitFor(t, submit(t, root, inputDraft("go")))
+	result := toolResults(chatEntries(t, root))[0]
+	if !strings.Contains(resultText(result), "Tool bash is not available") {
+		t.Fatalf("result = %q", resultText(result))
+	}
+}
+
+func TestCallersApplyAddToolsToModelToolsTooSoTheModelIsOfferedTheAddedTools(t *testing.T) {
+	setup := newChatSetup(t)
+	extra := callerTool("extra")
+	grow := callerTool("grow")
+	grow.Execute = func(context.Context, map[string]any, ToolExecutionAPI) (ToolExecutionResult, error) {
+		return ToolExecutionResult{Output: ai.ContentList{}, Control: &ToolControl{AddTools: []string{"extra"}}}, nil
+	}
+	installTool(t, setup.registry, extra)
+	installTool(t, setup.registry, grow)
+	setup.faux.SetResponses([]providers.FauxResponseStep{fauxStep(toolCalls(call("grow", nil, "c1"))), fauxText("done")})
+	h, root := openChat(t, memory.New(), setup)
+	must(t, root.Configure(bg, AgentChange{ModelTools: Set(Exactly(grow))}))
+	waitFor(t, submit(t, root, inputDraft("go")))
+	agent, err := h.Snapshot(bg, AgentDoc.Conversation(root.ID))
+	must(t, err)
+	if got := jsonOf(t, agent["modelTools"]); got != `["grow","extra"]` {
+		t.Fatalf("stored modelTools = %s", got)
+	}
+	if got := offeredNames(t, root); !slices.Equal(got, []string{"grow", "extra"}) {
+		t.Fatalf("offered = %v", got)
+	}
+}
+
+// Ported from pi packages/durable/test/harness-host-inputs.test.ts: the two
+// cases that pass Models and settings as Go has them; pi's models function
+// is not ported.
+
+func TestHostInputsStillAcceptAPlainModelsObject(t *testing.T) {
+	setup := newChatSetup(t)
+	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText("plain")})
+	_, root := openChat(t, memory.New(), setup)
+	waitFor(t, submit(t, root, inputDraft("one")))
+	entries := chatEntries(t, root)
+	if got := textOf(entries[len(entries)-1]); got != "plain" {
+		t.Fatalf("answer = %q", got)
+	}
+}
+
+func TestHostInputsGenerationReadsTheCurrentReturnValueOfASettingsFunction(t *testing.T) {
+	setup := newChatSetup(t)
+	var mu sync.Mutex
+	var timeouts []int
+	reply := func(_ context.Context, _ ai.TranscriptContext, opts *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+		mu.Lock()
+		timeouts = append(timeouts, opts.TimeoutMs)
+		mu.Unlock()
+		return fauxAnswer("ok")
+	}
+	setup.faux.SetResponses([]providers.FauxResponseStep{reply, reply})
+	setup.setSettings(func(s *HarnessSettings) { s.Stream = ConversationStreamOptions{TimeoutMs: ptr(1000)} })
+	_, root := openChat(t, memory.New(), setup)
+	waitFor(t, submit(t, root, inputDraft("one")))
+	setup.setSettings(func(s *HarnessSettings) { s.Stream = ConversationStreamOptions{TimeoutMs: ptr(2000)} })
+	waitFor(t, submit(t, root, inputDraft("two")))
+	mu.Lock()
+	defer mu.Unlock()
+	if !slices.Equal(timeouts, []int{1000, 2000}) {
+		t.Fatalf("timeouts = %v", timeouts)
+	}
+}

@@ -289,8 +289,12 @@ func finishToolRound(ctx context.Context, rt *TaskRuntime, assistant durable.Ent
 		if run, err := liveRun(liveDoc); err != nil {
 			return nil, err
 		} else if run != nil && run.TaskID == rt.TaskID && len(placed.users) > 0 {
-			run.Inputs = append(run.Inputs, placed.users...)
-			if err := setDraftField(liveDoc, "run", run); err != nil {
+			// Appended in place, as pi's `live.run.inputs.push(...users)`.
+			items := make([]any, len(placed.users))
+			for i, id := range placed.users {
+				items[i] = float64(id)
+			}
+			if _, err := liveDoc.At("run").At("inputs").Push(items...); err != nil {
 				return nil, err
 			}
 		}

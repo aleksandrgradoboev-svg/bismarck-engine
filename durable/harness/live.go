@@ -190,8 +190,8 @@ func handOver(live *delta.Draft, from, to durable.TaskID) error {
 	if err != nil || run == nil || run.TaskID != from {
 		return err
 	}
-	run.TaskID = to
-	return setDraftField(live, "run", run)
+	// One field write, as pi's `live.run.taskId = to`.
+	return live.At("run").Set("taskId", float64(to))
 }
 
 // endRun ends the run owned by taskID: it settles each of its inputs and
