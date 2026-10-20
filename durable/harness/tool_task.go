@@ -51,6 +51,23 @@ type ToolTaskInput struct {
 	Progress *bool `json:"progress,omitempty"`
 }
 
+// MarshalJSON writes a nested call's call as pi stores it: a tool call
+// block, with its "type".
+func (in ToolTaskInput) MarshalJSON() ([]byte, error) {
+	type plain ToolTaskInput
+	if in.Call == nil {
+		return json.Marshal(plain(in))
+	}
+	block, err := json.Marshal(ai.ContentList{*in.Call})
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(struct {
+		plain
+		Call json.RawMessage `json:"call"`
+	}{plain(in), block[1 : len(block)-1]})
+}
+
 // Tool task phases.
 const (
 	toolPhaseCall    = "call"
