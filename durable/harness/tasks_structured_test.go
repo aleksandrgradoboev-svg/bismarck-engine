@@ -973,8 +973,11 @@ func TestStructuredRejectsACycleOfAHoldAndTwoWaitsThatEachLookReasonable(t *test
 			return toResume(tx, durable.TaskRecord{})
 		})
 	}})
-	// The reviewer waits for the orchestrator's result.
+	// The reviewer waits for the orchestrator's result. It records its own ID:
+	// the worker reads it once the reviewer waits, which may be before start
+	// returns it to the test.
 	n.script("reviewer", behavior{run: func(ctx context.Context, rt *TaskRuntime) error {
+		tasks.set("reviewer", rt.TaskID)
 		err := rt.Commit(ctx, waitOn([]durable.TaskID{tasks.get("orchestrator")}, durable.JoinAllSettled, 1))
 		reviewerWaits.close()
 		return err
