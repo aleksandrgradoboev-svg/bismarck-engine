@@ -749,9 +749,12 @@ func TestNestedToolsAbortEveryLeftRunningNestedCallBeforeWaitingForAny(t *testin
 		return ToolExecutionResult{}, errors.New("aborted")
 	}))
 	installTool(t, setup.registry, nestedTool("batch", func(ctx context.Context, _ map[string]any, api ToolExecutionAPI) (ToolExecutionResult, error) {
+		// Admitted in call order, as pi's synchronous admissions are, so A's
+		// task precedes B's and a cleanup aborting one at a time would wait
+		// on A forever.
 		go func() { _, _ = api.ExecuteTool(ctx, "a", map[string]any{}, NestedCallOptions{Key: "a"}) }()
-		go func() { _, _ = api.ExecuteTool(ctx, "b", map[string]any{}, NestedCallOptions{Key: "b"}) }()
 		<-startedA
+		go func() { _, _ = api.ExecuteTool(ctx, "b", map[string]any{}, NestedCallOptions{Key: "b"}) }()
 		<-startedB
 		return ToolExecutionResult{Output: ai.ContentList{}}, nil
 	}))
