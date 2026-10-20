@@ -625,6 +625,38 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    rerun as `{}`, a call a sequential round never started ends with its result entry, scalar
    details compare by value, and the JSON of an output change. Sabotage 18 of 18.
 
+   **Durable slice 2c-1, nested tool calls** (snapshot `d2e7d8b7`; `tool.ts`, the nested slots of
+   `live.ts`). `ToolExecutionAPI.ExecuteTool` runs a tool among those the call may call as a nested
+   call in its own tool task, owned by the caller; one commit creates the task, its slot in
+   `pi.live` `nestedTools` and its `NestedCallDoc` member (a task-scoped family of the caller, keyed
+   by the call's key or position); a key already made returns that call when it names the same tool
+   and arguments, compared without regard to key order. The first admission of an attempt commits the
+   `pi.tool.madeNestedCalls` memo. A nested call settles into its caller's document, records its
+   usage, and leaves a summary in its done slot; every settling call first aborts the nested calls it
+   left running, all marked before any is awaited, and removes the slots below it. Programs get
+   structured output: a schema tool's validated value, else the tool's bounded output (one text as a
+   string, one image as itself, nothing as `""`, else the list); broken structured output is an error
+   result for them and only a report for the model's calls; a schema tool's error text becomes a
+   `tool_error` diagnostic. Forms: `NestedToolExecutionResult` carries its structured output and
+   details as `json.RawMessage`, decoded by the program into its own type, so a stored null is
+   `null`; `NestedToolSlot` and `ToolSlot` embed `SlotProgress`. A nested call's input stores its call
+   as pi does, a tool call block with its `"type"` (`ai.ToolCall` alone has none). Cancelling the
+   caller's context stops only its wait. `sliceUTF16` cuts the summary's error text in UTF-16 units,
+   leaving a surrogate pair whole. Tests: `harness-structured-output` without the bash case (stage 5)
+   and without the events half of the stored-result case, the three `harness-callers` cases that probe
+   `executeTool`, and `harness-nested-tools` without the three cases that read nested calls' tool
+   events (432, 861, 968) and the event halves of three others: those come with 2c-2, as does
+   `harness-nested-tools-restart`. Adapted: values read back from a document list their keys in Go's
+   order, so JSON compares by meaning; an empty explicit key is the call's position, as Go has no
+   undefined key; a repair drops a property instead of setting it undefined; goroutines admit nested
+   calls in no fixed order where pi's admissions are synchronous, so the abort-order case admits its
+   two calls in sequence, and the admission-during-return case holds its admission at
+   `beforeNestedAdmission`, a hook only tests set. Tests whose tools wait on the test open their
+   latches at cleanup, so a failure ends instead of hanging Close. Beyond pi: a call made after its
+   caller settled is refused. Sabotage 26 of 28: `abandonOnRestart` comes with the restart cases of
+   2c-2; unchecked, as in pi: removing nested slots transitively, which matters only when a nested
+   call left its own children's slots behind.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
