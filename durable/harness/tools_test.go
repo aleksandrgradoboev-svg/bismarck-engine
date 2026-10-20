@@ -1439,9 +1439,88 @@ func TestCallersApplyAddToolsToModelToolsTooSoTheModelIsOfferedTheAddedTools(t *
 	}
 }
 
-// Ported from pi packages/durable/test/harness-host-inputs.test.ts: the two
-// cases that pass Models and settings as Go has them; pi's models function
-// is not ported.
+// Ported from pi packages/durable/test/harness-host-inputs.test.ts; pi's
+// models function is Options.ModelsFunc.
+
+// switchingModels is a ModelsFunc whose return value a test swaps.
+type switchingModels struct {
+	mu      sync.Mutex
+	current ai.Models
+}
+
+func (s *switchingModels) get() ai.Models {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.current
+}
+
+func (s *switchingModels) set(models ai.Models) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.current = models
+}
+
+// answering makes setup's faux answer every request with text.
+func answering(setup *chatSetup, text string) {
+	steps := make([]providers.FauxResponseStep, 10)
+	for i := range steps {
+		steps[i] = fauxText(text)
+	}
+	setup.faux.SetResponses(steps)
+}
+
+func TestHostInputsGenerationUsesTheCurrentReturnValueOfAModelsFunctionAtEachRequest(t *testing.T) {
+	setup := newChatSetup(t)
+	other := newChatSetup(t)
+	answering(setup, "first")
+	answering(other, "second")
+	models := &switchingModels{current: setup.models}
+	setup.modelsFunc = models.get
+	_, root := openChat(t, memory.New(), setup)
+	waitFor(t, submit(t, root, inputDraft("one")))
+	if got := textOf(lastEntry(t, root)); got != "first" {
+		t.Fatalf("first answer = %q", got)
+	}
+	models.set(other.models)
+	waitFor(t, submit(t, root, inputDraft("two")))
+	if got := textOf(lastEntry(t, root)); got != "second" {
+		t.Fatalf("second answer = %q", got)
+	}
+}
+
+// otherModels is the same model access under another identity.
+type otherModels struct{ ai.Models }
+
+func TestHostInputsToolsReadTheCurrentModelsAtEachAccessOfAPIModels(t *testing.T) {
+	setup := newChatSetup(t)
+	first := setup.models
+	second := &otherModels{first}
+	models := &switchingModels{current: first}
+	setup.modelsFunc = models.get
+	var seen []ai.Models
+	installTool(t, setup.registry, echoTool("probe", func(_ context.Context, _ map[string]any, api ToolExecutionAPI) (ToolExecutionResult, error) {
+		seen = append(seen, api.Models())
+		models.set(second)
+		seen = append(seen, api.Models())
+		return ToolExecutionResult{Output: ai.ContentList{}}, nil
+	}))
+	_, root, _, status := runChat(t, setup, []providers.FauxResponseStep{fauxStep(toolCalls(call("probe", nil, "call-1"))), fauxText("done")}, nil)
+	if status != durable.SubmissionDone {
+		t.Fatalf("status = %s", status)
+	}
+	if got := textOf(lastEntry(t, root)); got != "done" {
+		t.Fatalf("answer = %q", got)
+	}
+	if len(seen) != 2 || seen[0] != first || seen[1] != ai.Models(second) {
+		t.Fatalf("models seen = %v, want first then second", seen)
+	}
+}
+
+func lastEntry(t *testing.T, root *Conversation) durable.EntryRecord {
+	t.Helper()
+	entries := chatEntries(t, root)
+	return entries[len(entries)-1]
+}
 
 func TestHostInputsStillAcceptAPlainModelsObject(t *testing.T) {
 	setup := newChatSetup(t)

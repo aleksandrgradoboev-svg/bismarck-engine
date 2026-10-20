@@ -574,8 +574,10 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    `run.inputs`; a slot's first progress commit wrote `output: ""` when nothing was output (pi's
    `slot.output ?? ""`). Tests: `harness-tools` without the two coding-tools cases (37; stage 5),
    the two `harness-callers` cases without nested calls (the three that probe `executeTool` come
-   with 2c), `harness-host-inputs` with Models and settings as Go has them (2 of 4; pi's models
-   function is not ported), the tool cases of `harness-live-deltas` (9). Adapted: a parallel
+   with 2c), `harness-host-inputs` (4), the tool cases of `harness-live-deltas` (9). pi's
+   `models: Models | (() => Models)` is two options: `Models` and `ModelsFunc`, which wins when set and
+   is read at every access (each request, each `Models()` of a runtime or tool API), as pi's
+   `currentModels`; sabotage of it 3 of 3. Adapted: a parallel
    round's starts are checked as a set, since goroutines start in any order; explicit null details
    are `json.RawMessage("null")`, as Go has no undefined, and `ai.ToolResultMessage` then omits them;
    the order in which `Details` calls settle is checked per call; the undefined-control-keys case

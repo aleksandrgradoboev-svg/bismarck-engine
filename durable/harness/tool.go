@@ -100,7 +100,7 @@ type ToolExecutionAPI interface {
 	// Agent is the calling conversation's agent, as the tool task's phase
 	// resolved it.
 	Agent(ctx context.Context) (*Agent, error)
-	// Models is the Harness model access.
+	// Models is the Harness model access, read at each call.
 	Models() ai.Models
 	// Env is built by Options.Env for this call; nil without an
 	// environment.

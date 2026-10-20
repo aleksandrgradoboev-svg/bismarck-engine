@@ -35,7 +35,8 @@ const (
 type schedulerOptions struct {
 	session  *durable.Session
 	registry RegistryReader
-	models   ai.Models
+	// models is the host's current model access, read at each access.
+	models func() ai.Models
 	// agent resolves a conversation's agent against a snapshot.
 	agent    func(ctx context.Context, id durable.ConversationID, snapshot *RegistrySnapshot) (*Agent, error)
 	settings func() Settings
