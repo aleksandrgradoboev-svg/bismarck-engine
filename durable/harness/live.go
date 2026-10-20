@@ -457,9 +457,9 @@ func recordUsage(tx *durable.Tx, conversationID durable.ConversationID, bucket, 
 // settleSchedulerOutcome is the Harness cleanup for a terminal outcome the
 // scheduler writes itself (faulted or orphaned): a run task ends its run; a
 // tool task's slot is marked done without an entry, and context derivation
-// synthesizes the missing result; a compaction task's status is removed and
-// its failure recorded. Other kinds are ignored, so it never creates pi.live
-// elsewhere.
+// synthesizes the missing result, and the nested slots below it are removed;
+// a compaction task's status is removed and its failure recorded. Other kinds
+// are ignored, so it never creates pi.live elsewhere.
 // REMINDER: a committed generation partial becomes an aborted assistant entry
 // here, exactly as in the generation abort handler, so the transcript keeps
 // what the model produced and pi.usage counts its spend.
@@ -470,9 +470,12 @@ func settleSchedulerOutcome(tx *durable.Tx, record durable.TaskRecord, outcome d
 			return err
 		}
 		if slot := toolSlotDraft(live, record.ID); slot != nil {
-			return finishSlot(slot)
+			if err := finishSlot(slot); err != nil {
+				return err
+			}
 		}
-		return nil
+		// The nested calls it made settle with it.
+		return removeNestedSlots(live, record.ID)
 	}
 	if record.Kind == compactionKind {
 		live, err := liveDraft(tx, record.ConversationID)

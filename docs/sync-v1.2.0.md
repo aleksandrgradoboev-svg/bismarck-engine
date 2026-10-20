@@ -677,6 +677,11 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    calls end in commits of their own), a nested slot created done, and dropping another
    conversation's nested results.
 
+   **Fix of slice 2c-1: a faulted or orphaned tool settles its nested slots.** pi's
+   `settleSchedulerOutcome` removes the nested slots below a tool task the scheduler faults or
+   orphans; the port marked only the tool's own slot done, so its nested calls' slots outlived it in
+   `pi.live`. Found reading pi for slice 3a. A case for both outcomes fails on the old code.
+
    **Durable slice 3a, the compaction task** (snapshot `d2e7d8b7`; `compaction.ts`, the compaction
    parts of `live.ts`, `events.ts` and `harness.ts`, and pi-ai `utils/overflow.ts`). The
    `pi.compaction` task (select, summarize, retry, abort), range selection, serialization, placing a
