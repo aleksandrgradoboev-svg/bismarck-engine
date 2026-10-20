@@ -553,6 +553,39 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    tools-manager's `WINDIR` fallback (not ported). Added beyond pi: a `SystemRoot` that is not
    drive-absolute matches nothing, not even its own relative join. Sabotage 11 of 11.
 
+   **Durable slice 2a, the tool round** (snapshot `d2e7d8b7`; `tool.ts`, the tools phase of
+   `generation.ts`, the slots of `live.ts`). The built-in `pi.tool` task, version 2 (a version 1
+   record migrates to a model-issued call): its call phase resolves the tool among the tools the
+   model is offered, repairs and validates the arguments, runs `BeforeTool` (the first block wins;
+   an error blocks with its text), validates again, records intent, executes, runs `AfterTool`, and
+   settles a `pi.tool-result` entry; its abort settles from the slot's durable output. The
+   generation's tools phase starts the round in the tool-calling answer's commit (an unoffered call
+   is answered there; a sequential round starts one call at a time), waits for the tool tasks it
+   owns, and applies their controls (`addTools`, `terminate`, the last `handoff`); aborting it answers
+   the calls never started. `ToolExecutionAPI` is an interface, so a wrapper embeds it and replaces
+   members, as pi's wrappers spread the api; `Output` takes bytes and an `output.Skip` (an
+   environment's `OutputSkip` converts field by field); `Details` blocks until a progress commit
+   holds the value. Running output, details and diagnostics commit to the slot field by field,
+   paced by the Harness clock: `chord/output` exports `Clock` and `NewProgressWithClock`. Structured
+   output of a model-issued call is checked with `ai.Schema.ValidationErrors` and only reported.
+   The execute phase (recovery after intent), nested calls and the tool events come with 2b and 2c
+   and fault as "not ported yet" until then. Fixed on the way, in this slice's own code: `handOver`
+   and the run's added inputs wrote `run` whole instead of `run.taskId` and an append to
+   `run.inputs`; a slot's first progress commit wrote `output: ""` when nothing was output (pi's
+   `slot.output ?? ""`). Tests: `harness-tools` without the two coding-tools cases (37; stage 5),
+   the two `harness-callers` cases without nested calls (the three that probe `executeTool` come
+   with 2c), `harness-host-inputs` with Models and settings as Go has them (2 of 4; pi's models
+   function is not ported), the tool cases of `harness-live-deltas` (9). Adapted: a parallel
+   round's starts are checked as a set, since goroutines start in any order; explicit null details
+   are `json.RawMessage("null")`, as Go has no undefined, and `ai.ToolResultMessage` then omits them;
+   the order in which `Details` calls settle is checked per call; the undefined-control-keys case
+   keeps its `addTools` half; the environment case uses temporary directories instead of `/tmp` and
+   `/`. Sabotage 28 of 34. Waiting: the tool resolved among the callable tools for a nested call (2c),
+   `AbandonOnRestart` for a non-replay-safe tool's child tasks (2c), and the aborted results of calls
+   never started (2b). Equivalent: controls of a call that did not complete (no reachable result
+   carries them). Unchecked, as in pi: an API call after the call settled, and rewriting an equal
+   `modelTools`.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
