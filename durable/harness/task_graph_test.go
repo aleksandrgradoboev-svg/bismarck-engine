@@ -203,8 +203,13 @@ func TestTaskGraphFollowsEveryLiveTaskThroughItsStatusesOwnerEdgesAndOwnedConver
 
 	close(child)
 	// The parent completes while the late child lives: its outcome is held.
+	// The scheduler starts the late child on its own pass, possibly after the
+	// parent completes; the graph is compared with a rebuild only once it
+	// runs, as nothing commits after that until late is closed.
 	eventually(t, func() bool {
-		return decodeGraph(t, graph.Value()).Tasks[parent].State.Status == durable.TaskCompleting
+		tasks := decodeGraph(t, graph.Value()).Tasks
+		late, ok := tasks[childID()]
+		return tasks[parent].State.Status == durable.TaskCompleting && ok && late.State.Status == durable.TaskRunning
 	})
 	tasks := decodeGraph(t, graph.Value()).Tasks
 	if got := tasks[parent].State; !reflect.DeepEqual(got, durable.TaskGraphState{Status: durable.TaskCompleting, Outcome: durable.OutcomeCompleted}) {
