@@ -711,8 +711,8 @@ type HarnessSettings struct {
 	// it; default AfterFailedRunKeep.
 	AfterFailedRun AfterFailedRun
 	// RestartLimit is how many restarts in a row without progress park a
-	// task (spec §5.4); default DefaultRestartLimit, negative never parks
-	// (pi's Infinity).
+	// task (spec §5.4); default DefaultRestartLimit, also for 0 (pi takes
+	// the default below one restart); negative never parks (pi's Infinity).
 	RestartLimit *int
 }
 
@@ -778,6 +778,10 @@ func resolveSettings(s HarnessSettings) Settings {
 	if s.DocumentRetention != nil && *s.DocumentRetention >= 0 {
 		documentRetention = *s.DocumentRetention
 	}
+	restartLimit := DefaultRestartLimit
+	if s.RestartLimit != nil && *s.RestartLimit != 0 {
+		restartLimit = *s.RestartLimit
+	}
 	afterFailedRun := s.AfterFailedRun
 	if afterFailedRun == "" {
 		afterFailedRun = AfterFailedRunKeep
@@ -807,6 +811,6 @@ func resolveSettings(s HarnessSettings) Settings {
 		ContextRetention:  pick(s.ContextRetention, defaultRetention),
 		DocumentRetention: documentRetention,
 		AfterFailedRun:    afterFailedRun,
-		RestartLimit:      pickInt(s.RestartLimit, DefaultRestartLimit),
+		RestartLimit:      restartLimit,
 	}
 }

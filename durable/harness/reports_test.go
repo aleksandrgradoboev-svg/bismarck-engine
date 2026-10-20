@@ -6,11 +6,49 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/env"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/storage/memory"
 )
 
-// pi test/harness-reports.test.ts. Its third case, sections, hooks and the
-// environment builder inside pi.generation, comes with generation.
+// pi test/harness-reports.test.ts.
+
+func TestReportsNameTheExtensionOfAFailingSectionOrHookAndTellThemFromAFailingEnvironmentBuilder(t *testing.T) {
+	setup := newChatSetup(t)
+	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText("answer")})
+	must(t, setup.registry.Install(&Extension{Name: "sections", Sections: []*PromptSection{
+		Section("broken", func(context.Context, PromptInput) (string, bool, error) { return "", false, errors.New("section") }),
+	}}))
+	must(t, setup.registry.Install(&Extension{Name: "hooks", Hooks: []HookRegistration{
+		Hook(GenerationTask, &GenerationHooks{AfterResponse: func(context.Context, ai.AssistantMessage, *TaskRuntime) error {
+			return errors.New("hook")
+		}}),
+	}}))
+	options := setup.options()
+	options.Env = func(context.Context, EnvTarget) (env.ExecutionEnv, error) { return nil, errors.New("env") }
+	h, err := Open(bg, memory.New(), options)
+	must(t, err)
+	t.Cleanup(func() { _ = h.Close(bg) })
+	root, err := h.Root(bg, &AgentChange{Model: Set(ModelRef{Provider: "faux", ModelID: "faux-1"})}, nil)
+	must(t, err)
+	waitFor(t, submit(t, root, inputDraft("hi")))
+	for message, want := range map[string]durable.ReportInfo{
+		"env":     {Type: durable.ReportHostError, Callback: durable.CallbackEnv},
+		"section": {Type: durable.ReportExtensionError, Extension: "sections"},
+		"hook":    {Type: durable.ReportExtensionError, Extension: "hooks"},
+	} {
+		info, ok := setup.reports.infoOf(message)
+		if !ok || info.Task == nil || info.Task.Kind != "pi.generation" || info.Task.ConversationID != root.ID {
+			t.Fatalf("report %q = %+v (found %v), want it about the generation of %d", message, info, ok, root.ID)
+		}
+		info.Task = nil
+		if info != want {
+			t.Fatalf("report %q = %+v, want %+v", message, info, want)
+		}
+	}
+}
 
 func TestReportsSayWhichTaskReportedAFailureOrFaulted(t *testing.T) {
 	faulty := oneStep(t, "test.faulty", func(_ context.Context, _ *stepTask, rt *TaskRuntime) error {

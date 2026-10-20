@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/delta"
@@ -36,8 +37,8 @@ const (
 // {attempt, compacted?, model, thinkingLevel, streamOptions, cutoff}; retry
 // {attempt, compacted?, until}; poll {attempt, compacted?, model, cutoff,
 // handle, pollAt}; tools {assistant, tools, pending}.
-// The retry, poll and tools phases and compaction come with their stages of
-// the port; a generation reaching one faults ("not ported yet").
+// The tools phase and compaction come with their stages of the port; a
+// generation reaching one faults ("not ported yet").
 type GenerationCheckpoint struct {
 	Phase   string `json:"phase"`
 	Attempt int    `json:"attempt,omitempty"`
@@ -110,8 +111,8 @@ func defineGeneration() Task {
 		Phases: map[string]func(ctx context.Context, task *generationTask, rt *TaskRuntime) error{
 			phasePrepare: prepareGeneration,
 			phaseRequest: requestGeneration,
-			phaseRetry:   func(context.Context, *generationTask, *TaskRuntime) error { return notPorted("the retry phase") },
-			phasePoll:    func(context.Context, *generationTask, *TaskRuntime) error { return notPorted("the poll phase") },
+			phaseRetry:   retryGeneration,
+			phasePoll:    pollGeneration,
 			phaseTools:   func(context.Context, *generationTask, *TaskRuntime) error { return notPorted("the tools phase") },
 		},
 		Abort: abortGeneration,
@@ -276,6 +277,74 @@ func requestGeneration(ctx context.Context, task *generationTask, rt *TaskRuntim
 	return classify(ctx, rt, checkpoint, message)
 }
 
+// defaultPollAfter is the wait before polling a deferred response whose
+// provider did not say.
+const defaultPollAfter = 5000 // milliseconds
+
+// retryGeneration runs after the backoff's sleep; a run before until (an
+// early wake, or a record of an earlier version) sleeps again.
+func retryGeneration(ctx context.Context, task *generationTask, rt *TaskRuntime) error {
+	checkpoint := task.Checkpoint
+	if checkpoint.Until == nil {
+		return errors.New("Generation retry checkpoint lacks its deadline")
+	}
+	now, err := rt.Now()
+	if err != nil {
+		return err
+	}
+	if *checkpoint.Until > now.UnixMilli() {
+		return rt.SleepUntil(ctx, time.UnixMilli(*checkpoint.Until), checkpoint)
+	}
+	return rt.Commit(ctx, func(tx *durable.Tx, _ durable.TaskRecord) (*durable.TaskState, error) {
+		live, err := liveDraft(tx, rt.ConversationID)
+		if err != nil {
+			return nil, err
+		}
+		if err := setDraftField(live, "generation", LiveGeneration{Attempt: checkpoint.Attempt + 1}); err != nil {
+			return nil, err
+		}
+		return Next(GenerationCheckpoint{Phase: phasePrepare, Attempt: checkpoint.Attempt + 1, Compacted: checkpoint.Compacted})
+	})
+}
+
+// pollGeneration runs after the sleep until pollAt; a run before it (an early
+// wake, or a record of an earlier version) sleeps again.
+func pollGeneration(ctx context.Context, task *generationTask, rt *TaskRuntime) error {
+	checkpoint := task.Checkpoint
+	if checkpoint.PollAt == nil || checkpoint.Model == nil || checkpoint.Cutoff == nil || checkpoint.Handle == nil {
+		return errors.New("Generation poll checkpoint lacks its deadline, model, cutoff, or handle")
+	}
+	now, err := rt.Now()
+	if err != nil {
+		return err
+	}
+	if *checkpoint.PollAt > now.UnixMilli() {
+		return rt.SleepUntil(ctx, time.UnixMilli(*checkpoint.PollAt), checkpoint)
+	}
+	model := resolveModel(rt, *checkpoint.Model)
+	if model == nil {
+		return failNoModel(ctx, rt, checkpoint.Model)
+	}
+	options := &ai.ModelsDeferredFetchOptions{}
+	options.TelemetryContext = telemetry.SpanFrom(ctx)
+	message := rt.Models().FetchDeferred(ctx, model, *checkpoint.Handle, options)
+	if message == nil {
+		return errors.New("Deferred fetch ended without a message")
+	}
+	return classify(ctx, rt, checkpoint, message)
+}
+
+// retryDelay is the backoff before the attempt after attempt.
+func retryDelay(policy RetryPolicy, attempt int) int64 {
+	maxDelay := int(policy.MaxAgentDelay.Milliseconds())
+	return int64(ai.RetryDelayMs(ai.RetryPolicy{
+		Enabled:         policy.Enabled,
+		MaxRetries:      policy.MaxRetries,
+		BaseDelayMs:     int(policy.BaseDelay.Milliseconds()),
+		MaxAgentDelayMs: &maxDelay,
+	}, attempt))
+}
+
 // streamOptions builds the request options of a generation.
 func streamOptions(stored *ConversationStreamOptions, sessionID string, thinking ai.ModelThinkingLevel) *ai.ModelsSimpleStreamOptions {
 	options := &ai.ModelsSimpleStreamOptions{}
@@ -417,7 +486,38 @@ func classify(ctx context.Context, rt *TaskRuntime, request GenerationCheckpoint
 		return context.Cause(ctx)
 	}
 	if message.StopReason == ai.StopDeferred && message.Deferred != nil {
-		return notPorted("polling a deferred response")
+		handle := *message.Deferred
+		now, err := rt.Now()
+		if err != nil {
+			return err
+		}
+		after := handle.PollAfterMs
+		if after == 0 {
+			after = defaultPollAfter
+		}
+		pollAt := now.UnixMilli() + after
+		// A still deferred result of a poll polls strictly later.
+		if request.PollAt != nil && *request.PollAt+1 > pollAt {
+			pollAt = *request.PollAt + 1
+		}
+		return rt.Commit(ctx, func(tx *durable.Tx, _ durable.TaskRecord) (*durable.TaskState, error) {
+			live, err := liveDraft(tx, rt.ConversationID)
+			if err != nil {
+				return nil, err
+			}
+			if err := setDraftField(live, "generation", LiveGeneration{Attempt: request.Attempt, Deferred: &LiveDeferred{PollAt: pollAt}}); err != nil {
+				return nil, err
+			}
+			return Sleep(time.UnixMilli(pollAt), GenerationCheckpoint{
+				Phase:     phasePoll,
+				Attempt:   request.Attempt,
+				Compacted: request.Compacted,
+				Model:     request.Model,
+				Cutoff:    request.Cutoff,
+				Handle:    &handle,
+				PollAt:    &pollAt,
+			})
+		})
 	}
 	if err := EachHook(ctx, rt, func(hooks *GenerationHooks) error {
 		if hooks.AfterResponse == nil {
@@ -452,18 +552,27 @@ func classify(ctx context.Context, rt *TaskRuntime, request GenerationCheckpoint
 	policy := settings.Retry
 	// An overflow is never retried: only a compaction can make the next
 	// request fit.
-	if message.StopReason == ai.StopError && !overflow && ai.IsRetryableAssistantError(*message) && policy.Enabled && request.Attempt <= policy.MaxRetries {
-		return notPorted("retrying a request")
+	retry := message.StopReason == ai.StopError && !overflow && ai.IsRetryableAssistantError(*message) && policy.Enabled && request.Attempt <= policy.MaxRetries
+	var until int64
+	if retry {
+		now, err := rt.Now()
+		if err != nil {
+			return err
+		}
+		until = now.UnixMilli() + retryDelay(policy, request.Attempt)
 	}
 	text := message.ErrorMessage
 	if text == "" {
 		text = fmt.Sprintf("Model response ended with stop reason %s", message.StopReason)
 	}
 	return rt.Commit(ctx, func(tx *durable.Tx, _ durable.TaskRecord) (*durable.TaskState, error) {
-		// Read before the first table write.
-		failure, err := prepareFailure(tx, rt)
-		if err != nil {
-			return nil, err
+		// Read before the first table write; only a failure uses it.
+		var failure failure
+		if !retry {
+			var err error
+			if failure, err = prepareFailure(tx, rt); err != nil {
+				return nil, err
+			}
 		}
 		live, err := liveDraft(tx, rt.ConversationID)
 		if err != nil {
@@ -471,6 +580,13 @@ func classify(ctx context.Context, rt *TaskRuntime, request GenerationCheckpoint
 		}
 		if _, err := appendAssistant(tx, rt.ConversationID, *message); err != nil {
 			return nil, err
+		}
+		if retry {
+			generation := LiveGeneration{Attempt: request.Attempt, Retry: &LiveRetry{At: until, Error: message.ErrorMessage}}
+			if err := setDraftField(live, "generation", generation); err != nil {
+				return nil, err
+			}
+			return Sleep(time.UnixMilli(until), GenerationCheckpoint{Phase: phaseRetry, Attempt: request.Attempt, Compacted: request.Compacted, Until: &until})
 		}
 		detail, err := json.Marshal(text)
 		if err != nil {
@@ -556,8 +672,20 @@ func answer(ctx context.Context, rt *TaskRuntime, message ai.AssistantMessage) e
 // becomes an aborted assistant entry, and the run's inputs settle unanswered
 // "aborted".
 func abortGeneration(ctx context.Context, task *generationTask, rt *TaskRuntime) error {
-	if task.Checkpoint.Phase == phasePoll || task.Checkpoint.Phase == phaseTools {
-		return notPorted("aborting the " + task.Checkpoint.Phase + " phase")
+	checkpoint := task.Checkpoint
+	if checkpoint.Phase == phaseTools {
+		return notPorted("aborting the tools phase")
+	}
+	if checkpoint.Phase == phasePoll && checkpoint.Model != nil && checkpoint.Handle != nil {
+		if model := resolveModel(rt, *checkpoint.Model); model != nil {
+			options := &ai.ModelsDeferredCancelOptions{}
+			options.TelemetryContext = telemetry.SpanFrom(ctx)
+			if err := rt.Models().CancelDeferred(ctx, model, *checkpoint.Handle, options); err != nil {
+				if reportErr := rt.Report(err, ReportFrom{Callback: durable.CallbackModels}); reportErr != nil {
+					return reportErr
+				}
+			}
+		}
 	}
 	return rt.Commit(ctx, func(tx *durable.Tx, _ durable.TaskRecord) (*durable.TaskState, error) {
 		live, err := liveDraft(tx, rt.ConversationID)

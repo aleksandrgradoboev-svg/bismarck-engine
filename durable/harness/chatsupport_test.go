@@ -51,9 +51,19 @@ func newChatSetupWith(t *testing.T, fauxOptions providers.RegisterFauxProviderOp
 		Models: faux.Models,
 		// The faux streams are registered by API; the provider hands each
 		// request to them.
-		API: &ai.ProviderStreams{StreamSimple: func(ctx context.Context, model *ai.Model, req ai.TranscriptContext, opts *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
-			return ai.StreamSimple(ctx, model, ai.Context{Messages: req.Messages}, opts)
-		}},
+		API: &ai.ProviderStreams{
+			StreamSimple: func(ctx context.Context, model *ai.Model, req ai.TranscriptContext, opts *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+				return ai.StreamSimple(ctx, model, ai.Context{Messages: req.Messages}, opts)
+			},
+			FetchDeferred: func(ctx context.Context, model *ai.Model, handle ai.DeferredHandle, opts *ai.DeferredFetchOptions) *ai.AssistantMessageEventStream {
+				api, _ := ai.GetApiProvider(model.Api)
+				return api.FetchDeferred(ctx, model, handle, opts)
+			},
+			CancelDeferred: func(ctx context.Context, model *ai.Model, handle ai.DeferredHandle, opts *ai.DeferredCancelOptions) error {
+				api, _ := ai.GetApiProvider(model.Api)
+				return api.CancelDeferred(ctx, model, handle, opts)
+			},
+		},
 	}))
 	return &chatSetup{faux: faux, models: models, registry: NewRegistry(), reports: &reportLog{}, now: time.Now}
 }
