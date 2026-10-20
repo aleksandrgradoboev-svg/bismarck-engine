@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"slices"
@@ -138,6 +139,31 @@ func applyChanges(message ai.AssistantMessage, changes []MessageChange) ai.Assis
 				block.Thinking += c.Delta
 				next.Content[c.ContentIndex] = block
 			}
+		case ToolCallDeltaChange:
+			block := next.Content[c.ContentIndex].(ai.ToolCall)
+			// The arguments are shared with the message this one came from.
+			var args map[string]any
+			raw, _ := json.Marshal(block.Arguments)
+			_ = json.Unmarshal(raw, &args)
+			block.Arguments = args
+			var target any = args
+			for _, segment := range c.Path[:len(c.Path)-1] {
+				switch s := segment.(type) {
+				case string:
+					target = target.(map[string]any)[s]
+				case int:
+					target = target.([]any)[s]
+				}
+			}
+			switch last := c.Path[len(c.Path)-1].(type) {
+			case string:
+				fields := target.(map[string]any)
+				fields[last] = fields[last].(string) + c.Delta
+			case int:
+				items := target.([]any)
+				items[last] = items[last].(string) + c.Delta
+			}
+			next.Content[c.ContentIndex] = block
 		}
 	}
 	return next
@@ -160,8 +186,8 @@ func TestEventsStreamARunAsLifecycleEventsAndTextDeltasThatRebuildTheAnswer(t *t
 	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText(text)})
 	h, root := openChat(t, memory.New(), setup)
 	stream, log := listen(t, root)
-	if len(stream.Snapshot.Entries) != 0 || len(stream.Snapshot.Inbox) != 0 {
-		t.Fatalf("snapshot = %+v, want no entries and no inbox", stream.Snapshot)
+	if got := jsonOf(t, stream.Snapshot); !strings.HasPrefix(got, `{"type":"snapshot","entries":[],`) || !strings.Contains(got, `"tools":[],"inbox":[],`) {
+		t.Fatalf("snapshot = %s, want no entries, tools or inbox", got)
 	}
 	var mu sync.Mutex
 	var partials []string
