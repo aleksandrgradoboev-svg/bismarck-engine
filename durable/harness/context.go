@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
@@ -77,16 +78,29 @@ func captureContextBounds(ctx context.Context, storage durable.Storage, conversa
 // captured on the Session line, entries derived off it.
 func readContext(ctx context.Context, session *durable.Session, conversationID durable.ConversationID, at *durable.EntryID) (ContextView, error) {
 	var bounds *contextBounds
-	err := session.ReadOnLine(func() error {
+	var view ContextView
+	err := session.ReadOnLineThen(ctx, func() error {
 		var err error
 		bounds, err = captureContextBounds(ctx, session.Storage(), conversationID, at)
+		return err
+	}, func(ctx context.Context) error {
+		if hook := beforeContextDerive.Load(); hook != nil {
+			(*hook)()
+		}
+		var err error
+		view, err = deriveContext(ctx, session.Storage(), conversationID, bounds)
 		return err
 	})
 	if err != nil {
 		return ContextView{}, err
 	}
-	return deriveContext(ctx, session.Storage(), conversationID, bounds)
+	return view, nil
 }
+
+// beforeContextDerive, set only by tests, runs between a context read's
+// bounds, captured on the line, and its derivation off it: a test holds it
+// there while Close seals the line.
+var beforeContextDerive atomic.Pointer[func()]
 
 // deriveContext derives the active transcript and model context of one
 // conversation within captured bounds.
