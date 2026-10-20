@@ -284,7 +284,11 @@ func (c *call) execute(parent context.Context, source string) (harness.ToolExecu
 		if err != nil {
 			return err
 		}
-		if stored, ok := run.Get("result"); ok {
+		if run.Has("result") {
+			stored, err := run.At("result").Snapshot()
+			if err != nil {
+				return err
+			}
 			result, err := restoreResult(stored)
 			done = &result
 			return err
@@ -469,7 +473,11 @@ func storeResult(tx *durable.Tx, taskID durable.TaskID, result harness.ToolExecu
 	if err != nil {
 		return result, false, err
 	}
-	if stored, ok := run.Get("result"); ok {
+	if run.Has("result") {
+		stored, err := run.At("result").Snapshot()
+		if err != nil {
+			return result, false, err
+		}
 		existing, err := restoreResult(stored)
 		return existing, false, err
 	}
