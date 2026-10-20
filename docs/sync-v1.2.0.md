@@ -553,6 +553,12 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    tools-manager's `WINDIR` fallback (not ported). Added beyond pi: a `SystemRoot` that is not
    drive-absolute matches nothing, not even its own relative join. Sabotage 11 of 11.
 
+   **Fix: a cancelled caller of `TaskRuntime.Agent` fails even when the resolution is done**
+   (found by a Windows CI flake of `TestTaskFailsAnAgentWaitWhoseCallerIsCancelled...` on PR #56;
+   ported wrong since stage 4b-1). pi's `awaitWithContext` checks `signal.aborted` first; Go's
+   `select` over a closed `done` and a cancelled context picks either. A probe that resolves first
+   and then waits with a cancelled caller failed 25 of 50 before and 0 of 50 after.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
