@@ -26,6 +26,12 @@ type ContextView struct {
 	Contributions [][]ai.Message
 	// Messages is the model context for the next provider request.
 	Messages []ai.Message
+	// contributionOrigins and messageOrigins say where each message of
+	// Contributions and Messages came from, standing in for the object
+	// identity pi compares; a synthesized result has none. Both are nil in a
+	// view built by hand.
+	contributionOrigins [][]origin
+	messageOrigins      []*origin
 }
 
 // contextBounds are the head marker and newest visible entry that fix one
@@ -140,6 +146,7 @@ func deriveRange(bounds *contextBounds, entries []durable.EntryRecord) ContextVi
 	}
 	active := selectActive(bounds.head, entries)
 	contributions := make([][]ai.Message, len(active))
+	contributionOrigins := make([][]origin, len(active))
 	var all []sourced
 	for i, entry := range active {
 		var edit *durable.ContextEdit
@@ -148,20 +155,28 @@ func deriveRange(bounds *contextBounds, entries []durable.EntryRecord) ContextVi
 		}
 		contributed := contribute(entry, edit)
 		messages := make([]ai.Message, len(contributed))
+		origins := make([]origin, len(contributed))
 		for j, message := range contributed {
 			messages[j] = message.message
+			origins[j] = message.origin
 		}
 		contributions[i] = messages
+		contributionOrigins[i] = origins
 		all = append(all, contributed...)
 	}
 	settled, open := settle(nil, all)
 	ordered := append(settled, orderToolResults(open)...)
 	led := leadWithSystem(ordered, findBaseline(bounds.head, active))
 	messages := make([]ai.Message, len(led))
+	messageOrigins := make([]*origin, len(led))
 	for i, message := range led {
 		messages[i] = message.message
+		if !message.synthetic {
+			o := message.origin
+			messageOrigins[i] = &o
+		}
 	}
-	return ContextView{Head: bounds.head, Entries: active, Contributions: contributions, Messages: messages}
+	return ContextView{Head: bounds.head, Entries: active, Contributions: contributions, Messages: messages, contributionOrigins: contributionOrigins, messageOrigins: messageOrigins}
 }
 
 // findBaseline finds the baseline among entries, oldest first: the system

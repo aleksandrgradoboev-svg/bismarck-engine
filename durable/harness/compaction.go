@@ -522,6 +522,50 @@ func summarizedMessages(view ContextView, cut int) []ai.Message {
 	return out
 }
 
+// estimateContext is the size of a request over view followed by extra (spec
+// §8.3): the usage of the newest assistant appended after the head marker,
+// whose request included the marker, plus estimates of the messages after
+// it; without one, estimates of every message.
+func estimateContext(view ContextView, extra []ai.Message) int {
+	var measured *ai.AssistantMessage
+	var at *origin
+	for index := len(view.Entries) - 1; index >= 0 && measured == nil; index-- {
+		if view.Head != nil && view.Entries[index].ID <= view.Head.ID {
+			continue
+		}
+		contribution := view.Contributions[index]
+		for j := len(contribution) - 1; j >= 0; j-- {
+			if assistant, ok := assistantOf(contribution[j]); ok && ai.CalculateContextTokens(assistant.Usage) > 0 {
+				measured = &assistant
+				if view.contributionOrigins != nil {
+					o := view.contributionOrigins[index][j]
+					at = &o
+				}
+				break
+			}
+		}
+	}
+	from, tokens := 0, 0
+	if measured != nil {
+		tokens = ai.CalculateContextTokens(measured.Usage)
+		// pi's lastIndexOf: the measured message's position in the model
+		// context, or none.
+		for i := len(view.messageOrigins) - 1; i >= 0 && at != nil; i-- {
+			if o := view.messageOrigins[i]; o != nil && *o == *at {
+				from = i + 1
+				break
+			}
+		}
+	}
+	for _, message := range view.Messages[from:] {
+		tokens += ai.EstimateMessageTokens(message)
+	}
+	for _, message := range extra {
+		tokens += ai.EstimateMessageTokens(message)
+	}
+	return tokens
+}
+
 // summaryText is the summary of a clean stop with text and no tool call;
 // false when the message is not a summary.
 func summaryText(message ai.AssistantMessage) (string, bool) {

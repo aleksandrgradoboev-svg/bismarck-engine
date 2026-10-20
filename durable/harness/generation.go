@@ -37,15 +37,18 @@ const (
 // {attempt, compacted?, model, thinkingLevel, streamOptions, cutoff}; retry
 // {attempt, compacted?, until}; poll {attempt, compacted?, model, cutoff,
 // handle, pollAt}; tools {assistant, tools, pending}.
-// The tools phase and compaction come with their stages of the port; a
-// generation reaching one faults ("not ported yet").
 type GenerationCheckpoint struct {
 	Phase   string `json:"phase"`
 	Attempt int    `json:"attempt,omitempty"`
-	// Compacted is the blocking compaction this generation waited for.
+	// Compacted is the blocking compaction this generation waited for; it
+	// starts no other compaction (spec §8.3).
 	Compacted *durable.TaskID `json:"compacted,omitempty"`
-	Overflow  string          `json:"overflow,omitempty"`
-	Threshold bool            `json:"threshold,omitempty"`
+	// Overflow is the error text of the overflow that started Compacted;
+	// checked once when prepare resumes.
+	Overflow string `json:"overflow,omitempty"`
+	// Threshold is set when the blocking threshold started Compacted; its
+	// outcome is checked once when prepare resumes.
+	Threshold bool `json:"threshold,omitempty"`
 	Model     *ModelRef       `json:"model,omitempty"`
 	// ThinkingLevel is the request's; "off" sends no reasoning option.
 	ThinkingLevel ai.ModelThinkingLevel `json:"thinkingLevel,omitempty"`
@@ -78,12 +81,6 @@ type GenerationHooks struct {
 	// AfterTools runs after every tool of a round is terminal, with the
 	// round's result entries in call order.
 	AfterTools func(ctx context.Context, assistant durable.EntryID, results []durable.EntryID, rt *TaskRuntime) error
-}
-
-// notPorted faults a generation that reaches a part of pi's generation whose
-// stage of the port has not arrived.
-func notPorted(what string) error {
-	return fmt.Errorf("Generation: %s is not ported yet", what)
 }
 
 type generationTask = Running[GenerationInput, GenerationCheckpoint]
@@ -131,12 +128,40 @@ func prepareGeneration(ctx context.Context, task *generationTask, rt *TaskRuntim
 		return err
 	}
 	settings := rt.Settings()
-	if agent.Model == nil || resolveModel(rt, *agent.Model) == nil {
+	if agent.Model == nil {
+		return failNoModel(ctx, rt, nil)
+	}
+	resolved := resolveModel(rt, *agent.Model)
+	if resolved == nil {
 		return failNoModel(ctx, rt, agent.Model)
 	}
 	checkpoint := task.Checkpoint
-	if checkpoint.Compacted != nil {
-		return notPorted("compaction")
+	if checkpoint.Compacted != nil && checkpoint.Overflow != "" {
+		outcomes, err := rt.Outcomes(ctx, []durable.TaskID{*checkpoint.Compacted})
+		if err != nil {
+			return err
+		}
+		var result CompactionResult
+		if outcomes[0].Status == durable.OutcomeCompleted {
+			if err := json.Unmarshal(outcomes[0].Result, &result); err != nil {
+				return err
+			}
+		}
+		if result.EntryID == nil {
+			return failModelError(ctx, rt, checkpoint.Overflow)
+		}
+	}
+	// A threshold compaction that found nothing to compact or was declined
+	// leaves a request that may still fit. One that failed left a context it
+	// judged too large: sending it would at best leave no room for the answer.
+	if checkpoint.Compacted != nil && checkpoint.Threshold {
+		outcomes, err := rt.Outcomes(ctx, []durable.TaskID{*checkpoint.Compacted})
+		if err != nil {
+			return err
+		}
+		if outcomes[0].Status != durable.OutcomeCompleted {
+			return failModelError(ctx, rt, compactionFailureText(outcomes[0]))
+		}
 	}
 	view, err := rt.Context(ctx, rt.ConversationID, nil)
 	if err != nil {
@@ -169,8 +194,22 @@ func prepareGeneration(ctx context.Context, task *generationTask, rt *TaskRuntim
 		return err
 	}
 	entries := planSystemEntries(view, desired, offeredAITools(agent.Tools), now.UnixMilli())
-	// Threshold compaction (spec §8.3) joins with the compaction stage of the
-	// port; until then a request is always sent as prepared.
+	threshold := ""
+	if checkpoint.Compacted == nil {
+		threshold = thresholdCompaction(view, entries, resolved.ContextWindow, compactionPolicy(settings, *agent.Model))
+	}
+	if threshold == "blocking" {
+		// Compact first and prepare again; the transcript is unchanged until
+		// the compaction appends.
+		return rt.Commit(ctx, func(tx *durable.Tx, _ durable.TaskRecord) (*durable.TaskState, error) {
+			owner := rt.TaskID
+			child, err := createCompaction(tx, rt.ConversationID, CompactionInput{Reason: CompactionThreshold}, &owner)
+			if err != nil {
+				return nil, err
+			}
+			return Wait([]durable.TaskID{child}, durable.JoinAllSettled, GenerationCheckpoint{Phase: phasePrepare, Attempt: checkpoint.Attempt, Compacted: &child, Threshold: true})
+		})
+	}
 	return rt.Commit(ctx, func(tx *durable.Tx, _ durable.TaskRecord) (*durable.TaskState, error) {
 		page, err := tx.ScanEntries(durable.EntryQuery{ConversationID: rt.ConversationID}, 1, nil)
 		if err != nil {
@@ -192,11 +231,25 @@ func prepareGeneration(ctx context.Context, task *generationTask, rt *TaskRuntim
 		if cutoff == nil {
 			return nil, fmt.Errorf("Conversation %d has no entries to send", rt.ConversationID)
 		}
+		// Checked in this commit, so a compaction admitted during preparation
+		// counts.
+		if threshold == "background" {
+			live, err := liveDraft(tx, rt.ConversationID)
+			if err != nil {
+				return nil, err
+			}
+			if !live.Has("compactions") {
+				if _, err := createCompaction(tx, rt.ConversationID, CompactionInput{Reason: CompactionThreshold}, nil); err != nil {
+					return nil, err
+				}
+			}
+		}
 		stream := settings.Stream
 		model := *agent.Model
 		return Next(GenerationCheckpoint{
 			Phase:         phaseRequest,
 			Attempt:       checkpoint.Attempt,
+			Compacted:     checkpoint.Compacted,
 			Model:         &model,
 			ThinkingLevel: agent.ThinkingLevel,
 			StreamOptions: &stream,
@@ -542,12 +595,40 @@ func classify(ctx context.Context, rt *TaskRuntime, request GenerationCheckpoint
 	// The retry and compaction policies govern the next attempt, so they are
 	// read now rather than pinned at preparation.
 	settings := rt.Settings()
-	// Overflow detection (pi-ai utils/overflow) joins with the compaction
-	// stage of the port; until then an overflow is an ordinary model error,
-	// as it is in pi with compaction disabled.
-	overflow := false
-	if overflow && request.Compacted == nil && settings.Compaction.Enabled {
-		return notPorted("overflow compaction")
+	overflow := message.StopReason == ai.StopError && ai.IsContextOverflow(*message, 0)
+	if request.Model == nil || request.Cutoff == nil {
+		return errors.New("Generation request checkpoint lacks its model or cutoff")
+	}
+	compaction := compactionPolicy(settings, *request.Model)
+	if overflow && request.Compacted == nil && compaction.Enabled {
+		view, err := rt.Context(ctx, rt.ConversationID, request.Cutoff)
+		if err != nil {
+			return err
+		}
+		if _, ok := selectCut(view, compaction.KeepRecentTokens); ok {
+			text := message.ErrorMessage
+			if text == "" {
+				text = "Context overflow"
+			}
+			return rt.Commit(ctx, func(tx *durable.Tx, _ durable.TaskRecord) (*durable.TaskState, error) {
+				live, err := liveDraft(tx, rt.ConversationID)
+				if err != nil {
+					return nil, err
+				}
+				if _, err := appendAssistant(tx, rt.ConversationID, *message); err != nil {
+					return nil, err
+				}
+				if err := live.Delete("generation"); err != nil {
+					return nil, err
+				}
+				owner := rt.TaskID
+				child, err := createCompaction(tx, rt.ConversationID, CompactionInput{Reason: CompactionOverflow}, &owner)
+				if err != nil {
+					return nil, err
+				}
+				return Wait([]durable.TaskID{child}, durable.JoinAllSettled, GenerationCheckpoint{Phase: phasePrepare, Attempt: request.Attempt, Compacted: &child, Overflow: text})
+			})
+		}
 	}
 	policy := settings.Retry
 	// An overflow is never retried: only a compaction can make the next
@@ -742,6 +823,78 @@ func failNoModel(ctx context.Context, rt *TaskRuntime, ref *ModelRef) error {
 		}
 		return modelFailure(message, "no_model"), nil
 	})
+}
+
+// failModelError settles the run's inputs unanswered "model_error" with text
+// and fails with it.
+func failModelError(ctx context.Context, rt *TaskRuntime, text string) error {
+	detail, err := json.Marshal(text)
+	if err != nil {
+		return err
+	}
+	return rt.Commit(ctx, func(tx *durable.Tx, _ durable.TaskRecord) (*durable.TaskState, error) {
+		failure, err := prepareFailure(tx, rt)
+		if err != nil {
+			return nil, err
+		}
+		live, err := liveDraft(tx, rt.ConversationID)
+		if err != nil {
+			return nil, err
+		}
+		if err := endFailedRun(tx, rt, live, failure, durable.SubmissionSettlement{Status: durable.SubmissionUnanswered, Reason: "model_error", Detail: detail}); err != nil {
+			return nil, err
+		}
+		return modelFailure(text, "model_error"), nil
+	})
+}
+
+// thresholdCompaction is which threshold compaction preparation starts
+// before its request (spec §8.3): "blocking" above contextWindow -
+// ReserveTokens, "background" above the background threshold, and only when
+// range selection finds a cut; "" for none. The caller starts a background
+// one only while no compaction is listed.
+func thresholdCompaction(view ContextView, planned []durable.EntryDraft, contextWindow int, policy CompactionPolicy) string {
+	if !policy.Enabled || contextWindow <= 0 {
+		return ""
+	}
+	var extra []ai.Message
+	for _, entry := range planned {
+		extra = append(extra, entry.Model...)
+	}
+	tokens := estimateContext(view, extra)
+	blocking := contextWindow - policy.ReserveTokens
+	background := blocking - policy.BackgroundTokens
+	over := ""
+	switch {
+	case tokens > blocking:
+		over = "blocking"
+	case policy.BackgroundTokens > 0 && tokens > background:
+		over = "background"
+	}
+	if over == "" {
+		return ""
+	}
+	if _, ok := selectCut(view, policy.KeepRecentTokens); !ok {
+		return ""
+	}
+	return over
+}
+
+// compactionFailureText is the error text of a generation whose blocking
+// compaction ended without completing.
+func compactionFailureText(outcome durable.TaskOutcome) string {
+	switch outcome.Status {
+	case durable.OutcomeFailed, durable.OutcomeFaulted:
+		message := ""
+		if outcome.Error != nil {
+			message = outcome.Error.Message
+		}
+		return "Compaction failed: " + message
+	case durable.OutcomeOrphaned:
+		return "Compaction failed: " + outcome.Reason
+	default:
+		return "Compaction was aborted"
+	}
 }
 
 // failure is what a failed run's end needs from the table, read before the
