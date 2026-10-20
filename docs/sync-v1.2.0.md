@@ -475,6 +475,24 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    observer (slice 1 (d)). Unchecked: a root replacement of a document, and a document's
    definition version changing under a mount.
 
+   **Durable slice 1, the rest of generation** (snapshot `d2e7d8b7`; `generation.ts`): the `retry`
+   phase (a durable backoff: the error answer is kept, `pi.live.generation.retry` shows when the
+   next attempt starts, an early wake sleeps again, the next attempt prepares anew and so reads the
+   settings again), the `poll` phase for a deferred response (`pi.live.generation.deferred`, a
+   still deferred result polls strictly later), and the abort of a polling generation, which
+   cancels the deferred response first and reports a failed cancellation as the host's `models`
+   callback. The tools phase and compaction stay "not ported yet" until slices 2 and 3. Tests:
+   `harness-generation` whole (21). The faux provider of the chat setup now forwards deferred
+   fetches and cancellations, as pi's does. Adapted: the faulting final message holds a NaN cost
+   instead of a function (Go marshals both to an error); pi's request signal is the request
+   context, so the stream-options case does not check it. Differences: a provider handle's
+   `PollAfterMs` of 0 means "not said" in `ai` (pi: 0 polls at once), so it waits the default
+   5 s. Fixed on the way: `HarnessSettings.RestartLimit` of 0 resolved to 0, and a limit of 0
+   parked every task (`Restarts >= 0`); pi takes the default below one restart, and so does Go
+   now (negative stays "never", pi's Infinity). Sabotage 12 of 17. Waiting: the early wakes of
+   retry and poll (`harness-generation-recovery`). Unchecked, as in pi: the default poll wait,
+   the backoff delay and its cap.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
