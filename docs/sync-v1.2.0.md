@@ -501,6 +501,15 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    `pi.live` (the request phase writes it again at once, in pi as well). Unchecked, as in pi:
    the default poll wait and the backoff's cap.
 
+   **Fix: close writes back a run that ended while closing** (found by a Windows CI flake of
+   `TestCloseStopsWithoutOutcomesAndStartsNoFreshPhaseOrAbortInvocation`, "commits 5 -> 5"). pi's
+   `close()` marks closing, seals and collects its invocations in one synchronous step; Go's seal
+   runs on its own goroutine and `join` collected the invocations only once it was done, so a run
+   that returned in between was neither stopped nor written back pending, and the next open
+   counted a restart for it. The scheduler now remembers the invocations that end after closing
+   began, and `join` writes back those with the ones it stops. A 50 ms delay before `join`
+   collects reproduced the CI failure 10 of 10 on the old code and passes 10 of 10 on the new.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
