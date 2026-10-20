@@ -474,8 +474,13 @@ func TestCodemodeRefusesToResumeWhenTheSandboxsFingerprintOrTheCodeModeVersionCh
 
 func TestCodemodeTimesAScriptOutAcrossARestartWithoutAdmittingNewCalls(t *testing.T) {
 	c := newTestChat(t, nil, nil)
-	r := restart(t, c, "// @options: {\"timeout_ms\": 300}\n\t\tawait tools.hold({}); await tools.echo({ text: \"late\" });", func(*harness.Harness, durable.TaskID) {
-		time.Sleep(400 * time.Millisecond)
+	// The Harness's clock moves past the deadline while the call is
+	// interrupted; the live run has the whole minute to reach hold.
+	var offset atomic.Int64
+	base := time.Now()
+	c.chat.Now = func() time.Time { return base.Add(time.Duration(offset.Load())) }
+	r := restart(t, c, "// @options: {\"timeout_ms\": 60000}\n\t\tawait tools.hold({}); await tools.echo({ text: \"late\" });", func(*harness.Harness, durable.TaskID) {
+		offset.Add(int64(61 * time.Second))
 	}, nil)
 	expectError(t, r.result, "deadline passed")
 	if len(c.echoes()) != 0 || c.sandbox.starts.Load() != 1 {

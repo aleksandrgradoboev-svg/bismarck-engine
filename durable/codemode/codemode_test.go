@@ -67,15 +67,21 @@ func TestCodemodeResumesAScriptAfterARestartWithoutRunningItsFinishedCallsAgain(
 }
 
 func TestCodemodeReplaysResultsInTheOrderTheyArrivedNotTheOrderTheCallsWereMade(t *testing.T) {
-	c := newTestChat(t, nil, nil)
-	// 2 finishes first, then 1.
+	// 2 finishes first, then 1: 1 is released once the script has 2's result
+	// (its arrived() call), not once 2's tool returns, as 2's result still
+	// travels through its nested task and could be overtaken.
+	arrived := newSignal()
+	c := newTestChat(t, []Global{{Name: "arrived", Execute: func(ctxT, rawT, harness.ToolExecutionAPI) (any, error) {
+		arrived.fire()
+		return nil, nil
+	}}}, nil)
 	c.slows.release(2)
 	go func() {
-		<-c.slows.finishedCall(2)
+		<-arrived.ch
 		c.slows.release(1)
 	}()
 	r := restart(t, c, `const order = [];
-		await Promise.all([tools.slow({ id: 1 }).then(() => order.push(1)), tools.slow({ id: 2 }).then(() => order.push(2))]);
+		await Promise.all([tools.slow({ id: 1 }).then(() => order.push(1)), tools.slow({ id: 2 }).then(() => { order.push(2); arrived(); })]);
 		await tools.echo({ text: order.join(",") });
 		await tools.hold({});
 		return order;`, nil, nil)

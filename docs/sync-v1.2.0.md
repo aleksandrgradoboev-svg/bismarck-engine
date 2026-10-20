@@ -847,7 +847,12 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    processing a delivered batch, a few at a time; counts alone now wait for the VM's idle on the
    last delivered result, one commit per batch as in pi. "Results that finish together" has no
    tick in Go: the case holds the first result's commit until all 50 globals return, so the rest
-   arrive during it and go in one commit. CI runs `./durable/codemode/...` with `-cpu 1` too.
+   arrive during it and go in one commit. CI runs `./durable/codemode/...` with `-cpu 1` too, which
+   showed two more cases depending on timing: "replays results in the order they arrived" released
+   call 1 once call 2's tool returned, while 2's result still travelled through its nested task (1
+   is now released by a global the script calls on 2's result), and the restart timeout case had
+   300 ms of real time to reach its hold (the Harness's clock now moves past a 60 s deadline while
+   the call is interrupted; `chattest.Chat.Now`, new).
    Sabotage of the fix 6 of 7; counts committed mid-batch are caught only now and then (2 of 20
    runs with four processors): the window is a few statements between delivery and the re-run, and
    a deterministic case needs a test-only hook (open).
