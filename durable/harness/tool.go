@@ -140,26 +140,36 @@ type ToolExecutionAPI interface {
 	Snapshot(ctx context.Context, ref durable.DocRef) (map[string]any, error)
 	SnapshotAsOf(ctx context.Context, ref durable.DocRef, at durable.EntryID) (map[string]any, error)
 	WatchDoc(ctx context.Context, ref durable.DocRef) (*durable.DocumentWatch, error)
-	// ExecuteTool runs tool name as a nested call of this one and waits for
-	// its result; it comes with the nested calls of the port.
+	// ExecuteTool runs tool name, among the tools this call may call, as a
+	// nested call of this one in its own tool task, and waits for its
+	// result. A key already made returns that call when it names the same
+	// tool and arguments. Cancelling ctx stops only the wait: the call runs
+	// on, and its key returns its result.
 	ExecuteTool(ctx context.Context, name string, args map[string]any, options NestedCallOptions) (NestedToolExecutionResult, error)
 }
 
 // NestedCallOptions are the options of ExecuteTool.
 type NestedCallOptions struct {
-	// Key names the nested call within this call; empty takes its position.
+	// Key names the nested call within this call; empty takes its position
+	// among this attempt's calls. An explicit key is non-empty, has no "/",
+	// is not "__proto__", and is not a positive integer.
 	Key string
 	// NoProgress commits no running output, details or diagnostics to the
 	// nested call's slot.
 	NoProgress bool
 }
 
-// NestedToolExecutionResult is what ExecuteTool returns.
+// NestedToolExecutionResult is what ExecuteTool returns, exactly as the
+// nested call stored it: without the output, which only the model reads, and
+// without controls, which only model-issued calls apply. StructuredOutput is
+// the tool's value for programs (a tool without a schema gives its output:
+// one text as a string, one image as itself, nothing as "", else the content
+// list) and Details are for UIs; both are JSON to decode, nil when absent.
 type NestedToolExecutionResult struct {
 	TaskID           durable.TaskID   `json:"taskId"`
-	StructuredOutput any              `json:"structuredOutput,omitempty"`
+	StructuredOutput json.RawMessage  `json:"structuredOutput,omitempty"`
 	IsError          bool             `json:"isError"`
-	Details          any              `json:"details,omitempty"`
+	Details          json.RawMessage  `json:"details,omitempty"`
 	Diagnostics      []ToolDiagnostic `json:"diagnostics"`
 	Usage            *ai.Usage        `json:"usage,omitempty"`
 	DurationMs       *int64           `json:"durationMs,omitempty"`
