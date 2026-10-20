@@ -19,9 +19,8 @@ import (
 )
 
 // Ported from pi packages/durable/test/harness-nested-tools.test.ts, on
-// JSONL in place of node's SQLite. The cases that read tool events of nested
-// calls (pi.live.nestedTools as events, a late subscriber, a progress: false
-// call aborted) and the event halves of three others come with slice 2c-2.
+// JSONL in place of node's SQLite. The three cases that only read nested
+// calls' tool events are in nested_events_test.go.
 
 func textSchema() *ai.Schema {
 	var schema ai.Schema
@@ -434,11 +433,14 @@ func TestNestedToolsAbortTheNestedCallsACallerLeftRunningWhenItReturns(t *testin
 		<-running
 		return ToolExecutionResult{Output: ai.ContentList{ai.TextContent{Text: "returned early"}}}, nil
 	}))
-	h, root, status, _ := runNested(t, setup, callStep("batch", nil), fauxText("done"))
-	if status != durable.SubmissionDone {
+	setup.faux.SetResponses([]providers.FauxResponseStep{callStep("batch", nil), fauxText("done")})
+	h, root := openChat(t, memory.New(), setup)
+	_, log := listen(t, root)
+	if status := waitFor(t, submit(t, root, inputDraft("go"))).Status; status != durable.SubmissionDone {
 		t.Fatalf("status = %s", status)
 	}
 	must(t, h.WaitForIdle(bg))
+	log.quiet(t)
 	if text := resultText(toolResults(chatEntries(t, root))[0]); text != "returned early" {
 		t.Fatalf("result = %q", text)
 	}
@@ -446,6 +448,21 @@ func TestNestedToolsAbortTheNestedCallsACallerLeftRunningWhenItReturns(t *testin
 	if status, result := toolOutcome(child); status != durable.OutcomeAborted || result != `{"kind":"nested"}` {
 		t.Fatalf("child outcome = %+v", child.State.Outcome)
 	}
+	// The aborted call's result keeps its details; programs get no partial
+	// output, which only the model read.
+	all := log.events()
+	childEnd := endOf(all, "c1/1")
+	if childEnd == nil || childEnd.Result == nil || !childEnd.Result.IsError || normalJSON(t, childEnd.Result.Details) != `{"step":1}` || childEnd.Result.StructuredOutput != nil {
+		t.Fatalf("nested end = %s", jsonOf(t, childEnd))
+	}
+	// The nested call ends, with its result, before its caller.
+	var ends []string
+	for _, event := range all {
+		if end, ok := event.(ToolExecutionEndEvent); ok {
+			ends = append(ends, fmt.Sprint(end.ToolCallID, " ", end.Result != nil))
+		}
+	}
+	expectStrings(t, "ends", ends, []string{"c1/1 true", "c1 false"})
 	expectIdleLive(t, h, root)
 }
 
@@ -813,7 +830,7 @@ func TestNestedToolsRejectExplicitKeysWithASlashThatAreProtoOrArePositiveInteger
 	})
 }
 
-func TestNestedToolsRunNestedCallsOfNestedCalls(t *testing.T) {
+func TestNestedToolsRunNestedCallsOfNestedCallsAndEndThemChildrenFirst(t *testing.T) {
 	setup := newChatSetup(t)
 	installTool(t, setup.registry, newCountingEcho().registration)
 	installTool(t, setup.registry, nestedTool("inner", func(ctx context.Context, _ map[string]any, api ToolExecutionAPI) (ToolExecutionResult, error) {
@@ -824,9 +841,13 @@ func TestNestedToolsRunNestedCallsOfNestedCalls(t *testing.T) {
 		result, err := api.ExecuteTool(ctx, "inner", map[string]any{}, NestedCallOptions{})
 		return ToolExecutionResult{Output: ai.ContentList{ai.TextContent{Text: nestedText(result)}}}, err
 	}))
-	h, root, _, entries := runNested(t, setup, callStep("outer", nil), fauxText("done"))
+	setup.faux.SetResponses([]providers.FauxResponseStep{callStep("outer", nil), fauxText("done")})
+	h, root := openChat(t, memory.New(), setup)
+	_, log := listen(t, root)
+	waitFor(t, submit(t, root, inputDraft("go")))
 	must(t, h.WaitForIdle(bg))
-	if text := resultText(toolResults(entries)[0]); text != "echo deep" {
+	log.quiet(t)
+	if text := resultText(toolResults(chatEntries(t, root))[0]); text != "echo deep" {
 		t.Fatalf("result = %q", text)
 	}
 	tasks := allToolTasks(t, h, root)
@@ -834,9 +855,14 @@ func TestNestedToolsRunNestedCallsOfNestedCalls(t *testing.T) {
 	if inner.Owner == nil || *inner.Owner != outer.ID || deep.Owner == nil || *deep.Owner != inner.ID {
 		t.Fatalf("owners = %v, %v", inner.Owner, deep.Owner)
 	}
-	if call := toolInput(t, deep).Call; call == nil || call.ID != "c1/1/x" {
-		t.Fatalf("deep call = %+v", call)
-	}
+	expectStrings(t, "tool events", toolLifecycle(log.events()), []string{
+		"tool_execution_start c1 ",
+		"tool_execution_start c1/1 c1",
+		"tool_execution_start c1/1/x c1/1",
+		"tool_execution_end c1/1/x c1/1",
+		"tool_execution_end c1/1 c1",
+		"tool_execution_end c1 ",
+	})
 	expectIdleLive(t, h, root)
 }
 
@@ -920,6 +946,7 @@ func TestNestedToolsShowANestedCallsArgumentsInItsSlotAsMadeThenUnboundedAsItRun
 	setup.faux.SetResponses([]providers.FauxResponseStep{callStep("batch", nil), fauxText("done")})
 	h, root := openChat(t, memory.New(), setup)
 	openAtCleanup(t, hookRelease, release)
+	_, log := listen(t, root)
 	submission := submit(t, root, inputDraft("go"))
 	awaitSignal(t, hookEntered, "beforeTool")
 	if slot := liveNested(t, h, root)[0]; slot["status"] != slotPending || jsonOf(t, slot["arguments"]) != `{"text":"asked"}` {
@@ -932,7 +959,19 @@ func TestNestedToolsShowANestedCallsArgumentsInItsSlotAsMadeThenUnboundedAsItRun
 	}
 	release.open()
 	waitFor(t, submission)
-	// The task input keeps the arguments the call was made with.
+	must(t, h.WaitForIdle(bg))
+	log.quiet(t)
+	// The start event carries the arguments the call runs with; the task
+	// input keeps the ones it was made with.
+	var start *ToolExecutionStartEvent
+	for _, event := range log.events() {
+		if s, ok := event.(ToolExecutionStartEvent); ok && s.ToolCallID == "c1/1" {
+			start = &s
+		}
+	}
+	if start == nil || jsonOf(t, start.Args) != jsonOf(t, map[string]any{"text": large}) {
+		t.Fatal("the nested call's start does not carry the arguments it runs with")
+	}
 	for _, task := range allToolTasks(t, h, root) {
 		if input := toolInput(t, task); input.Kind == toolCallNested && jsonOf(t, input.Call.Arguments) != `{"text":"asked"}` {
 			t.Fatalf("nested input = %s", task.Input)

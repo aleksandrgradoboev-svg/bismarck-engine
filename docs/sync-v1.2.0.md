@@ -657,6 +657,26 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    2c-2; unchecked, as in pi: removing nested slots transitively, which matters only when a nested
    call left its own children's slots behind.
 
+   **Durable slice 2c-2, nested calls' events and restarts** (snapshot `d2e7d8b7`; `events.ts`). A
+   nested call's `tool_execution_start` carries the arguments of its slot, its updates read
+   `pi.live` `nestedTools` (`toolUpdate` now takes the list and the shared `SlotProgress`), and its
+   `tool_execution_end` carries `Result`, the result its commit stored in the caller's
+   `NestedCallDoc`, read from the publication since the document may retire next; nested ends come
+   children first, after the model-issued calls' and before the entries. Nested calls' events fill
+   `ParentToolCallID` and `ParentTaskID`; the snapshot carries `nestedTools`. Tests: the three
+   `harness-nested-tools` cases that read nested calls' tool events, the event halves of the
+   abandoned-call, nested-of-nested and arguments cases and of `harness-structured-output`'s
+   stored-result case, and all of `harness-nested-tools-restart` on JSONL; their mechanisms
+   (abandonment on restart, its cascade, a missing definition) were already there. Adapted: cases
+   whose caller makes two default-keyed calls hold the second until the first took its key, through
+   `beforeNestedAdmission`, since pi's synchronous admissions keep call order and goroutines do not.
+   Beyond pi: a nested call's later output is an append on its own slot's path (pi's nested updates
+   are all a slot's first output, a set, which a wrong path also yields). Sabotage 8 of 12, with
+   `abandonOnRestart` caught by the restart cases; unchecked, as in pi, and not reached by any flow
+   found: a nested slot that vanishes unfinished, children-first order within one commit (nested
+   calls end in commits of their own), a nested slot created done, and dropping another
+   conversation's nested results.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

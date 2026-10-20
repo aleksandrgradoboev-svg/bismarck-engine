@@ -186,7 +186,7 @@ func TestEventsStreamARunAsLifecycleEventsAndTextDeltasThatRebuildTheAnswer(t *t
 	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText(text)})
 	h, root := openChat(t, memory.New(), setup)
 	stream, log := listen(t, root)
-	if got := jsonOf(t, stream.Snapshot); !strings.HasPrefix(got, `{"type":"snapshot","entries":[],`) || !strings.Contains(got, `"tools":[],"inbox":[],`) {
+	if got := jsonOf(t, stream.Snapshot); !strings.HasPrefix(got, `{"type":"snapshot","entries":[],`) || !strings.Contains(got, `"tools":[],"nestedTools":[],"inbox":[],`) {
 		t.Fatalf("snapshot = %s, want no entries, tools or inbox", got)
 	}
 	var mu sync.Mutex
