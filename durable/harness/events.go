@@ -15,8 +15,8 @@ import (
 // Agent events (pi packages/durable/src/harness/events.ts, spec §9.4):
 // experimental. One conversation's commits as batches of events shaped like
 // the coding agent's session events, translated from the conversation view's
-// publications. The tool and compaction events come with their slices of the
-// port, with the pi.live slots they read.
+// publications. Events of nested calls and of compaction come with their
+// slices of the port, with the pi.live slots they read.
 
 // QueuedItem is one queued inbox item: its submission and how it is queued.
 type QueuedItem struct {
