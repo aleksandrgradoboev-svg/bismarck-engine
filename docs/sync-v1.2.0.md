@@ -807,6 +807,11 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    callers and replay, no control without matches, the first description line, its search text and
    the extension name. Sabotage 27 of 27, including the two image branches of read missed in 5a-1.
 
+   Under the race detector, `durable/images` took 80–132 s on CI (113 s locally), 84 s of it in
+   the two noisy 2000×2000 cases (the 3/4 shrink and the tight half of the PNG re-encoding). They
+   test sizes and limits, not concurrency, so the race step skips them (`raceDetector`, as harness
+   does for its depth tests); the test step without it runs them; locally 35 s under race.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
