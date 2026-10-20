@@ -26,6 +26,9 @@ func TestLegacyWslBashUnderSystemRoot(t *testing.T) {
 		{ptrTo(`D:\WinNT`), `D:\Git\bin\bash.exe`, false},
 		{ptrTo(`D:\WinNT`), `E:\Windows\System32\bash.exe`, false},
 		{ptrTo(`WinNT`), `C:\Windows\System32\bash.exe`, false},
+		// Beyond pi: a SystemRoot that is not drive-absolute matches nothing,
+		// not even the path its own relative join would give.
+		{ptrTo(`WinNT`), `WinNT\System32\bash.exe`, false},
 	} {
 		t.Run(c.shell, func(t *testing.T) {
 			setSystemRoot(t, c.systemRoot)
