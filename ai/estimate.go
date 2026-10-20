@@ -38,9 +38,9 @@ func jsStringLength(s string) int {
 	return len(utf16.Encode([]rune(s)))
 }
 
-// calculateContextTokens mirrors pi's calculateContextTokens: prefer the
+// CalculateContextTokens mirrors pi's calculateContextTokens: prefer the
 // provider-reported total, else sum the component counts.
-func calculateContextTokens(usage Usage) int {
+func CalculateContextTokens(usage Usage) int {
 	if usage.TotalTokens != 0 {
 		return usage.TotalTokens
 	}
@@ -89,8 +89,9 @@ func estimateTextAndImageContentTokens(content ContentList) int {
 	return int(math.Ceil(float64(estimateTextAndImageContentChars(content)) / charsPerToken))
 }
 
-// estimateMessageTokens mirrors pi's estimateMessageTokens.
-func estimateMessageTokens(message Message) int {
+// EstimateMessageTokens mirrors pi's estimateMessageTokens: ceil(chars / 3.5)
+// over the message's UTF-16 length, an image counted as 4800 characters.
+func EstimateMessageTokens(message Message) int {
 	if system, ok := systemMessageOf(message); ok {
 		return estimateTextTokens(GetSystemMessageText(system)) +
 			estimateToolsTokens(system.ToolsAdded) +
@@ -152,7 +153,7 @@ func getLastAssistantUsageInfo(messages []Message) (usage Usage, index int, foun
 			if usageAppliesToPrefix &&
 				assistant.StopReason != StopAborted &&
 				assistant.StopReason != StopError &&
-				calculateContextTokens(assistant.Usage) > 0 {
+				CalculateContextTokens(assistant.Usage) > 0 {
 				usage, index, found = assistant.Usage, i, true
 			}
 		}
@@ -169,10 +170,10 @@ func getLastAssistantUsageInfo(messages []Message) (usage Usage, index int, foun
 func estimateContextTokens(messages []Message) ContextUsageEstimate {
 	usage, index, found := getLastAssistantUsageInfo(messages)
 	if found {
-		usageTokens := calculateContextTokens(usage)
+		usageTokens := CalculateContextTokens(usage)
 		trailingTokens := 0
 		for i := index + 1; i < len(messages); i++ {
-			trailingTokens += estimateMessageTokens(messages[i])
+			trailingTokens += EstimateMessageTokens(messages[i])
 		}
 		return ContextUsageEstimate{
 			Tokens:         usageTokens + trailingTokens,
@@ -184,7 +185,7 @@ func estimateContextTokens(messages []Message) ContextUsageEstimate {
 
 	tokens := 0
 	for _, message := range messages {
-		tokens += estimateMessageTokens(message)
+		tokens += EstimateMessageTokens(message)
 	}
 	return ContextUsageEstimate{Tokens: tokens, UsageTokens: 0, TrailingTokens: tokens, LastUsageIndex: -1}
 }
