@@ -15,8 +15,8 @@ import (
 // Agent events (pi packages/durable/src/harness/events.ts, spec §9.4):
 // experimental. One conversation's commits as batches of events shaped like
 // the coding agent's session events, translated from the conversation view's
-// publications. Events of nested calls and of compaction come with their
-// slices of the port, with the pi.live slots they read.
+// publications. Events of compaction come with its slice of the port, with
+// the pi.live slots they read.
 
 // QueuedItem is one queued inbox item: its submission and how it is queued.
 type QueuedItem struct {
@@ -43,8 +43,11 @@ type SnapshotEvent struct {
 	// retry backoff, or deferred poll.
 	Generation *LiveGeneration `json:"generation,omitempty"`
 	// Tools are pi.live tools, the current round's calls.
-	Tools []ToolSlot   `json:"tools"`
-	Inbox []QueuedItem `json:"inbox"`
+	Tools []ToolSlot `json:"tools"`
+	// NestedTools are pi.live nestedTools: nested calls of running tool
+	// calls.
+	NestedTools []NestedToolSlot `json:"nestedTools"`
+	Inbox       []QueuedItem     `json:"inbox"`
 	// Agent is pi.agent; its initial value when absent.
 	Agent AgentState `json:"agent"`
 	Usage UsageState `json:"usage"`
@@ -215,11 +218,13 @@ func (e ToolExecutionUpdateEvent) MarshalJSON() ([]byte, error) {
 }
 
 // ToolExecutionEndEvent: a call ended, a model-issued one with its result
-// Entry. Entry is nil when the tool task faulted or was orphaned, or when
-// the call's slot left pi.live unfinished because its run ended.
+// Entry, a nested one with its Result. Both are nil when the tool task
+// faulted or was orphaned, or when the call's slot left pi.live unfinished:
+// its run ended, or its parent settled first.
 type ToolExecutionEndEvent struct {
 	ToolEventCall
-	Entry *durable.EntryRecord `json:"entry,omitempty"`
+	Entry  *durable.EntryRecord       `json:"entry,omitempty"`
+	Result *NestedToolExecutionResult `json:"result,omitempty"`
 }
 
 func (ToolExecutionStartEvent) EventType() string  { return "tool_execution_start" }
@@ -605,9 +610,10 @@ func rawAt(value map[string]any, keys ...string) map[string]any {
 
 // liveParts is the typed part of pi.live the events read.
 type liveParts struct {
-	Run        *LiveRun        `json:"run,omitempty"`
-	Generation *LiveGeneration `json:"generation,omitempty"`
-	Tools      []ToolSlot      `json:"tools,omitempty"`
+	Run         *LiveRun         `json:"run,omitempty"`
+	Generation  *LiveGeneration  `json:"generation,omitempty"`
+	Tools       []ToolSlot       `json:"tools,omitempty"`
+	NestedTools []NestedToolSlot `json:"nestedTools,omitempty"`
 }
 
 func decodeLiveParts(live map[string]any) (liveParts, error) {
@@ -667,6 +673,10 @@ func eventSnapshot(view map[string]any) (SnapshotEvent, error) {
 	if snapshot.Tools == nil {
 		snapshot.Tools = []ToolSlot{}
 	}
+	snapshot.NestedTools = live.NestedTools
+	if snapshot.NestedTools == nil {
+		snapshot.NestedTools = []NestedToolSlot{}
+	}
 	if snapshot.Entries == nil {
 		snapshot.Entries = []durable.EntryRecord{}
 	}
@@ -692,8 +702,22 @@ func translateEvents(id durable.ConversationID, before, after map[string]any, vi
 	var taskOrder []durable.TaskID
 	tasks := map[durable.TaskID]durable.TaskRecord{}
 	var submissions []durable.SubmissionRecord
+	// Nested results this commit stored, by nested task ID; read now, since
+	// the caller's documents may retire next.
+	nestedResults := map[durable.TaskID]NestedToolExecutionResult{}
 	for _, change := range publication.Changes {
 		switch c := change.(type) {
+		case durable.DocumentChange:
+			if c.Record.Kind != NestedCallDoc.Definition().Kind || c.Value == nil || c.ConversationID != id {
+				continue
+			}
+			var state NestedCallState
+			if err := decodeValue(c.Value, &state); err != nil {
+				return nil, err
+			}
+			if state.TaskID != nil && state.Result != nil {
+				nestedResults[*state.TaskID] = *state.Result
+			}
 		case durable.EntryWrite:
 			if c.Value.ConversationID == id {
 				entries = append(entries, c.Value)
@@ -751,6 +775,22 @@ func translateEvents(id durable.ConversationID, before, after map[string]any, vi
 		}
 		events = append(events, ToolExecutionStartEvent{ToolEventCall: callOf(slot), Args: args})
 	}
+	nestedBefore := map[durable.TaskID]NestedToolSlot{}
+	for _, slot := range wasLive.NestedTools {
+		nestedBefore[slot.TaskID] = slot
+	}
+	rawNestedBefore, rawNestedNow := rawNestedSlots(was.live), rawNestedSlots(now.live)
+	for _, slot := range nowLive.NestedTools {
+		if previous, ok := nestedBefore[slot.TaskID]; slot.Status != slotRunning || ok && previous.Status == slotRunning {
+			continue
+		}
+		// A nested slot carries the arguments the call runs with.
+		args := slot.Arguments
+		if args == nil {
+			args = map[string]any{}
+		}
+		events = append(events, ToolExecutionStartEvent{ToolEventCall: nestedCallOf(slot), Args: args})
+	}
 	partialBefore := rawAt(was.live, "generation", "message")
 	partial := rawAt(now.live, "generation", "message")
 	if partial != nil {
@@ -770,8 +810,18 @@ func translateEvents(id durable.ConversationID, before, after map[string]any, vi
 		if slot.Status != slotRunning || !ok || previous.Status != slotRunning {
 			continue
 		}
-		if update, changed := toolUpdate(viewOps, index, slot, previous, rawNow[slot.CallID], rawBefore[slot.CallID]); changed {
+		if update, changed := toolUpdate(viewOps, "tools", index, slot.SlotProgress, previous.SlotProgress, rawNow[slot.CallID], rawBefore[slot.CallID]); changed {
 			update.ToolEventCall = callOf(slot)
+			events = append(events, update)
+		}
+	}
+	for index, slot := range nowLive.NestedTools {
+		previous, ok := nestedBefore[slot.TaskID]
+		if slot.Status != slotRunning || !ok || previous.Status != slotRunning {
+			continue
+		}
+		if update, changed := toolUpdate(viewOps, "nestedTools", index, slot.SlotProgress, previous.SlotProgress, rawNestedNow[slot.TaskID], rawNestedBefore[slot.TaskID]); changed {
+			update.ToolEventCall = nestedCallOf(slot)
 			events = append(events, update)
 		}
 	}
@@ -825,6 +875,38 @@ func translateEvents(id durable.ConversationID, before, after map[string]any, vi
 	for _, slot := range nowLive.Tools {
 		if _, ok := slotsBefore[slot.CallID]; slot.Status == slotDone && !ok {
 			endTool(slot, slot.Entry)
+		}
+	}
+	// Nested calls that end in this commit, the same way, children before
+	// the calls that made them: the lists hold parents first, so walk them
+	// backwards.
+	endNested := func(slot NestedToolSlot) {
+		end := ToolExecutionEndEvent{ToolEventCall: nestedCallOf(slot)}
+		if result, ok := nestedResults[slot.TaskID]; ok {
+			end.Result = &result
+		}
+		events = append(events, end)
+	}
+	nestedNow := map[durable.TaskID]NestedToolSlot{}
+	for _, slot := range nowLive.NestedTools {
+		nestedNow[slot.TaskID] = slot
+	}
+	for i := len(wasLive.NestedTools) - 1; i >= 0; i-- {
+		previous := wasLive.NestedTools[i]
+		if previous.Status == slotDone {
+			continue
+		}
+		if slot, ok := nestedNow[previous.TaskID]; !ok {
+			endNested(previous)
+		} else if slot.Status == slotDone {
+			endNested(slot)
+		}
+	}
+	for i := len(nowLive.NestedTools) - 1; i >= 0; i-- {
+		if slot := nowLive.NestedTools[i]; slot.Status == slotDone {
+			if _, ok := nestedBefore[slot.TaskID]; !ok {
+				endNested(slot)
+			}
 		}
 	}
 
@@ -950,6 +1032,27 @@ func rawSlots(live map[string]any) map[string]map[string]any {
 	return out
 }
 
+// rawNestedSlots are pi.live nestedTools as raw values, by task ID.
+func rawNestedSlots(live map[string]any) map[durable.TaskID]map[string]any {
+	items, _ := live["nestedTools"].([]any)
+	out := make(map[durable.TaskID]map[string]any, len(items))
+	for _, item := range items {
+		if slot, ok := item.(map[string]any); ok {
+			if id, ok := slot["taskId"].(float64); ok {
+				out[durable.TaskID(id)] = slot
+			}
+		}
+	}
+	return out
+}
+
+// nestedCallOf is the identifying fields of a nested slot's tool events:
+// the call and the one that made it.
+func nestedCallOf(slot NestedToolSlot) ToolEventCall {
+	taskID, parentTaskID := slot.TaskID, slot.ParentTaskID
+	return ToolEventCall{ToolCallID: slot.CallID, ToolName: slot.Name, TaskID: &taskID, ParentToolCallID: slot.ParentCallID, ParentTaskID: &parentTaskID}
+}
+
 // callOf is the identifying fields of a slot's tool events.
 func callOf(slot ToolSlot) ToolEventCall {
 	return ToolEventCall{ToolCallID: slot.CallID, ToolName: slot.Name, TaskID: slot.TaskID}
@@ -971,10 +1074,11 @@ func resultOf(entries []durable.EntryRecord, callID string) *durable.EntryID {
 }
 
 // toolUpdate is the output, details and diagnostics changes of the running
-// slot at index in pi.live tools, from the view operations on it; changed
+// slot at index in pi.live list ("tools" or "nestedTools"), from the view
+// operations on it; changed
 // is false when there are none.
-func toolUpdate(viewOps []delta.Op, index int, slot, previous ToolSlot, raw, rawBefore map[string]any) (update ToolExecutionUpdateEvent, changed bool) {
-	outputPath := delta.Path{delta.Key("docs"), delta.Key(LiveDoc.Definition().Kind), delta.Key("tools"), delta.Index(index), delta.Key("output")}
+func toolUpdate(viewOps []delta.Op, list string, index int, slot, previous SlotProgress, raw, rawBefore map[string]any) (update ToolExecutionUpdateEvent, changed bool) {
+	outputPath := delta.Path{delta.Key("docs"), delta.Key(LiveDoc.Definition().Kind), delta.Key(list), delta.Index(index), delta.Key("output")}
 	trimStart, appended, set := 0, "", false
 	for _, op := range viewOps {
 		path, ok := opPath(op)
