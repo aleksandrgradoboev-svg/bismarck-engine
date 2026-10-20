@@ -21,7 +21,7 @@ import (
 )
 
 // Ported from pi packages/durable/test/harness-tools.test.ts. The two
-// "coding tools" cases need the tools on env (stage 5).
+// "coding tools" cases are in durable/tools, beside the tools they run.
 
 func echoSchema() *ai.Schema {
 	var schema ai.Schema

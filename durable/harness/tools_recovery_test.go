@@ -17,8 +17,8 @@ import (
 )
 
 // Ported from pi packages/durable/test/harness-tools-recovery.test.ts, on
-// JSONL in place of node's SQLite. The real bash case comes with the tools
-// on env (stage 5).
+// JSONL in place of node's SQLite. The real bash case is in durable/tools,
+// beside the bash tool it runs.
 
 // openRecovering opens a Harness over the JSONL session in dir with
 // scheduling resumed; change may adjust its options. It closes at cleanup,
