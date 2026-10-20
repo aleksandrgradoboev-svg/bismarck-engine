@@ -47,9 +47,12 @@ func (w *ProgressWaiter) Wait(ctx context.Context) error {
 	}
 }
 
-// clock is the time source Progress paces by; tests replace it.
-type clock interface {
+// Clock is the time source Progress paces by (pi's ProgressClock): the
+// harness passes its own clock and timers, tests a fake one.
+type Clock interface {
 	Now() time.Time
+	// AfterFunc runs f once d has passed; stop disarms it and reports
+	// whether it was still armed.
 	AfterFunc(d time.Duration, f func()) (stop func() bool)
 }
 
@@ -69,7 +72,7 @@ type Progress struct {
 	write       func() (int, error)
 	onError     func(error)
 	minInterval time.Duration
-	clock       clock
+	clock       Clock
 
 	mu        sync.Mutex
 	waiters   []*ProgressWaiter
@@ -84,7 +87,13 @@ type Progress struct {
 // how many bytes it wrote; it runs on its own goroutine. onError receives a
 // failed commit's error.
 func NewProgress(write func() (int, error), onError func(error), minInterval time.Duration) *Progress {
-	return &Progress{write: write, onError: onError, minInterval: minInterval, clock: realClock{}}
+	return NewProgressWithClock(write, onError, minInterval, realClock{})
+}
+
+// NewProgressWithClock is NewProgress paced by clock (pi's Progress with a
+// ProgressClock).
+func NewProgressWithClock(write func() (int, error), onError func(error), minInterval time.Duration, clock Clock) *Progress {
+	return &Progress{write: write, onError: onError, minInterval: minInterval, clock: clock}
 }
 
 // Mark schedules a commit.

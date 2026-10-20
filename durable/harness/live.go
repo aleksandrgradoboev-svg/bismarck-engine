@@ -40,6 +40,82 @@ type LiveDeferred struct {
 	PollAt int64 `json:"pollAt"`
 }
 
+// Slot statuses.
+const (
+	slotPending = "pending"
+	slotRunning = "running"
+	slotDone    = "done"
+)
+
+// ToolSlot is the presentation of one tool call of the current round in
+// pi.live tools, in call order, from the tool-calling answer until the
+// generation's tools phase ends it. Read only: the Harness writes slots
+// field by field, so a running output commits as an append or a trim.
+type ToolSlot struct {
+	CallID string `json:"callId"`
+	Name   string `json:"name"`
+	// Status is "pending", "running" or "done".
+	Status string `json:"status"`
+	// Output is the retained running output, and DroppedBytes and
+	// DroppedLines what the bounds dropped.
+	Output       *string `json:"output,omitempty"`
+	DroppedBytes int     `json:"droppedBytes,omitempty"`
+	DroppedLines int     `json:"droppedLines,omitempty"`
+	// Details is the last Details value.
+	Details     any              `json:"details,omitempty"`
+	Diagnostics []ToolDiagnostic `json:"diagnostics,omitempty"`
+	// TaskID is absent for a call not started yet (sequential round) and
+	// for a call its request did not offer, which starts done with the
+	// Entry the generation wrote.
+	TaskID *durable.TaskID `json:"taskId,omitempty"`
+	// Entry is the result entry once done; absent when the tool task
+	// faulted or was orphaned.
+	Entry *durable.EntryID `json:"entry,omitempty"`
+}
+
+// toolKind is the built-in tool task's kind.
+const toolKind = "pi.tool"
+
+// toolSlotDraft is the slot of tool task taskID in pi.live tools; nil when
+// it has none. Nested slots come with the nested calls of the port.
+func toolSlotDraft(live *delta.Draft, taskID durable.TaskID) *delta.Draft {
+	tools := live.At("tools")
+	if tools == nil {
+		return nil
+	}
+	for i := range tools.Len() {
+		slot := tools.At(i)
+		if slot == nil {
+			continue
+		}
+		if id, ok := slot.Get("taskId"); ok && id == float64(taskID) {
+			return slot
+		}
+	}
+	return nil
+}
+
+// finishSlot marks a slot done and clears its running output; the caller
+// sets a model-issued call's result entry. Neither is set when the task
+// faulted or was orphaned.
+func finishSlot(slot *delta.Draft) error {
+	if err := slot.Set("status", slotDone); err != nil {
+		return err
+	}
+	return clearProgress(slot)
+}
+
+// clearProgress removes what a tool published while running; its result
+// entry or a rerun replaces it.
+func clearProgress(slot *delta.Draft) error {
+	for _, key := range []string{"output", "droppedBytes", "droppedLines", "details", "diagnostics"} {
+		if err := slot.Delete(key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // runTaskKinds are the built-in task kinds that can own pi.live run.
 var runTaskKinds = map[string]bool{"pi.generation": true}
 
@@ -194,13 +270,25 @@ func recordUsage(tx *durable.Tx, conversationID durable.ConversationID, bucket, 
 }
 
 // settleSchedulerOutcome is the Harness cleanup for a terminal outcome the
-// scheduler writes itself (faulted or orphaned): a run task ends its run.
-// Other kinds are ignored, so it never creates pi.live elsewhere; tool and
-// compaction tasks join with their stages of the port.
+// scheduler writes itself (faulted or orphaned): a run task ends its run; a
+// tool task's slot is marked done without an entry, and context derivation
+// synthesizes the missing result. Other kinds are ignored, so it never
+// creates pi.live elsewhere; compaction tasks join with their stage of the
+// port.
 // REMINDER: a committed generation partial becomes an aborted assistant entry
 // here, exactly as in the generation abort handler, so the transcript keeps
 // what the model produced and pi.usage counts its spend.
 func settleSchedulerOutcome(tx *durable.Tx, record durable.TaskRecord, outcome durable.TaskOutcome) error {
+	if record.Kind == toolKind {
+		live, err := liveDraft(tx, record.ConversationID)
+		if err != nil {
+			return err
+		}
+		if slot := toolSlotDraft(live, record.ID); slot != nil {
+			return finishSlot(slot)
+		}
+		return nil
+	}
 	if !runTaskKinds[record.Kind] {
 		return nil
 	}

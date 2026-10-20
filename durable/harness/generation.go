@@ -113,7 +113,7 @@ func defineGeneration() Task {
 			phaseRequest: requestGeneration,
 			phaseRetry:   retryGeneration,
 			phasePoll:    pollGeneration,
-			phaseTools:   func(context.Context, *generationTask, *TaskRuntime) error { return notPorted("the tools phase") },
+			phaseTools:   toolsGeneration,
 		},
 		Abort: abortGeneration,
 	})
@@ -527,14 +527,14 @@ func classify(ctx context.Context, rt *TaskRuntime, request GenerationCheckpoint
 	}); err != nil {
 		return err
 	}
-	calls := 0
+	var calls []ai.ToolCall
 	for _, content := range message.Content {
-		if _, ok := toolCallOf(content); ok {
-			calls++
+		if call, ok := toolCallOf(content); ok {
+			calls = append(calls, call)
 		}
 	}
-	if message.StopReason == ai.StopToolUse && calls > 0 {
-		return notPorted("a tool round")
+	if message.StopReason == ai.StopToolUse && len(calls) > 0 {
+		return startToolRound(ctx, rt, request, *message, calls)
 	}
 	if message.StopReason == ai.StopStop || message.StopReason == ai.StopLength || message.StopReason == ai.StopToolUse {
 		return answer(ctx, rt, *message)
@@ -673,8 +673,14 @@ func answer(ctx context.Context, rt *TaskRuntime, message ai.AssistantMessage) e
 // "aborted".
 func abortGeneration(ctx context.Context, task *generationTask, rt *TaskRuntime) error {
 	checkpoint := task.Checkpoint
-	if checkpoint.Phase == phaseTools {
-		return notPorted("aborting the tools phase")
+	// Runs after the round's tool tasks are terminal; calls never started
+	// get aborted results (spec §8.5).
+	var unstarted []ai.ToolCall
+	if checkpoint.Phase == phaseTools && checkpoint.Assistant != nil {
+		var err error
+		if unstarted, err = unstartedCalls(ctx, rt, *checkpoint.Assistant, checkpoint.Pending); err != nil {
+			return err
+		}
 	}
 	if checkpoint.Phase == phasePoll && checkpoint.Model != nil && checkpoint.Handle != nil {
 		if model := resolveModel(rt, *checkpoint.Model); model != nil {
@@ -694,6 +700,13 @@ func abortGeneration(ctx context.Context, task *generationTask, rt *TaskRuntime)
 		}
 		if err := convertPartial(tx, live, rt.ConversationID); err != nil {
 			return nil, err
+		}
+		now := rt.s.now().UnixMilli()
+		for _, call := range unstarted {
+			result := harnessError("aborted", fmt.Sprintf("Tool %s was aborted", call.Name))
+			if _, err := appendToolResult(tx, rt.ConversationID, call, result, now, nil); err != nil {
+				return nil, err
+			}
 		}
 		if err := endRun(tx, live, rt.TaskID, durable.SubmissionSettlement{Status: durable.SubmissionUnanswered, Reason: "aborted"}); err != nil {
 			return nil, err
