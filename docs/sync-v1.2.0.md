@@ -734,6 +734,29 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    past the cutoff (only display-only entries can land meanwhile); unchecked, as in pi, the orphaned
    compaction's text.
 
+   **Durable stage 5a-1, read and write on an environment** (snapshot `d2e7d8b7`;
+   `packages/durable/src/tools` and `truncate.ts`). New package `durable/tools`: `read`, `write`,
+   `truncate` with `TruncateHeadOf`, the per-file mutation queue, tool paths, and the
+   `ImageProcessor` contract (a processor itself comes with 5b). The format sniffing of the coding
+   read tool moves unchanged to `internal/imagemime`, which both packages use; it adds `DetectOf`
+   (the header and the PNG chunk headers of a file only) and `Dimensions`. `truncate` is not shared:
+   pi's coding agent and durable choose `truncatedBy` differently (durable reports bytes when only a
+   trailing newline exceeds them at the line cap), so a shared one would change `coding`. The queue
+   is not shared either: durable keys a file by environment ID and the environment's canonical path
+   and runs calls in the order their keys resolve; coding keys the OS path. Go forms: offsets and
+   limits are JSON numbers with JS arithmetic, fractions and unsafe integers included, and messages
+   render numbers as JS does; an empty output is an empty `ContentList`, not nil (nil keeps the
+   streamed output); `ImageProcessor.Prepare` returns nil for an image it cannot prepare. Tests: the
+   read, write and queue-through-write cases of `tools.test` (14; the symlinked directory and the
+   backslash name run on Linux only), `env-truncate` (7; the runtime-without-Buffer case is n/a), and
+   `tools-read-differential` (2, without NaN, which JSON arguments cannot carry; the reference does
+   not reuse the tool's index and number helpers). Beyond pi: a file that changes during both passes
+   fails; a fractional start at an over-long line names no line; a leading `@` is dropped; a read
+   path finds the typographic-apostrophe variant; a cancellation right after a successful write
+   fails the call. Sabotage 18 of 21: the non-inline format and the dimension check wait for the
+   image cases of 5b; the canonical key of a new file under a symlinked directory is caught on Linux
+   only.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
