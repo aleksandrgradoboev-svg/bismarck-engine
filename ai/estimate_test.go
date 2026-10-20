@@ -69,7 +69,7 @@ func TestEstimateContextTokensSystemPromptAndTools(t *testing.T) {
 func TestEstimateMessageTokensImage(t *testing.T) {
 	// One image block -> ESTIMATED_IMAGE_CHARS 4800 -> ceil(4800/3.5) = 1372.
 	msg := UserMessage{Content: ContentList{ImageContent{Data: "x", MimeType: "image/png"}}}
-	if got := estimateMessageTokens(msg); got != 1372 {
+	if got := EstimateMessageTokens(msg); got != 1372 {
 		t.Fatalf("image message tokens = %d, want 1372", got)
 	}
 }
@@ -81,7 +81,7 @@ func TestEstimateMessageTokensAssistantToolCall(t *testing.T) {
 	msg := AssistantMessage{Content: ContentList{tc}, StopReason: StopToolUse}
 	wantChars := jsStringLength("run") + jsStringLength(argsJSON)
 	want := int(math.Ceil(float64(wantChars) / charsPerToken))
-	if got := estimateMessageTokens(msg); got != want {
+	if got := EstimateMessageTokens(msg); got != want {
 		t.Fatalf("assistant tool call tokens = %d, want %d (argsJSON=%q)", got, want, argsJSON)
 	}
 }
@@ -205,10 +205,10 @@ func TestEstimateUsesUsageAfterResponseToInsertedContext(t *testing.T) {
 
 func TestCalculateContextTokensFallback(t *testing.T) {
 	// totalTokens preferred; else sum of input+output+cacheRead+cacheWrite.
-	if got := calculateContextTokens(Usage{TotalTokens: 42, Input: 1}); got != 42 {
+	if got := CalculateContextTokens(Usage{TotalTokens: 42, Input: 1}); got != 42 {
 		t.Fatalf("totalTokens path = %d, want 42", got)
 	}
-	if got := calculateContextTokens(Usage{Input: 1, Output: 2, CacheRead: 3, CacheWrite: 4}); got != 10 {
+	if got := CalculateContextTokens(Usage{Input: 1, Output: 2, CacheRead: 3, CacheWrite: 4}); got != 10 {
 		t.Fatalf("component sum = %d, want 10", got)
 	}
 }
@@ -281,7 +281,7 @@ func TestEstimateMessageTokensSystemMessage(t *testing.T) {
 	sys.Sections = SystemSections{{Name: "s", Value: strp("efgh")}}
 	sys.ToolsAdded = []Tool{estimateTestTool()}
 	sys.ToolsRemoved = []ToolReference{{Name: "gone"}}
-	if got := estimateMessageTokens(sys); got != 37 {
+	if got := EstimateMessageTokens(sys); got != 37 {
 		t.Fatalf("system message tokens = %d, want 37", got)
 	}
 }

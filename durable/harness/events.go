@@ -15,8 +15,7 @@ import (
 // Agent events (pi packages/durable/src/harness/events.ts, spec §9.4):
 // experimental. One conversation's commits as batches of events shaped like
 // the coding agent's session events, translated from the conversation view's
-// publications. Events of compaction come with its slice of the port, with
-// the pi.live slots they read.
+// publications.
 
 // QueuedItem is one queued inbox item: its submission and how it is queued.
 type QueuedItem struct {
@@ -47,7 +46,13 @@ type SnapshotEvent struct {
 	// NestedTools are pi.live nestedTools: nested calls of running tool
 	// calls.
 	NestedTools []NestedToolSlot `json:"nestedTools"`
-	Inbox       []QueuedItem     `json:"inbox"`
+	// Compactions are pi.live compactions: live compactions with their
+	// attempt and retry backoff.
+	Compactions []CompactionStatus `json:"compactions"`
+	// CompactionFailure is pi.live compactionFailure: the newest compaction
+	// failure since a compaction last produced a summary.
+	CompactionFailure *CompactionFailure `json:"compactionFailure,omitempty"`
+	Inbox             []QueuedItem       `json:"inbox"`
 	// Agent is pi.agent; its initial value when absent.
 	Agent AgentState `json:"agent"`
 	Usage UsageState `json:"usage"`
@@ -137,6 +142,24 @@ type TaskFailedEvent struct {
 	TaskID  durable.TaskID `json:"taskId"`
 	Kind    string         `json:"kind"`
 	Message string         `json:"message"`
+}
+
+// CompactionStartEvent: a compaction task was created; Blocking when a
+// generation waits for it.
+type CompactionStartEvent struct {
+	TaskID   durable.TaskID   `json:"taskId"`
+	Reason   CompactionReason `json:"reason"`
+	Blocking bool             `json:"blocking"`
+}
+
+// CompactionEndEvent: a compaction task ended. The task's outcome tells
+// whether it produced a summary; the summary entry has its own events. Error
+// is set when the compaction failed, faulted, or was orphaned, as in pi.live
+// compactionFailure.
+type CompactionEndEvent struct {
+	TaskID durable.TaskID   `json:"taskId"`
+	Reason CompactionReason `json:"reason"`
+	Error  *string          `json:"error,omitempty"`
 }
 
 // ToolEventCall is which call a tool event is about. ToolCallID is the
@@ -241,23 +264,35 @@ func (e ToolExecutionEndEvent) MarshalJSON() ([]byte, error) {
 	return typedJSON(e.EventType(), plain(e))
 }
 
-func (SnapshotEvent) EventType() string       { return "snapshot" }
-func (RunStartEvent) EventType() string       { return "run_start" }
-func (RunEndEvent) EventType() string         { return "run_end" }
-func (TurnStartEvent) EventType() string      { return "turn_start" }
-func (TurnEndEvent) EventType() string        { return "turn_end" }
-func (MessageStartEvent) EventType() string   { return "message_start" }
-func (MessageUpdateEvent) EventType() string  { return "message_update" }
-func (MessageEndEvent) EventType() string     { return "message_end" }
-func (InboxUpdateEvent) EventType() string    { return "inbox_update" }
-func (SubmissionEvent) EventType() string     { return "submission" }
-func (AutoRetryStartEvent) EventType() string { return "auto_retry_start" }
-func (AutoRetryEndEvent) EventType() string   { return "auto_retry_end" }
-func (DeferredPollEvent) EventType() string   { return "deferred_poll" }
-func (EntryAppendedEvent) EventType() string  { return "entry_appended" }
-func (AgentChangedEvent) EventType() string   { return "agent_changed" }
-func (UsageChangedEvent) EventType() string   { return "usage_changed" }
-func (TaskFailedEvent) EventType() string     { return "task_failed" }
+func (SnapshotEvent) EventType() string        { return "snapshot" }
+func (RunStartEvent) EventType() string        { return "run_start" }
+func (RunEndEvent) EventType() string          { return "run_end" }
+func (TurnStartEvent) EventType() string       { return "turn_start" }
+func (TurnEndEvent) EventType() string         { return "turn_end" }
+func (MessageStartEvent) EventType() string    { return "message_start" }
+func (MessageUpdateEvent) EventType() string   { return "message_update" }
+func (MessageEndEvent) EventType() string      { return "message_end" }
+func (InboxUpdateEvent) EventType() string     { return "inbox_update" }
+func (SubmissionEvent) EventType() string      { return "submission" }
+func (AutoRetryStartEvent) EventType() string  { return "auto_retry_start" }
+func (AutoRetryEndEvent) EventType() string    { return "auto_retry_end" }
+func (DeferredPollEvent) EventType() string    { return "deferred_poll" }
+func (EntryAppendedEvent) EventType() string   { return "entry_appended" }
+func (AgentChangedEvent) EventType() string    { return "agent_changed" }
+func (UsageChangedEvent) EventType() string    { return "usage_changed" }
+func (TaskFailedEvent) EventType() string      { return "task_failed" }
+func (CompactionStartEvent) EventType() string { return "compaction_start" }
+func (CompactionEndEvent) EventType() string   { return "compaction_end" }
+
+func (e CompactionStartEvent) MarshalJSON() ([]byte, error) {
+	type plain CompactionStartEvent
+	return typedJSON(e.EventType(), plain(e))
+}
+
+func (e CompactionEndEvent) MarshalJSON() ([]byte, error) {
+	type plain CompactionEndEvent
+	return typedJSON(e.EventType(), plain(e))
+}
 
 // typedJSON is the JSON of v with "type": kind first.
 func typedJSON(kind string, v any) ([]byte, error) {
@@ -610,10 +645,12 @@ func rawAt(value map[string]any, keys ...string) map[string]any {
 
 // liveParts is the typed part of pi.live the events read.
 type liveParts struct {
-	Run         *LiveRun         `json:"run,omitempty"`
-	Generation  *LiveGeneration  `json:"generation,omitempty"`
-	Tools       []ToolSlot       `json:"tools,omitempty"`
-	NestedTools []NestedToolSlot `json:"nestedTools,omitempty"`
+	Run               *LiveRun           `json:"run,omitempty"`
+	Generation        *LiveGeneration    `json:"generation,omitempty"`
+	Tools             []ToolSlot         `json:"tools,omitempty"`
+	NestedTools       []NestedToolSlot   `json:"nestedTools,omitempty"`
+	Compactions       []CompactionStatus `json:"compactions,omitempty"`
+	CompactionFailure *CompactionFailure `json:"compactionFailure,omitempty"`
 }
 
 func decodeLiveParts(live map[string]any) (liveParts, error) {
@@ -677,6 +714,11 @@ func eventSnapshot(view map[string]any) (SnapshotEvent, error) {
 	if snapshot.NestedTools == nil {
 		snapshot.NestedTools = []NestedToolSlot{}
 	}
+	snapshot.Compactions = live.Compactions
+	if snapshot.Compactions == nil {
+		snapshot.Compactions = []CompactionStatus{}
+	}
+	snapshot.CompactionFailure = live.CompactionFailure
 	if snapshot.Entries == nil {
 		snapshot.Entries = []durable.EntryRecord{}
 	}
@@ -943,7 +985,19 @@ func translateEvents(id durable.ConversationID, before, after map[string]any, vi
 		}
 	}
 
-	// Task failures, then turn and run ends. A generation's turn ends when
+	// Compaction ends, task failures, then turn and run ends.
+	for _, previous := range wasLive.Compactions {
+		if slices.ContainsFunc(nowLive.Compactions, func(status CompactionStatus) bool { return status.TaskID == previous.TaskID }) {
+			continue
+		}
+		end := CompactionEndEvent{TaskID: previous.TaskID, Reason: previous.Reason}
+		if failure := nowLive.CompactionFailure; failure != nil && failure.TaskID == previous.TaskID {
+			message := failure.Error
+			end.Error = &message
+		}
+		events = append(events, end)
+	}
+	// A generation's turn ends when
 	// its outcome is committed: at a completing hold or at terminal,
 	// whichever comes first, so a successor created at the hold starts after
 	// it.
@@ -1005,6 +1059,11 @@ func translateEvents(id durable.ConversationID, before, after map[string]any, vi
 			return nil, err
 		}
 		events = append(events, UsageChangedEvent{Usage: usage})
+	}
+	for _, status := range nowLive.Compactions {
+		if !slices.ContainsFunc(wasLive.Compactions, func(previous CompactionStatus) bool { return previous.TaskID == status.TaskID }) {
+			events = append(events, CompactionStartEvent{TaskID: status.TaskID, Reason: status.Reason, Blocking: status.Blocking})
+		}
 	}
 	if run != nil && runChanged {
 		events = append(events, RunStartEvent{Inputs: run.Inputs})

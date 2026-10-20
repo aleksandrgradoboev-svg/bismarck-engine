@@ -542,6 +542,23 @@ func (c *Conversation) Reset(ctx context.Context, handoff *string) error {
 	return err
 }
 
+// Compact admits a manual compaction task and returns its ID; instructions,
+// unless nil, are an additional focus for the summary. It summarizes while
+// the conversation keeps working and places its summary through a write
+// submission: at once when idle, otherwise at the next boundary (spec §8.7).
+// It enables scheduling.
+func (c *Conversation) Compact(ctx context.Context, instructions *string) (durable.TaskID, error) {
+	c.h.tasks.resume()
+	input := CompactionInput{Reason: CompactionManual, Instructions: instructions}
+	var id durable.TaskID
+	err := c.h.Commit(ctx, func(tx *durable.Tx) error {
+		var err error
+		id, err = createCompaction(tx, c.ID, input, nil)
+		return err
+	})
+	return id, err
+}
+
 // Commit runs a Session commit whose Tx.CreateTask defaults to this
 // conversation.
 func (c *Conversation) Commit(ctx context.Context, change func(tx *durable.Tx) error) error {
