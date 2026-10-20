@@ -605,6 +605,26 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    carries them). Unchecked, as in pi: an API call after the call settled, and rewriting an equal
    `modelTools`.
 
+   **Durable slice 2b, recovery and tool events** (snapshot `d2e7d8b7`; `tool.ts`, `events.ts`). The
+   tool task's `execute` phase, reached only by recovery after intent, reruns only when the stored
+   and the current replay policy both say `safe`, after one commit clears the slot's progress;
+   otherwise the call fails as interrupted, answered with the slot's durable output. Empty
+   arguments are omitted from the stored intent and rerun as `{}`. Agent events gain
+   `tool_execution_start` (the intent's arguments), `tool_execution_update` and
+   `tool_execution_end` (with the result entry, directly before its message), and the snapshot
+   gains `tools`. `ToolEventCall` is embedded in each tool event; its parent fields and the nested
+   `result` of an end come with 2c. An update's output is one `ToolOutputChange` that encodes as
+   `{set}` or `{trimStart?, append?}`; details and diagnostics a safe rerun cleared are sent as `null`
+   and `[]`, marked by `DetailsChanged` and `DiagnosticsChanged`, as Go has no undefined. pi's `===`
+   on slot parts is `sameValue`, now for any value: objects and arrays by identity, other values by
+   equality. Tests: `harness-tools-recovery` without the real bash case (8; stage 5), the six tool
+   cases of `harness-events` (one extends the ported usage-only case), the eight tool cases of
+   `harness-inbox` and the two of `harness-input-entries`; their code came with 2a. The snapshot case
+   checks its empty `tools` again, as pi's does; slice 1 (d2) had dropped that check. Beyond pi,
+   from the sabotage run: an interrupted call fails (pi checks only its answer), empty arguments
+   rerun as `{}`, a call a sequential round never started ends with its result entry, scalar
+   details compare by value, and the JSON of an output change. Sabotage 18 of 18.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

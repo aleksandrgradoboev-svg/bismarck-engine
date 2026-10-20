@@ -18,9 +18,9 @@ import (
 )
 
 // The built-in tool task (pi packages/durable/src/harness/tool.ts). This
-// stage of the port runs model-issued calls; the execute phase (recovery
-// after intent) and nested calls come with their stages, and reaching them
-// faults ("not ported yet").
+// stage of the port runs model-issued calls, recovery after intent included;
+// nested calls come with their stage, and reaching them faults ("not ported
+// yet").
 
 // The output limits a tool without its own keep (pi truncate.ts).
 const (
@@ -97,7 +97,7 @@ func init() {
 		},
 		Phases: map[string]func(ctx context.Context, task *toolTask, rt *TaskRuntime) error{
 			toolPhaseCall:    callTool,
-			toolPhaseExecute: func(context.Context, *toolTask, *TaskRuntime) error { return notPorted("the tool execute phase") },
+			toolPhaseExecute: executeTool,
 		},
 		Abort: abortTool,
 	})
@@ -191,6 +191,50 @@ func callTool(ctx context.Context, task *toolTask, rt *TaskRuntime) error {
 		return err
 	}
 	return runTool(ctx, rt, task.Input, call, tool, final)
+}
+
+// executeTool is recovery after intent: it reruns only when the stored and
+// the current policy both say safe; otherwise the call fails as interrupted,
+// answered with the slot's durable output.
+func executeTool(ctx context.Context, task *toolTask, rt *TaskRuntime) error {
+	if task.Input.Kind == toolCallNested {
+		return notPorted("nested tool calls")
+	}
+	call, err := readToolCall(ctx, rt, task.Input)
+	if err != nil {
+		return err
+	}
+	tool, err := resolveTool(ctx, rt, task.Input, call.Name)
+	if err != nil {
+		return err
+	}
+	if task.Checkpoint.Replay == ReplaySafe && tool != nil && tool.Replay == ReplaySafe {
+		// The rerun reports from scratch; clear what the interrupted attempt
+		// published.
+		if err := rt.Commit(ctx, func(tx *durable.Tx, _ durable.TaskRecord) (*durable.TaskState, error) {
+			live, err := liveDraft(tx, rt.ConversationID)
+			if err != nil {
+				return nil, err
+			}
+			if slot := toolSlotDraft(live, rt.TaskID); slot != nil {
+				return nil, clearProgress(slot)
+			}
+			return nil, nil
+		}); err != nil {
+			return err
+		}
+		args := task.Checkpoint.Arguments
+		if args == nil {
+			// Empty arguments are omitted from the stored intent.
+			args = map[string]any{}
+		}
+		return runTool(ctx, rt, task.Input, call, tool, args)
+	}
+	message := fmt.Sprintf("Tool %s was interrupted and may have partially run", call.Name)
+	// Failed records cancellation intent, so the call's owned conversations,
+	// left unsupervised, are aborted.
+	ending := toolEnding{status: durable.OutcomeFailed, message: message}
+	return settleTool(ctx, rt, task.Input, call, ending, func(slot *ToolSlot) ToolExecutionResult { return fromSlot(slot, "interrupted", message) }, nil)
 }
 
 // abortTool settles an abort-marked call; one abandoned after a restart says

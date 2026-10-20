@@ -20,10 +20,8 @@ import (
 )
 
 // Ported from pi packages/durable/test/harness-inbox.test.ts (snapshot
-// 1402973a). The cases that run tools (steers at the postTools boundary, a
-// reset or handoff after tools, a terminating round, tool usage) wait for
-// slice 2 of the port; the partial converted after reopen waits for the
-// generation recovery of slice 1 (d).
+// 1402973a). The cases that run tools are in inbox_tools_test.go; the
+// partial converted after reopen is in generation_recovery_test.go.
 
 // queuedNote is a write that affects model context, so it queues while busy;
 // a data-only write would be appended at once.

@@ -15,8 +15,8 @@ import (
 // Agent events (pi packages/durable/src/harness/events.ts, spec §9.4):
 // experimental. One conversation's commits as batches of events shaped like
 // the coding agent's session events, translated from the conversation view's
-// publications. The tool and compaction events come with their slices of the
-// port, with the pi.live slots they read.
+// publications. Events of nested calls and of compaction come with their
+// slices of the port, with the pi.live slots they read.
 
 // QueuedItem is one queued inbox item: its submission and how it is queued.
 type QueuedItem struct {
@@ -42,7 +42,9 @@ type SnapshotEvent struct {
 	// Generation is the current generation attempt: its in-flight partial,
 	// retry backoff, or deferred poll.
 	Generation *LiveGeneration `json:"generation,omitempty"`
-	Inbox      []QueuedItem    `json:"inbox"`
+	// Tools are pi.live tools, the current round's calls.
+	Tools []ToolSlot   `json:"tools"`
+	Inbox []QueuedItem `json:"inbox"`
 	// Agent is pi.agent; its initial value when absent.
 	Agent AgentState `json:"agent"`
 	Usage UsageState `json:"usage"`
@@ -132,6 +134,106 @@ type TaskFailedEvent struct {
 	TaskID  durable.TaskID `json:"taskId"`
 	Kind    string         `json:"kind"`
 	Message string         `json:"message"`
+}
+
+// ToolEventCall is which call a tool event is about. ToolCallID is the
+// call's ID in the transcript and in tool events: match events by it, do not
+// parse it. TaskID is the call's tool task, nil for a call that never got
+// one (not offered, or not started in a sequential round). The parent fields
+// name the call that made a nested call.
+type ToolEventCall struct {
+	ToolCallID       string          `json:"toolCallId"`
+	ToolName         string          `json:"toolName"`
+	TaskID           *durable.TaskID `json:"taskId,omitempty"`
+	ParentToolCallID string          `json:"parentToolCallId,omitempty"`
+	ParentTaskID     *durable.TaskID `json:"parentTaskId,omitempty"`
+}
+
+// ToolExecutionStartEvent: a call starts running with Args, its final
+// arguments.
+type ToolExecutionStartEvent struct {
+	ToolEventCall
+	Args map[string]any `json:"args"`
+}
+
+// ToolOutputChange is how a running call's retained output changed: Set
+// replaces it, else TrimStart UTF-16 code units leave its front and Append
+// joins its end.
+type ToolOutputChange struct {
+	TrimStart int
+	Append    string
+	Set       *string
+}
+
+func (c ToolOutputChange) MarshalJSON() ([]byte, error) {
+	if c.Set != nil {
+		return json.Marshal(struct {
+			Set string `json:"set"`
+		}{*c.Set})
+	}
+	return json.Marshal(struct {
+		TrimStart int    `json:"trimStart,omitempty"`
+		Append    string `json:"append,omitempty"`
+	}{c.TrimStart, c.Append})
+}
+
+// ToolExecutionUpdateEvent: a running call's progress changed. A field
+// that did not change is absent; a safe rerun clears details, sent as null,
+// and diagnostics, sent as [].
+type ToolExecutionUpdateEvent struct {
+	ToolEventCall
+	Output             *ToolOutputChange
+	DetailsChanged     bool
+	Details            any
+	DiagnosticsChanged bool
+	Diagnostics        []ToolDiagnostic
+}
+
+func (e ToolExecutionUpdateEvent) MarshalJSON() ([]byte, error) {
+	fields := struct {
+		ToolEventCall
+		Output      *ToolOutputChange `json:"output,omitempty"`
+		Details     *json.RawMessage  `json:"details,omitempty"`
+		Diagnostics *[]ToolDiagnostic `json:"diagnostics,omitempty"`
+	}{ToolEventCall: e.ToolEventCall, Output: e.Output}
+	if e.DetailsChanged {
+		raw, err := json.Marshal(e.Details)
+		if err != nil {
+			return nil, err
+		}
+		details := json.RawMessage(raw)
+		fields.Details = &details
+	}
+	if e.DiagnosticsChanged {
+		diagnostics := e.Diagnostics
+		if diagnostics == nil {
+			diagnostics = []ToolDiagnostic{}
+		}
+		fields.Diagnostics = &diagnostics
+	}
+	return typedJSON(e.EventType(), fields)
+}
+
+// ToolExecutionEndEvent: a call ended, a model-issued one with its result
+// Entry. Entry is nil when the tool task faulted or was orphaned, or when
+// the call's slot left pi.live unfinished because its run ended.
+type ToolExecutionEndEvent struct {
+	ToolEventCall
+	Entry *durable.EntryRecord `json:"entry,omitempty"`
+}
+
+func (ToolExecutionStartEvent) EventType() string  { return "tool_execution_start" }
+func (ToolExecutionUpdateEvent) EventType() string { return "tool_execution_update" }
+func (ToolExecutionEndEvent) EventType() string    { return "tool_execution_end" }
+
+func (e ToolExecutionStartEvent) MarshalJSON() ([]byte, error) {
+	type plain ToolExecutionStartEvent
+	return typedJSON(e.EventType(), plain(e))
+}
+
+func (e ToolExecutionEndEvent) MarshalJSON() ([]byte, error) {
+	type plain ToolExecutionEndEvent
+	return typedJSON(e.EventType(), plain(e))
 }
 
 func (SnapshotEvent) EventType() string       { return "snapshot" }
@@ -472,9 +574,22 @@ func partsOf(view map[string]any) eventParts {
 }
 
 // sameValue reports one immutable value: the view shares what a commit left
-// untouched, as pi compares by reference.
-func sameValue(a, b map[string]any) bool {
-	return reflect.ValueOf(a).UnsafePointer() == reflect.ValueOf(b).UnsafePointer()
+// untouched, as pi compares by reference. Objects and arrays compare by
+// identity, other values by equality, as pi's ===.
+func sameValue(a, b any) bool {
+	switch x := a.(type) {
+	case map[string]any:
+		y, ok := b.(map[string]any)
+		return ok && reflect.ValueOf(x).UnsafePointer() == reflect.ValueOf(y).UnsafePointer()
+	case []any:
+		y, ok := b.([]any)
+		return ok && len(x) == len(y) && reflect.ValueOf(x).UnsafePointer() == reflect.ValueOf(y).UnsafePointer()
+	}
+	switch b.(type) {
+	case map[string]any, []any:
+		return false
+	}
+	return a == b
 }
 
 // rawAt walks object keys down a raw value; nil when absent.
@@ -492,6 +607,7 @@ func rawAt(value map[string]any, keys ...string) map[string]any {
 type liveParts struct {
 	Run        *LiveRun        `json:"run,omitempty"`
 	Generation *LiveGeneration `json:"generation,omitempty"`
+	Tools      []ToolSlot      `json:"tools,omitempty"`
 }
 
 func decodeLiveParts(live map[string]any) (liveParts, error) {
@@ -547,7 +663,10 @@ func eventSnapshot(view map[string]any) (SnapshotEvent, error) {
 	if err != nil {
 		return SnapshotEvent{}, err
 	}
-	snapshot := SnapshotEvent{Entries: decoded.Entries, Generation: live.Generation, Inbox: queuedOf(parts.inbox), Agent: agent, Usage: usage}
+	snapshot := SnapshotEvent{Entries: decoded.Entries, Generation: live.Generation, Tools: live.Tools, Inbox: queuedOf(parts.inbox), Agent: agent, Usage: usage}
+	if snapshot.Tools == nil {
+		snapshot.Tools = []ToolSlot{}
+	}
 	if snapshot.Entries == nil {
 		snapshot.Entries = []durable.EntryRecord{}
 	}
@@ -609,7 +728,29 @@ func translateEvents(id durable.ConversationID, before, after map[string]any, vi
 	}
 	var events []AgentEvent
 
-	// Progress: the in-flight message, retry and deferred state.
+	// Progress: tool starts, the in-flight message, tool updates, retry and
+	// deferred state.
+	slotsBefore := map[string]ToolSlot{}
+	for _, slot := range wasLive.Tools {
+		slotsBefore[slot.CallID] = slot
+	}
+	rawBefore, rawNow := rawSlots(was.live), rawSlots(now.live)
+	for _, slot := range nowLive.Tools {
+		if previous, ok := slotsBefore[slot.CallID]; slot.Status != slotRunning || ok && previous.Status == slotRunning {
+			continue
+		}
+		// A model-issued call's arguments are in its intent checkpoint.
+		args := map[string]any{}
+		if slot.TaskID != nil {
+			if task, ok := tasks[*slot.TaskID]; ok {
+				var checkpoint ToolTaskCheckpoint
+				if err := json.Unmarshal(task.State.Checkpoint, &checkpoint); err == nil && checkpoint.Arguments != nil {
+					args = checkpoint.Arguments
+				}
+			}
+		}
+		events = append(events, ToolExecutionStartEvent{ToolEventCall: callOf(slot), Args: args})
+	}
 	partialBefore := rawAt(was.live, "generation", "message")
 	partial := rawAt(now.live, "generation", "message")
 	if partial != nil {
@@ -624,6 +765,16 @@ func translateEvents(id durable.ConversationID, before, after map[string]any, vi
 			events = append(events, MessageUpdateEvent{Usage: message.Usage, Changes: changes})
 		}
 	}
+	for index, slot := range nowLive.Tools {
+		previous, ok := slotsBefore[slot.CallID]
+		if slot.Status != slotRunning || !ok || previous.Status != slotRunning {
+			continue
+		}
+		if update, changed := toolUpdate(viewOps, index, slot, previous, rawNow[slot.CallID], rawBefore[slot.CallID]); changed {
+			update.ToolEventCall = callOf(slot)
+			events = append(events, update)
+		}
+	}
 	generation, generationBefore := nowLive.Generation, wasLive.Generation
 	if generation != nil && generation.Retry != nil && (generationBefore == nil || generationBefore.Retry == nil) {
 		events = append(events, AutoRetryStartEvent{Attempt: generation.Attempt, At: generation.Retry.At, ErrorMessage: generation.Retry.Error})
@@ -635,9 +786,57 @@ func translateEvents(id durable.ConversationID, before, after map[string]any, vi
 		events = append(events, DeferredPollEvent{PollAt: generation.Deferred.PollAt})
 	}
 
-	// Entries in append order.
+	// Tools that end in this commit: a slot that becomes done, one created
+	// done (a call not offered), or an unfinished one that vanishes because
+	// its run ended. A done slot that vanishes ended earlier.
+	type toolEnd struct {
+		event   ToolExecutionEndEvent
+		entryID *durable.EntryID
+	}
+	var toolEnds []toolEnd
+	endTool := func(slot ToolSlot, entryID *durable.EntryID) {
+		end := toolEnd{event: ToolExecutionEndEvent{ToolEventCall: callOf(slot)}}
+		if entryID != nil {
+			for i := range entries {
+				if entries[i].ID == *entryID {
+					entry := entries[i]
+					end.event.Entry, end.entryID = &entry, entryID
+					break
+				}
+			}
+		}
+		toolEnds = append(toolEnds, end)
+	}
+	for _, previous := range wasLive.Tools {
+		if previous.Status == slotDone {
+			continue
+		}
+		index := slices.IndexFunc(nowLive.Tools, func(slot ToolSlot) bool { return slot.CallID == previous.CallID })
+		if index >= 0 {
+			if slot := nowLive.Tools[index]; slot.Status == slotDone {
+				endTool(slot, slot.Entry)
+			}
+			continue
+		}
+		// A slot whose run ended in this commit may have had its result
+		// appended with it, as for unstarted calls.
+		endTool(previous, resultOf(entries, previous.CallID))
+	}
+	for _, slot := range nowLive.Tools {
+		if _, ok := slotsBefore[slot.CallID]; slot.Status == slotDone && !ok {
+			endTool(slot, slot.Entry)
+		}
+	}
+
+	// Entries in append order; a tool's end directly precedes its result's
+	// message, as in the coding agent.
 	assistantAppended := false
 	for _, entry := range entries {
+		for _, end := range toolEnds {
+			if end.entryID != nil && *end.entryID == entry.ID {
+				events = append(events, end.event)
+			}
+		}
 		if len(entry.Model) == 0 {
 			events = append(events, EntryAppendedEvent{Entry: entry})
 			continue
@@ -653,6 +852,13 @@ func translateEvents(id durable.ConversationID, before, after map[string]any, vi
 			events = append(events, MessageStartEvent{Message: message})
 		}
 		events = append(events, MessageEndEvent{Entry: entry})
+	}
+	// Ends without a result entry: a faulted or orphaned tool, or one whose
+	// run ended.
+	for _, end := range toolEnds {
+		if end.entryID == nil {
+			events = append(events, end.event)
+		}
 	}
 
 	// Task failures, then turn and run ends. A generation's turn ends when
@@ -727,6 +933,85 @@ func translateEvents(id durable.ConversationID, before, after map[string]any, vi
 		}
 	}
 	return events, nil
+}
+
+// rawSlots are pi.live tools as raw values, by call ID: the parts whose
+// identity tells whether details or diagnostics changed.
+func rawSlots(live map[string]any) map[string]map[string]any {
+	items, _ := live["tools"].([]any)
+	out := make(map[string]map[string]any, len(items))
+	for _, item := range items {
+		if slot, ok := item.(map[string]any); ok {
+			if id, ok := slot["callId"].(string); ok {
+				out[id] = slot
+			}
+		}
+	}
+	return out
+}
+
+// callOf is the identifying fields of a slot's tool events.
+func callOf(slot ToolSlot) ToolEventCall {
+	return ToolEventCall{ToolCallID: slot.CallID, ToolName: slot.Name, TaskID: slot.TaskID}
+}
+
+// resultOf is the tool result entry for callID among entries; nil when
+// absent.
+func resultOf(entries []durable.EntryRecord, callID string) *durable.EntryID {
+	for _, entry := range entries {
+		if len(entry.Model) == 0 {
+			continue
+		}
+		if result, ok := entry.Model[0].(ai.ToolResultMessage); ok && result.ToolCallID == callID {
+			id := entry.ID
+			return &id
+		}
+	}
+	return nil
+}
+
+// toolUpdate is the output, details and diagnostics changes of the running
+// slot at index in pi.live tools, from the view operations on it; changed
+// is false when there are none.
+func toolUpdate(viewOps []delta.Op, index int, slot, previous ToolSlot, raw, rawBefore map[string]any) (update ToolExecutionUpdateEvent, changed bool) {
+	outputPath := delta.Path{delta.Key("docs"), delta.Key(LiveDoc.Definition().Kind), delta.Key("tools"), delta.Index(index), delta.Key("output")}
+	trimStart, appended, set := 0, "", false
+	for _, op := range viewOps {
+		path, ok := opPath(op)
+		if !ok || !hasPrefix(path, outputPath) {
+			continue
+		}
+		switch o := op.(type) {
+		case delta.Truncate:
+			trimStart += o.Count
+		case delta.Append:
+			appended += o.Text
+		default:
+			set = true
+		}
+	}
+	text := func(output *string) string {
+		if output == nil {
+			return ""
+		}
+		return *output
+	}
+	outputChanged := (slot.Output == nil) != (previous.Output == nil) || text(slot.Output) != text(previous.Output)
+	if set || outputChanged && trimStart == 0 && appended == "" {
+		whole := text(slot.Output)
+		update.Output = &ToolOutputChange{Set: &whole}
+	} else if trimStart > 0 || appended != "" {
+		update.Output = &ToolOutputChange{TrimStart: trimStart, Append: appended}
+	}
+	// A safe rerun clears a running slot's progress: removed details send
+	// null, removed diagnostics [].
+	if !sameValue(raw["details"], rawBefore["details"]) {
+		update.DetailsChanged, update.Details = true, slot.Details
+	}
+	if !sameValue(raw["diagnostics"], rawBefore["diagnostics"]) {
+		update.DiagnosticsChanged, update.Diagnostics = true, slot.Diagnostics
+	}
+	return update, update.Output != nil || update.DetailsChanged || update.DiagnosticsChanged
 }
 
 var partialPath = delta.Path{delta.Key("docs"), delta.Key(LiveDoc.Definition().Kind), delta.Key("generation"), delta.Key("message")}
