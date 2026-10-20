@@ -362,10 +362,11 @@ func inspected(t *testing.T, h *Harness, id durable.TaskID) *TaskInspection {
 
 func taskNotes() *durable.Doc {
 	return durable.MustDefineDoc(durable.DocDef{
-		Kind:    "test.task-notes",
-		Version: 1,
-		Scope:   durable.ScopeTask,
-		Initial: func(any) map[string]any { return map[string]any{"text": ""} },
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "test.task-notes",
+		Version:        1,
+		Scope:          durable.ScopeTask,
+		Initial:        func(any) map[string]any { return map[string]any{"text": ""} },
 	})
 }
 

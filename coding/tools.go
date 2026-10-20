@@ -1304,12 +1304,38 @@ func getPowerShellConfig() (shell string, args []string, useStdin bool, err erro
 	if runtime.GOOS != "windows" {
 		return "", nil, false, errors.New("The powershell tool is only available on Windows.")
 	}
-	for _, executable := range []string{"pwsh.exe", "powershell.exe"} {
-		if p, lookErr := exec.LookPath(executable); lookErr == nil && p != "" {
-			return p, slices.Clone(powershellArgs), false, nil
+	return powerShellConfig(exec.LookPath, shellExists, os.Getenv)
+}
+
+// powerShellConfig is getPowerShellConfig's resolution (upstream 61060ddf,
+// pi#9490), on any OS for its tests: PowerShell 7 on PATH, then under
+// ProgramFiles, then Windows PowerShell on PATH, then under SystemRoot.
+// Installation directories may be on any drive and need not be on PATH.
+func powerShellConfig(lookPath func(string) (string, error), exists func(string) bool, getenv func(string) string) (string, []string, bool, error) {
+	onPath := func(executable string) string {
+		if p, err := lookPath(executable); err == nil {
+			return p
+		}
+		return ""
+	}
+	shell := onPath("pwsh.exe")
+	if programFiles := getenv("ProgramFiles"); shell == "" && programFiles != "" {
+		if pwsh7 := proc.WinJoin(programFiles, "PowerShell", "7", "pwsh.exe"); exists(pwsh7) {
+			shell = pwsh7
 		}
 	}
-	return "", nil, false, errors.New("No PowerShell executable found. Install PowerShell or add powershell.exe/pwsh.exe to PATH.")
+	if shell == "" {
+		shell = onPath("powershell.exe")
+	}
+	if systemRoot := getenv("SystemRoot"); shell == "" && systemRoot != "" {
+		if windowsPowerShell := proc.WinJoin(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"); exists(windowsPowerShell) {
+			shell = windowsPowerShell
+		}
+	}
+	if shell == "" {
+		return "", nil, false, errors.New("No PowerShell executable found. Install PowerShell or add powershell.exe/pwsh.exe to PATH.")
+	}
+	return shell, slices.Clone(powershellArgs), false, nil
 }
 
 // ---------------------------------------------------------------------------

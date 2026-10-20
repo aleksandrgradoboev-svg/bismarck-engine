@@ -23,22 +23,26 @@ func liveInitial() map[string]any {
 }
 
 var LiveDoc = durable.MustDefineDoc(durable.DocDef{
-	Kind: "test.live", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkInitial,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "test.live", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkInitial,
 	Initial: func(any) map[string]any { liveInitCount.Add(1); return liveInitial() },
 })
 
 var RewindableLiveDoc = durable.MustDefineDoc(durable.DocDef{
-	Kind: "test.live", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "test.live", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
 	Initial: func(any) map[string]any { return liveInitial() },
 })
 
 var LiveDocV2 = durable.MustDefineDoc(durable.DocDef{
-	Kind: "test.live", Version: 2, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkInitial,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "test.live", Version: 2, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkInitial,
 	Initial: func(any) map[string]any { return liveInitial() },
 })
 
 var CounterDoc = durable.MustDefineDoc(durable.DocDef{
-	Kind: "test.counter", Version: 1, Scope: durable.ScopeSession,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "test.counter", Version: 1, Scope: durable.ScopeSession,
 	Initial: func(any) map[string]any { return map[string]any{"count": 0} },
 })
 
@@ -48,7 +52,8 @@ var (
 )
 
 var MemberDoc = durable.MustDefineDoc(durable.DocDef{
-	Kind: "test.member", Version: 1, Family: true, Scope: durable.ScopeSession,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "test.member", Version: 1, Family: true, Scope: durable.ScopeSession,
 	Initial: func(seed any) map[string]any {
 		seedsMu.Lock()
 		seeds = append(seeds, seed.(string))
@@ -413,7 +418,8 @@ func TestDocumentLateAbsentAcquisitionNeitherInitializesNorMints(t *testing.T) {
 	ts := openTestSession(t)
 	var initialized atomic.Int64
 	lateDoc := durable.MustDefineDoc(durable.DocDef{
-		Kind: "test.late", Version: 1, Scope: durable.ScopeSession,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "test.late", Version: 1, Scope: durable.ScopeSession,
 		Initial: func(any) map[string]any { initialized.Add(1); return map[string]any{"count": 0} },
 	})
 	g := ts.storage.holdFindDocument()
@@ -489,7 +495,8 @@ func TestDocumentRejectsNonJSONValuesBeforeAdmission(t *testing.T) {
 	ts := openTestSession(t)
 	conversationID := createConversation(t, ts.session)
 	dateDoc := durable.MustDefineDoc(durable.DocDef{
-		Kind: "test.date", Version: 1, Scope: durable.ScopeSession,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "test.date", Version: 1, Scope: durable.ScopeSession,
 		Initial: func(any) map[string]any { return map[string]any{"at": time.Now()} },
 	})
 	err := ts.session.Commit(bg, func(tx *durable.Tx) error { _, err := tx.Doc(dateDoc.Session()); return err })

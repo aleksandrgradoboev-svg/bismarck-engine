@@ -551,7 +551,7 @@ func TestViewSharesOneMountBetweenConcurrentObserversAndIsolatesAFailingListener
 
 func TestViewPublishesOneFrameForACommitThatAppendsSeveralEntriesAndEditsADocument(t *testing.T) {
 	h, root := openChat(t, memory.New(), newChatSetup(t))
-	other := durable.MustDefineDoc(durable.DocDef{Kind: "app.other", Version: 1, Scope: durable.ScopeConversation, History: "latest", Fork: "initial", Initial: func(any) map[string]any { return map[string]any{"n": float64(0)} }})
+	other := durable.MustDefineDoc(durable.DocDef{Kind: "app.other", Version: 1, Scope: durable.ScopeConversation, History: "latest", Fork: "initial", Initial: func(any) map[string]any { return map[string]any{"n": float64(0)} }, CheckpointWhen: durable.NeverCheckpoint})
 	recorded := recordView(t, root)
 	must(t, root.Commit(bg, func(tx *durable.Tx) error {
 		if _, err := tx.AppendEntry(root.ID, durable.EntryDraft{Kind: "a"}); err != nil {
@@ -619,7 +619,7 @@ func TestViewMountsADocumentRecreatedInOneCommitWhole(t *testing.T) {
 // be, and its members commit.
 func TestViewIgnoresAKeyedMemberOfAMountedKind(t *testing.T) {
 	_, root := openChat(t, memory.New(), newChatSetup(t))
-	family := durable.MustDefineDoc(durable.DocDef{Kind: "pi.live", Version: 1, Scope: durable.ScopeConversation, History: "latest", Fork: "initial", Family: true, Initial: func(any) map[string]any { return map[string]any{} }})
+	family := durable.MustDefineDoc(durable.DocDef{Kind: "pi.live", Version: 1, Scope: durable.ScopeConversation, History: "latest", Fork: "initial", Family: true, Initial: func(any) map[string]any { return map[string]any{} }, CheckpointWhen: durable.NeverCheckpoint})
 	recorded := recordView(t, root)
 	must(t, root.Commit(bg, func(tx *durable.Tx) error {
 		member, err := tx.Doc(family.Conversation(root.ID).Member("other", nil))

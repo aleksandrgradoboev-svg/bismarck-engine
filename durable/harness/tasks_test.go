@@ -147,10 +147,11 @@ func TestTaskComparesCheckpointsByValueIncludingArrays(t *testing.T) {
 
 func TestTaskCommitsResultsWithEntriesKeepsMemosUntilTerminalAndRetiresTaskDocuments(t *testing.T) {
 	progress := durable.MustDefineDoc(durable.DocDef{
-		Kind:    "test.task-progress",
-		Version: 1,
-		Scope:   durable.ScopeTask,
-		Initial: func(any) map[string]any { return map[string]any{"lines": []any{}} },
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "test.task-progress",
+		Version:        1,
+		Scope:          durable.ScopeTask,
+		Initial:        func(any) map[string]any { return map[string]any{"lines": []any{}} },
 	})
 	child := oneStep(t, "test.child", func(ctx context.Context, _ *stepTask, rt *TaskRuntime) error {
 		return rt.Commit(ctx, completeWith(nil))

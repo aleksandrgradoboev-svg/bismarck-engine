@@ -448,12 +448,13 @@ func TestGenerationCommitsPartialsNoMoreOftenThanTheProgressInterval(t *testing.
 }
 
 var sectionAgentDoc = durable.MustDefineDoc(durable.DocDef{
-	Kind:    "test.agent",
-	Version: 1,
-	Scope:   durable.ScopeConversation,
-	History: "latest",
-	Fork:    "current",
-	Initial: func(any) map[string]any { return map[string]any{"cwd": "/", "kind": "main"} },
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "test.agent",
+	Version:        1,
+	Scope:          durable.ScopeConversation,
+	History:        "latest",
+	Fork:           "current",
+	Initial:        func(any) map[string]any { return map[string]any{"cwd": "/", "kind": "main"} },
 })
 
 func TestGenerationRendersSectionsThatReadConversationDocumentsThroughInputRead(t *testing.T) {

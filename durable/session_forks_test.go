@@ -15,14 +15,16 @@ import (
 
 func valueDoc(kind, history, fork, initial string) *durable.Doc {
 	return durable.MustDefineDoc(durable.DocDef{
-		Kind: kind, Version: 1, Scope: durable.ScopeConversation, History: history, Fork: fork,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           kind, Version: 1, Scope: durable.ScopeConversation, History: history, Fork: fork,
 		Initial: func(any) map[string]any { return map[string]any{"value": initial} },
 	})
 }
 
 func valueFamily(kind, history, fork string) *durable.Doc {
 	return durable.MustDefineDoc(durable.DocDef{
-		Kind: kind, Version: 1, Family: true, Scope: durable.ScopeConversation, History: history, Fork: fork,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           kind, Version: 1, Family: true, Scope: durable.ScopeConversation, History: history, Fork: fork,
 		Initial: func(seed any) map[string]any { return map[string]any{"value": seed} },
 	})
 }
@@ -177,12 +179,14 @@ func TestForkSelectsTheEntryOwnerForAsOfAndTheParentForCurrent(t *testing.T) {
 
 func TestForkCopiesTheStoredValueAndVersionWithoutMigrating(t *testing.T) {
 	v1 := durable.MustDefineDoc(durable.DocDef{
-		Kind: "fork.stored-version", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "fork.stored-version", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
 		Initial: func(any) map[string]any { return map[string]any{"count": 1} },
 	})
 	var migrations atomic.Int64
 	v3 := durable.MustDefineDoc(durable.DocDef{
-		Kind: "fork.stored-version", Version: 3, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "fork.stored-version", Version: 3, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
 		Initial: func(any) map[string]any { return map[string]any{"count": 0, "migrated": false} },
 		Migrate: func(value map[string]any, from int) map[string]any {
 			if from != 1 {
@@ -224,7 +228,8 @@ func TestForkCopiesTheStoredValueAndVersionWithoutMigrating(t *testing.T) {
 
 func TestForkCoalescesAMigrationAndAnOverrideIntoTheCopiedBase(t *testing.T) {
 	v1 := durable.MustDefineDoc(durable.DocDef{
-		Kind: "fork.override", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "fork.override", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
 		Initial: func(any) map[string]any { return map[string]any{"count": 2} },
 	})
 	var checkpoints atomic.Int64
@@ -498,11 +503,13 @@ func TestForkRetiresACopiedDocumentAndRecreatesTheAddress(t *testing.T) {
 func TestForkCopiesOnlyConversationDocuments(t *testing.T) {
 	copied := valueDoc("fork.scope.conversation", durable.HistoryLatest, durable.ForkCurrent, "conversation")
 	sessionOnly := durable.MustDefineDoc(durable.DocDef{
-		Kind: "fork.scope.session", Version: 1, Scope: durable.ScopeSession,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "fork.scope.session", Version: 1, Scope: durable.ScopeSession,
 		Initial: func(any) map[string]any { return map[string]any{"value": "session"} },
 	})
 	taskOnly := durable.MustDefineDoc(durable.DocDef{
-		Kind: "fork.scope.task", Version: 1, Scope: durable.ScopeTask,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "fork.scope.task", Version: 1, Scope: durable.ScopeTask,
 		Initial: func(any) map[string]any { return map[string]any{"value": "task"} },
 	})
 	work := testTask{name: "fork.scope.work", version: 1, checkpoint: `{"phase":"start"}`}
@@ -538,7 +545,8 @@ func TestForkCopiesOnlyConversationDocuments(t *testing.T) {
 
 func TestForkCopiesEveryFamilyMemberAcrossScanPages(t *testing.T) {
 	family := durable.MustDefineDoc(durable.DocDef{
-		Kind: "fork.pagination", Version: 1, Family: true, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkCurrent,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "fork.pagination", Version: 1, Family: true, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkCurrent,
 		Initial: func(seed any) map[string]any { return map[string]any{"value": seed} },
 	})
 	ts := openTestSession(t)

@@ -1256,7 +1256,7 @@ func (tx *Tx) assemble() ([]StorageWrite, error) {
 		if w, ok := plan.content.(DocumentChangeWrite); ok && w.Content.Kind == ContentDelta && plan.change != nil && plan.change.loaded != nil {
 			change := plan.change
 			info := CheckpointInfo{DeltasSinceBase: change.loaded.deltasSinceBase}
-			if change.def != nil && change.def.CheckpointWhen != nil {
+			if change.def != nil {
 				base, err := callHook(func() bool { return change.def.CheckpointWhen(change.prepared.Value(), change.prepared.Ops(), info) })
 				if err != nil {
 					return nil, err

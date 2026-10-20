@@ -715,10 +715,11 @@ func TestBlockedBlocksAnOlderRecordWhoseNewerDefinitionHasNoMigration(t *testing
 
 func TestBlockedSettlesAnAbortedBlockedTaskAsOrphanedAndRetiresItsDocuments(t *testing.T) {
 	scratch := durable.MustDefineDoc(durable.DocDef{
-		Kind:    "test.orphan-scratch",
-		Version: 1,
-		Scope:   durable.ScopeTask,
-		Initial: func(any) map[string]any { return map[string]any{"n": 0} },
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "test.orphan-scratch",
+		Version:        1,
+		Scope:          durable.ScopeTask,
+		Initial:        func(any) map[string]any { return map[string]any{"n": 0} },
 	})
 	o := openRoot(t, nil, openOptions{})
 	var id durable.TaskID

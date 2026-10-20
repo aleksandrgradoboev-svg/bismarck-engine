@@ -18,10 +18,11 @@ import (
 
 func sessionNotes(kind string) *durable.Doc {
 	return durable.MustDefineDoc(durable.DocDef{
-		Kind:    kind,
-		Version: 1,
-		Scope:   durable.ScopeSession,
-		Initial: func(any) map[string]any { return map[string]any{"text": ""} },
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           kind,
+		Version:        1,
+		Scope:          durable.ScopeSession,
+		Initial:        func(any) map[string]any { return map[string]any{"text": ""} },
 	})
 }
 
@@ -105,12 +106,13 @@ func TestRuntimeFailsOperationsAfterTheInvocationEndsAndStopsItsWatches(t *testi
 
 func TestRuntimeReadsCommittedDocumentsAndContextAndForwardsTheClockAndReports(t *testing.T) {
 	notes := durable.MustDefineDoc(durable.DocDef{
-		Kind:    "test.runtime-notes",
-		Version: 1,
-		Scope:   durable.ScopeConversation,
-		History: "rewindable",
-		Fork:    "asOf",
-		Initial: func(any) map[string]any { return map[string]any{"text": ""} },
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "test.runtime-notes",
+		Version:        1,
+		Scope:          durable.ScopeConversation,
+		History:        "rewindable",
+		Fork:           "asOf",
+		Initial:        func(any) map[string]any { return map[string]any{"text": ""} },
 	})
 	var captured *TaskRuntime
 	var seen []any

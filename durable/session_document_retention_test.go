@@ -20,18 +20,21 @@ import (
 // it; pi's timers without unref and non-numeric retentions have no Go form.
 
 var retentionCounter = durable.MustDefineDoc(durable.DocDef{
-	Kind: "test.retention.counter", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkInitial,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "test.retention.counter", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkInitial,
 	Initial: func(any) map[string]any { return map[string]any{"count": 0} },
 })
 
 var retentionRewindable = durable.MustDefineDoc(durable.DocDef{
-	Kind: "test.retention.rewindable", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "test.retention.rewindable", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
 	Initial: func(any) map[string]any { return map[string]any{"count": 0} },
 })
 
 // retentionEvent is a third-party conversation family: one member per event.
 var retentionEvent = durable.MustDefineDoc(durable.DocDef{
-	Kind: "test.retention.event", Version: 1, Family: true, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkInitial,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "test.retention.event", Version: 1, Family: true, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkInitial,
 	Initial: func(seq any) map[string]any { return map[string]any{"seq": seq} },
 })
 
