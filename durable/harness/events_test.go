@@ -18,7 +18,7 @@ import (
 )
 
 // Ported from pi packages/durable/test/harness-events.test.ts, without the
-// cases that run a tool (slice 2).
+// cases of nested calls (slice 2c) and compaction (slice 3).
 
 // eventLog records every delivered batch of a stream.
 type eventLog struct {
@@ -398,7 +398,7 @@ func TestEventsApplyDeltasAfterAnOverflowSnapshotThatHoldsAnInFlightPartial(t *t
 	}
 }
 
-func TestEventsReportUsageOnlyUpdatesDeferredPollsAndRetiredDocuments(t *testing.T) {
+func TestEventsReportUsageOnlyUpdatesClearedToolProgressToolsEndingWithoutEntriesAndDeferredPolls(t *testing.T) {
 	_, root := openChat(t, memory.New(), newChatSetup(t))
 	_, log := listen(t, root)
 	change := func(edit func(tx *durable.Tx) error) {
@@ -436,6 +436,33 @@ func TestEventsReportUsageOnlyUpdatesDeferredPollsAndRetiredDocuments(t *testing
 		}
 		return draft.At("generation").At("deferred").Set("pollAt", float64(2))
 	})
+	change(func(tx *durable.Tx) error {
+		draft, err := live(tx)
+		if err != nil {
+			return err
+		}
+		return draft.Set("tools", []any{map[string]any{"callId": "c1", "name": "t", "status": slotRunning, "details": map[string]any{"n": float64(1)}, "diagnostics": []any{}}})
+	})
+	// A safe replay clears the running slot's progress.
+	change(func(tx *durable.Tx) error {
+		draft, err := live(tx)
+		if err != nil {
+			return err
+		}
+		slot := draft.At("tools").At(0)
+		if err := slot.Delete("details"); err != nil {
+			return err
+		}
+		return slot.Delete("diagnostics")
+	})
+	// A fault marks the slot done without an entry.
+	change(func(tx *durable.Tx) error {
+		draft, err := live(tx)
+		if err != nil {
+			return err
+		}
+		return draft.At("tools").At(0).Set("status", slotDone)
+	})
 	change(func(tx *durable.Tx) error { return tx.RetireDoc(UsageDoc.Conversation(root.ID)) })
 	change(func(tx *durable.Tx) error { return tx.RetireDoc(AgentDoc.Conversation(root.ID)) })
 	log.quiet(t)
@@ -448,6 +475,9 @@ func TestEventsReportUsageOnlyUpdatesDeferredPollsAndRetiredDocuments(t *testing
 		{MessageUpdateEvent{Usage: usage, Changes: []MessageChange{}}},
 		{DeferredPollEvent{PollAt: 1}},
 		{DeferredPollEvent{PollAt: 2}},
+		{ToolExecutionStartEvent{ToolEventCall: ToolEventCall{ToolCallID: "c1", ToolName: "t"}, Args: map[string]any{}}},
+		{ToolExecutionUpdateEvent{ToolEventCall: ToolEventCall{ToolCallID: "c1", ToolName: "t"}, DetailsChanged: true, DiagnosticsChanged: true}},
+		{ToolExecutionEndEvent{ToolEventCall: ToolEventCall{ToolCallID: "c1", ToolName: "t"}}},
 		// Retired documents read as their initial values.
 		{UsageChangedEvent{Usage: initialUsage}},
 		{AgentChangedEvent{Agent: AgentState{}}},
@@ -461,6 +491,16 @@ func TestEventsReportUsageOnlyUpdatesDeferredPollsAndRetiredDocuments(t *testing
 	}
 	for i := range want {
 		if gotJSON, wantJSON := jsonOf(t, got[i]), jsonOf(t, want[i]); gotJSON != wantJSON {
+			t.Fatalf("batch %d = %s, want %s", i, gotJSON, wantJSON)
+		}
+	}
+	// The tool events as pi's JSON has them.
+	for i, wantJSON := range map[int]string{
+		4: `[{"type":"tool_execution_start","toolCallId":"c1","toolName":"t","args":{}}]`,
+		5: `[{"type":"tool_execution_update","toolCallId":"c1","toolName":"t","details":null,"diagnostics":[]}]`,
+		6: `[{"type":"tool_execution_end","toolCallId":"c1","toolName":"t"}]`,
+	} {
+		if gotJSON := jsonOf(t, got[i]); gotJSON != wantJSON {
 			t.Fatalf("batch %d = %s, want %s", i, gotJSON, wantJSON)
 		}
 	}
