@@ -550,8 +550,8 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    `path.win32` on any OS (expectations checked against node). Tests: the definition case,
    `windows-shell-config`, `powershell-config`, `env-node`'s transport table (POSIX only, as in
    pi) and the taskkill regression. n/a: the coding agent's `docs/windows.md` and the
-   tools-manager's `WINDIR` fallback (not ported). Sabotage 10 of 11; unchecked, as in pi: a
-   `SystemRoot` that is not drive-absolute.
+   tools-manager's `WINDIR` fallback (not ported). Added beyond pi: a `SystemRoot` that is not
+   drive-absolute matches nothing, not even its own relative join. Sabotage 11 of 11.
 
 ## 5. Bookkeeping
 
