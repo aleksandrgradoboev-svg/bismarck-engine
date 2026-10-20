@@ -812,6 +812,32 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    test sizes and limits, not concurrency, so the race step skips them (`raceDetector`, as harness
    does for its depth tests); the test step without it runs them; locally 35 s under race.
 
+   **Durable stage 5c, code mode** (snapshot `d2e7d8b7`; `src/codemode`: `codemode.ts`,
+   `output.ts`, `describe.ts`). `durable/codemode` is the replay-safe code mode tool on the
+   `codemode` package's deterministic `Sandbox.Start` (start time, seed, fingerprint, `OnCall`,
+   `OnIdle`, `Deliver`, `During`), with pi's documents (`pi.codemode.run`, `pi.codemode.journal`,
+   `pi.codemode.store`) and its replay: journal before delivery, a call launched only once the count
+   of calls issued before it is committed, and the divergence checks (module version, fingerprint,
+   deadline, counts, call targets and arguments, a replay that ends where the live run went on).
+   `models.*` is not ported (the engine's model access has no classifier or image generation): the
+   tool is pi's with `models: false`, and `codemode-models.test` (7) is n/a. Go forms:
+   `Options.Sandbox` is an interface `*codemode.Sandbox` satisfies; VM callbacks change state under
+   one mutex and leave commits, nested calls and deliveries to goroutines; results delivered
+   together go to the VM last first, so it processes the batch in one turn and acknowledges it
+   once, as pi's VM does with results of one microtask turn; result files are joined with the
+   environment's `JoinPath`. `Draft.Get` returns a draft for an object member, so stored values are
+   read with `At(...).Snapshot()`. Tests: `codemode.test` (41; restarts reopen JSONL; one case made
+   deterministic, as Go runs nested tasks concurrently), `codemode-describe.test` (5), and the code
+   mode replay case of `harness-telemetry`; `durable/internal/chattest` gains a telemetry adapter.
+   Beyond pi: the fingerprint is recorded on the first run; a global where the journal has a tool
+   call diverges; `searchTools()` rejects a limit that is not a positive integer; text items are
+   numbered from two; an image shown twice is saved once; tools without a namespace that do not
+   fit say so. Sabotage 37 of 40: equivalent, a delivery after a failed journal commit (the failure
+   aborts the VM first) and the first read of the output directory (the second commit reads it
+   again, leaving an empty temp directory, as in pi); not caught, launching a call before its count
+   is committed — the session's FIFO commit line puts the count commit first, so only a crash
+   window shows it, and a test needs a test-only hook (open).
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

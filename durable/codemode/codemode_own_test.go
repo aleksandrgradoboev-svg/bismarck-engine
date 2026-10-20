@@ -69,6 +69,12 @@ func (s *countHoldingStorage) Commit(ctx context.Context, writes []durable.Stora
 	return s.Storage.Commit(ctx, writes)
 }
 
+// TestCodemodeLaunchesACallOnlyOnceTheCountOfCallsIssuedBeforeItIsCommitted
+// checks that a call made after a result does not run while that count's
+// commit is held. It does not catch a launch that skips the wait: the
+// session's FIFO commit line puts the count commit ahead of the nested
+// call's, so only a crash window shows the difference, which needs a
+// test-only hook.
 func TestCodemodeLaunchesACallOnlyOnceTheCountOfCallsIssuedBeforeItIsCommitted(t *testing.T) {
 	c := newTestChat(t, nil, nil)
 	c.holds.block.Store(false)
