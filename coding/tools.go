@@ -26,6 +26,7 @@ import (
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/agent"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/imagemime"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/proc"
 	"golang.org/x/text/collate"
@@ -250,99 +251,10 @@ func argBool(params map[string]any, key string) bool {
 
 const imageTypeSniffBytes = 4100
 
-var pngSignature = []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}
-
 // detectSupportedImageMimeType sniffs magic bytes to identify a supported image
 // type (port of utils/mime.ts detectSupportedImageMimeType). Returns "" for
 // CMYK JPEG (ffd8fff7), animated PNG (acTL), and non-IHDR PNG.
-func detectSupportedImageMimeType(buf []byte) string {
-	if bytesStartWith(buf, []byte{0xff, 0xd8, 0xff}) {
-		if len(buf) > 3 && buf[3] == 0xf7 {
-			return ""
-		}
-		return "image/jpeg"
-	}
-	if bytesStartWith(buf, pngSignature) {
-		if isPNG(buf) && !isAnimatedPNG(buf) {
-			return "image/png"
-		}
-		return ""
-	}
-	if startsWithAscii(buf, 0, "GIF87a") || startsWithAscii(buf, 0, "GIF89a") {
-		return "image/gif"
-	}
-	if startsWithAscii(buf, 0, "RIFF") && startsWithAscii(buf, 8, "WEBP") {
-		return "image/webp"
-	}
-	if startsWithAscii(buf, 0, "BM") && isBmp(buf) {
-		return "image/bmp"
-	}
-	return ""
-}
-
-// isBmp validates the BMP magic + DIB header (port of utils/mime.ts isBmp).
-// It requires colorPlanes==1 and bitsPerPixel in {1,4,8,16,24,32}, and applies
-// the declaredFileSize/pixelDataOffset sanity checks.
-func isBmp(buf []byte) bool {
-	if len(buf) < 26 {
-		return false
-	}
-	declaredFileSize := readUint32LE(buf, 2)
-	pixelDataOffset := readUint32LE(buf, 10)
-	dibHeaderSize := readUint32LE(buf, 14)
-	if declaredFileSize != 0 && declaredFileSize < 26 {
-		return false
-	}
-	if pixelDataOffset < 14+dibHeaderSize {
-		return false
-	}
-	if declaredFileSize != 0 && pixelDataOffset >= declaredFileSize {
-		return false
-	}
-
-	var colorPlanes, bitsPerPixel int
-	if dibHeaderSize == 12 {
-		colorPlanes = readUint16LE(buf, 22)
-		bitsPerPixel = readUint16LE(buf, 24)
-	} else if dibHeaderSize >= 40 && dibHeaderSize <= 124 {
-		if len(buf) < 30 {
-			return false
-		}
-		colorPlanes = readUint16LE(buf, 26)
-		bitsPerPixel = readUint16LE(buf, 28)
-	} else {
-		return false
-	}
-	if colorPlanes != 1 {
-		return false
-	}
-	switch bitsPerPixel {
-	case 1, 4, 8, 16, 24, 32:
-		return true
-	default:
-		return false
-	}
-}
-
-func readUint16LE(buf []byte, offset int) int {
-	b := func(i int) int {
-		if i < len(buf) {
-			return int(buf[i])
-		}
-		return 0
-	}
-	return b(offset) + (b(offset+1) << 8)
-}
-
-func readUint32LE(buf []byte, offset int) int {
-	b := func(i int) int {
-		if i < len(buf) {
-			return int(buf[i])
-		}
-		return 0
-	}
-	return b(offset) + (b(offset+1) << 8) + (b(offset+2) << 16) + b(offset+3)*0x1000000
-}
+func detectSupportedImageMimeType(buf []byte) string { return imagemime.Detect(buf) }
 
 // DetectSupportedImageMimeTypeFromFile reads up to the sniff window from a file
 // and identifies a supported image type (mime.ts
@@ -364,64 +276,6 @@ func DetectSupportedImageMimeTypeFromFile(path string) string {
 		return ""
 	}
 	return detectSupportedImageMimeType(buf[:n])
-}
-
-func bytesStartWith(buf, prefix []byte) bool {
-	if len(buf) < len(prefix) {
-		return false
-	}
-	for i := range prefix {
-		if buf[i] != prefix[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func startsWithAscii(buf []byte, offset int, text string) bool {
-	if len(buf) < offset+len(text) {
-		return false
-	}
-	for i := 0; i < len(text); i++ {
-		if buf[offset+i] != text[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func readUint32BE(buf []byte, offset int) int {
-	b := func(i int) int {
-		if i < len(buf) {
-			return int(buf[i])
-		}
-		return 0
-	}
-	return b(offset)*0x1000000 + (b(offset+1) << 16) + (b(offset+2) << 8) + b(offset+3)
-}
-
-func isPNG(buf []byte) bool {
-	return len(buf) >= 16 && readUint32BE(buf, len(pngSignature)) == 13 && startsWithAscii(buf, 12, "IHDR")
-}
-
-func isAnimatedPNG(buf []byte) bool {
-	offset := len(pngSignature)
-	for offset+8 <= len(buf) {
-		chunkLength := readUint32BE(buf, offset)
-		chunkTypeOffset := offset + 4
-		if startsWithAscii(buf, chunkTypeOffset, "acTL") {
-			return true
-		}
-		if startsWithAscii(buf, chunkTypeOffset, "IDAT") {
-			return false
-		}
-		nextOffset := offset + 8 + chunkLength + 4
-		if nextOffset <= offset || nextOffset > len(buf) {
-			return false
-		}
-		offset = nextOffset
-	}
-	return false
 }
 
 // readTool builds the read tool against the local filesystem — the form every
