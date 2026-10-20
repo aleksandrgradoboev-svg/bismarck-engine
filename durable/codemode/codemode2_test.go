@@ -576,10 +576,15 @@ func TestCodemodeKeepsStoreValuesPerConversationAsOfAForksEntry(t *testing.T) {
 	}
 }
 
+// In pi the 50 results finish in one tick; Go has no tick, so "together" is
+// what the pump batches: results that arrive while a journal commit is in
+// flight go into the next one. The first result's commit is held until all
+// 50 globals have returned.
 func TestCodemodeJournalsResultsThatFinishTogetherInOneCommit(t *testing.T) {
 	release := make(chan struct{})
-	var waiting atomic.Int32
+	var waiting, returned atomic.Int32
 	wait := Global{Name: "wait", Execute: func(ctxT, rawT, harness.ToolExecutionAPI) (any, error) {
+		defer returned.Add(1)
 		if waiting.Add(1) == 50 {
 			close(release)
 		}
@@ -589,7 +594,23 @@ func TestCodemodeJournalsResultsThatFinishTogetherInOneCommit(t *testing.T) {
 	c := newTestChat(t, []Global{wait}, nil)
 	c.holds.block.Store(false)
 	c.chat.Faux.SetResponses([]providers.FauxResponseStep{script(`return (await Promise.all(Array.from({ length: 50 }, () => wait()))).length`), chattest.Done})
-	h, root := c.chat.Open(t, memory.New(), nil)
+	storage := newHoldingStorage(`"global":{"name":"wait"`)
+	h, root := c.chat.Open(t, storage, nil)
+	t.Cleanup(storage.open)
+	go func() {
+		// The first result's commit, or the cleanup's release.
+		select {
+		case <-storage.reached.ch:
+		case <-storage.release:
+			return
+		}
+		for returned.Load() < 50 {
+			time.Sleep(time.Millisecond)
+		}
+		// Each returned global queues its result right after.
+		time.Sleep(100 * time.Millisecond)
+		storage.open()
+	}()
 	var journalCommits atomic.Int32
 	unsubscribe, err := h.SubscribeCommits(func(publication durable.CommitPublication, _ context.Context) {
 		for _, change := range publication.Changes {

@@ -146,7 +146,12 @@ type call struct {
 	// up to it may launch.
 	durableIssued int
 	// waiting are live calls waiting for their issued count to be committed.
-	waiting     []sandbox.HostCall
+	waiting []sandbox.HostCall
+	// starting are covered calls not yet started; one launcher starts them in
+	// call order, each once the one before it has started (as Pi starts a
+	// covered batch synchronously).
+	starting    []sandbox.HostCall
+	launching   bool
 	replayIndex map[int]int
 	// issued counts the calls the VM issued so far; its call IDs are 1, 2, ...
 	issued int
@@ -744,7 +749,7 @@ func (c *call) onCall(made sandbox.HostCall) {
 	}
 	go func() {
 		<-c.gate
-		outcome, err := c.callTool(made)
+		outcome, err := c.callTool(made, nil)
 		if err != nil {
 			if c.stopped() {
 				return
@@ -927,8 +932,33 @@ func (c *call) launchCoveredLocked() {
 		}
 	}
 	c.waiting = rest
-	for _, made := range covered {
-		go c.launch(made)
+	if len(covered) == 0 {
+		return
+	}
+	c.starting = append(c.starting, covered...)
+	if !c.launching {
+		c.launching = true
+		go c.launcher()
+	}
+}
+
+// launcher starts the covered calls in call order: a call has started once a
+// tool call is admitted or a global is executing, or once it has ended.
+func (c *call) launcher() {
+	for {
+		c.mu.Lock()
+		if len(c.starting) == 0 {
+			c.launching = false
+			c.mu.Unlock()
+			return
+		}
+		made := c.starting[0]
+		c.starting = c.starting[1:]
+		c.mu.Unlock()
+		started := make(chan struct{})
+		var once sync.Once
+		go c.launch(made, func() { once.Do(func() { close(started) }) })
+		<-started
 	}
 }
 
@@ -966,7 +996,8 @@ func (c *call) earlier(made sandbox.HostCall) (string, error) {
 }
 
 // launch runs one live call and journals its result.
-func (c *call) launch(made sandbox.HostCall) {
+func (c *call) launch(made sandbox.HostCall, started func()) {
+	defer started()
 	if c.stopped() {
 		return
 	}
@@ -974,9 +1005,9 @@ func (c *call) launch(made sandbox.HostCall) {
 	var global *journalGlobal
 	var err error
 	if made.Target == "tool" {
-		outcome, err = c.callTool(made)
+		outcome, err = c.callTool(made, started)
 	} else {
-		outcome, err = c.callGlobal(made)
+		outcome, err = c.callGlobal(made, started)
 		if err == nil {
 			var journaled journalOutcome
 			journaled, err = fromOutcome(outcome)
@@ -1013,7 +1044,8 @@ func (c *call) launch(made sandbox.HostCall) {
 	c.pump()
 }
 
-func (c *call) callTool(made sandbox.HostCall) (sandbox.Outcome, error) {
+// callTool calls started, when set, once the nested call is admitted.
+func (c *call) callTool(made sandbox.HostCall, started func()) (sandbox.Outcome, error) {
 	// Passed as the script gave them; an argument list that is not an object
 	// cannot reach the tool.
 	args := map[string]any{}
@@ -1027,7 +1059,11 @@ func (c *call) callTool(made sandbox.HostCall) (sandbox.Outcome, error) {
 			args = map[string]any{}
 		}
 	}
-	result, err := c.api.ExecuteTool(c.ctx, made.Name, args, harness.NestedCallOptions{Key: "c" + strconv.Itoa(made.ID)})
+	options := harness.NestedCallOptions{Key: "c" + strconv.Itoa(made.ID)}
+	if started != nil {
+		options.OnAdmitted = func(durable.TaskID) { started() }
+	}
+	result, err := c.api.ExecuteTool(c.ctx, made.Name, args, options)
 	if err != nil {
 		return sandbox.Outcome{}, err
 	}
@@ -1180,9 +1216,11 @@ func (c *call) details() ToolDetails {
 	return ToolDetails{Calls: calls}
 }
 
-func (c *call) callGlobal(made sandbox.HostCall) (sandbox.Outcome, error) {
+// callGlobal calls started as the global begins executing.
+func (c *call) callGlobal(made sandbox.HostCall, started func()) (sandbox.Outcome, error) {
 	var value any
 	var err error
+	started()
 	switch {
 	case slices.Contains(discoveryGlobals, made.Name):
 		value, err = c.discover(made)
@@ -1319,6 +1357,13 @@ func (c *call) discover(made sandbox.HostCall) (any, error) {
 func (c *call) pump() {
 	c.mu.Lock()
 	if c.committing || c.stoppedLocked() || (len(c.queue) == 0 && len(c.acks) == 0) {
+		c.mu.Unlock()
+		return
+	}
+	// Counts alone wait until the VM has processed everything delivered: its
+	// idle for the last result pumps them as one commit, as pi commits the
+	// counts of a batch processed in one turn.
+	if _, caughtUp := c.acks[c.journalLength]; len(c.queue) == 0 && !caughtUp {
 		c.mu.Unlock()
 		return
 	}

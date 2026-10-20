@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,18 +44,28 @@ func TestCodemodeEndsTheCallWhenAResumedScriptCallsAGlobalWhereTheJournalHasAToo
 	expectError(t, r.result, "call 1 is pick(), but was a tool call")
 }
 
-// countHoldingStorage holds the first commit that records an issued count
-// after a result (a journal entry's issuedAfter) until released.
-type countHoldingStorage struct {
+// holdingStorage holds the first commit whose writes contain marker until
+// released. A test registers t.Cleanup(storage.open) after opening the chat:
+// cleanups run last first, so a failed test releases the commit before the
+// chat's Close waits for it.
+type holdingStorage struct {
 	durable.Storage
+	marker  []byte
 	once    sync.Once
 	reached *signal
 	release chan struct{}
+	opened  sync.Once
 }
 
-func (s *countHoldingStorage) Commit(ctx context.Context, writes []durable.StorageWrite) (durable.Seq, error) {
+func newHoldingStorage(marker string) *holdingStorage {
+	return &holdingStorage{Storage: memory.New(), marker: []byte(marker), reached: newSignal(), release: make(chan struct{})}
+}
+
+func (s *holdingStorage) open() { s.opened.Do(func() { close(s.release) }) }
+
+func (s *holdingStorage) Commit(ctx context.Context, writes []durable.StorageWrite) (durable.Seq, error) {
 	raw, _ := json.Marshal(writes)
-	if bytes.Contains(raw, []byte("issuedAfter")) {
+	if bytes.Contains(raw, s.marker) {
 		held := false
 		s.once.Do(func() { held = true })
 		if held {
@@ -71,29 +82,35 @@ func (s *countHoldingStorage) Commit(ctx context.Context, writes []durable.Stora
 
 // TestCodemodeLaunchesACallOnlyOnceTheCountOfCallsIssuedBeforeItIsCommitted
 // checks that a call made after a result does not run while that count's
-// commit is held. It does not catch a launch that skips the wait: the
-// session's FIFO commit line puts the count commit ahead of the nested
-// call's, so only a crash window shows the difference, which needs a
-// test-only hook.
+// commit (a journal entry's issuedAfter) is held. Call 2 is a global: it runs
+// in this process without a commit of its own, so the session's FIFO commit
+// line, which would put a tool call's admission behind the count, does not
+// hide a launch that skips the wait.
 func TestCodemodeLaunchesACallOnlyOnceTheCountOfCallsIssuedBeforeItIsCommitted(t *testing.T) {
-	c := newTestChat(t, nil, nil)
+	var ran atomic.Int32
+	counting := Global{Name: "counting", Execute: func(ctxT, rawT, harness.ToolExecutionAPI) (any, error) {
+		ran.Add(1)
+		return 1, nil
+	}}
+	c := newTestChat(t, []Global{counting}, nil)
 	c.holds.block.Store(false)
-	storage := &countHoldingStorage{Storage: memory.New(), reached: newSignal(), release: make(chan struct{})}
-	c.chat.Faux.SetResponses([]providers.FauxResponseStep{script(`await tools.echo({ text: "a" }); await tools.echo({ text: "b" }); return 1;`), chattest.Done})
+	storage := newHoldingStorage("issuedAfter")
+	c.chat.Faux.SetResponses([]providers.FauxResponseStep{script(`await tools.echo({ text: "a" }); await counting(); return 1;`), chattest.Done})
 	_, root := c.chat.Open(t, storage, nil)
+	t.Cleanup(storage.open)
 	submission, err := root.Submit(bg, chattest.Input("go"))
 	must(t, err)
 	// After result 1 the script makes call 2; its count is being committed.
 	storage.reached.wait(t, "the count commit")
 	time.Sleep(100 * time.Millisecond)
-	if n := c.echoes()["b"]; n != 0 {
+	if n := ran.Load(); n != 0 {
 		t.Fatalf("call 2 ran %d times before its count was committed", n)
 	}
-	close(storage.release)
+	storage.open()
 	_, err = submission.Wait(bg)
 	must(t, err)
 	expectResult(t, resultOf(t, root), "1", false)
-	if n := c.echoes()["b"]; n != 1 {
+	if n := ran.Load(); n != 1 {
 		t.Fatalf("call 2 ran %d times", n)
 	}
 }
