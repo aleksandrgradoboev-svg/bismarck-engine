@@ -106,8 +106,7 @@ func TestCompactionRecoveryFailsAnOverflowRunWithItsTextWhenItsCompactionFailsAf
 	if state.Status != durable.TaskWaiting || checkpoint.Phase != phasePrepare || checkpoint.Overflow != overflowText {
 		t.Fatalf("generation = %s %s", state.Status, state.Checkpoint)
 	}
-	chat = reopenCompaction(t, dir, chat)
-	chat.faux.pushSummary(fauxStep(fauxError("bad request")))
+	chat = reopenCompaction(t, dir, chat, func(f *compactionScript) { f.pushSummary(fauxStep(fauxError("bad request"))) })
 	expectModelError(t, waitSubmission(t, chat.h, input.ID), overflowText)
 }
 
@@ -122,9 +121,10 @@ func TestCompactionRecoveryKeepsAGenerationWaitingOnItsBlockingCompactionAcrossR
 	input, err := chat.root.Submit(bg, inputDraft(sizedText("u4", 200)))
 	must(t, err)
 	awaitSignal(t, reached, "the summary request")
-	chat = reopenCompaction(t, dir, chat)
-	chat.faux.pushSummary(summaryStep("SUMMARY"))
-	chat.faux.pushAgent(fauxText("a4"))
+	chat = reopenCompaction(t, dir, chat, func(f *compactionScript) {
+		f.pushSummary(summaryStep("SUMMARY"))
+		f.pushAgent(fauxText("a4"))
+	})
 	if status := waitSubmission(t, chat.h, input.ID).Status; status != durable.SubmissionDone {
 		t.Fatalf("input = %s", status)
 	}

@@ -870,6 +870,13 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    on task 0 ("Task 0 does not exist"). The reviewer now records its own ID before it waits. Shown
    by sabotage: 50 ms between `start` returning and the test storing the ID fails the old case 5 of
    5 with CI's message; the new one passes 20 of 20.
+   **Fix: compaction cases queueing answers after a reopen resumed** (slice 3, found by CI). Six
+   cases reopened the chat (`reopenCompaction`) and only then queued the faux model's
+   summary or agent answer; the resumed compaction could ask first, get "No scripted summary
+   response" and fail. In pi the queue is filled in the same turn, before the resumed work runs.
+   `reopenCompaction` now takes the answers and queues them before `Resume`; a failed compaction
+   reports its error text. Shown by sabotage: a 50 ms delay after `Resume` fails the old cases with
+   CI's message ("compaction 20 = … failed …, want completed", 3 of 3); the new ones pass 5 of 5.
    **Fix: a fail-fast sibling could run before its mark** (stage 4b, scheduler; found locally with
    one processor, 9 of 40 runs of "recovery marks fail-fast siblings a crash left unmarked"). Open
    queues fail-fast checks for a reconcile pass, and a check marks the members of a waiter with a
