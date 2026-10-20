@@ -45,8 +45,12 @@ type Agent struct {
 	FilePath     string
 	// NoBackground is set by "background: never": the agent is not run in
 	// the background (Options.Background), as its caller cannot go on
-	// without its result. Not in pi.
-	NoBackground bool
+	// without its result. AlwaysBackground is set by "background: always":
+	// with a host that runs calls in the background, a call of the agent runs
+	// there whatever the model asks, unless it also calls an agent that is
+	// never. Not in pi.
+	NoBackground     bool
+	AlwaysBackground bool
 }
 
 // Discovery is the result of DiscoverAgents.
@@ -145,8 +149,13 @@ func loadAgentsFromDir(dir string, source Source) []Agent {
 		if model := fm["model"]; model.IsString {
 			agent.Model = model.Value
 		}
-		if bg := fm["background"]; bg.IsString && strings.TrimSpace(bg.Value) == "never" {
-			agent.NoBackground = true
+		if bg := fm["background"]; bg.IsString {
+			switch strings.TrimSpace(bg.Value) {
+			case "never":
+				agent.NoBackground = true
+			case "always":
+				agent.AlwaysBackground = true
+			}
 		}
 		agents = append(agents, agent)
 	}
