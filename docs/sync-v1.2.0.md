@@ -553,6 +553,23 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    tools-manager's `WINDIR` fallback (not ported). Added beyond pi: a `SystemRoot` that is not
    drive-absolute matches nothing, not even its own relative join. Sabotage 11 of 11.
 
+   **Fix: a cancelled caller of `TaskRuntime.Agent` fails even when the resolution is done**
+   (found by a Windows CI flake of `TestTaskFailsAnAgentWaitWhoseCallerIsCancelled...` on PR #56;
+   ported wrong since stage 4b-1). pi's `awaitWithContext` checks `signal.aborted` first; Go's
+   `select` over a closed `done` and a cancelled context picks either. A probe that resolves first
+   and then waits with a cancelled caller failed 25 of 50 before and 0 of 50 after; it stays as a
+   case beyond pi.
+
+   **Fix: the sleep timer's deadline is computed when the wake is scheduled** (found by a Linux
+   `-race` CI hang of `TestGenerationPollsADeferredResponseUntilItIsReady` on PR #56; ported wrong
+   since D1). pi computes the wake in a microtask, before the pass the same change starts, so a
+   sleep the wake finds due has its pass still ahead. Here delivery and pass run on goroutines: a
+   delivery late enough to find a 1 ms sleep due skipped it, after the pass had found it not due,
+   and nothing armed or ran it again. `scheduleWakeLocked` (and open, which delivers directly) now
+   compute the deadline under `mu`; the delivery arms what was computed. A case beyond pi holds
+   `wakeMu` while the pass runs and the clock passes the deadline: 3 of 3 failures before, 0 of 20
+   after.
+
    **Durable slice 2a, the tool round** (snapshot `d2e7d8b7`; `tool.ts`, the tools phase of
    `generation.ts`, the slots of `live.ts`). The built-in `pi.tool` task, version 2 (a version 1
    record migrates to a model-issued call): its call phase resolves the tool among the tools the

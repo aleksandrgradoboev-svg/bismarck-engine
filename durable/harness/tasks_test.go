@@ -576,6 +576,26 @@ func TestTaskFailsAnAgentWaitWhoseCallerIsCancelledWithoutAffectingTheResolution
 	}
 }
 
+// Beyond pi, whose case cancels the caller before the resolution can end:
+// once the resolution is done, a caller already gone still fails.
+func TestTaskFailsAnAgentWaitWhoseCallerIsCancelledAfterTheResolutionIsDone(t *testing.T) {
+	var cancelled error
+	task := oneStep(t, "test.agent-cancel-resolved", func(ctx context.Context, _ *stepTask, rt *TaskRuntime) error {
+		if _, err := rt.Agent(ctx); err != nil {
+			return err
+		}
+		caller, cancel := context.WithCancelCause(ctx)
+		cancel(errors.New("caller gone"))
+		_, cancelled = rt.Agent(caller)
+		return rt.Commit(ctx, completeWith(nil))
+	}, nil)
+	o := openRoot(t, []Task{task}, openOptions{})
+	id := start(t, o.root, task, false)
+	must(t, o.h.Resume())
+	waitDone(t, o.h, id)
+	expectError(t, cancelled, "caller gone")
+}
+
 func TestTaskObservesAFailedAgentResolutionWhoseOnlyCallerStoppedWaiting(t *testing.T) {
 	var fail sync.Map
 	settings := func() HarnessSettings {

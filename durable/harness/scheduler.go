@@ -221,6 +221,11 @@ type scheduler struct {
 	// repeated; guarded by wakeMu.
 	lastWake      *Wake
 	wakeScheduled bool
+	// sleepAt is the earliest sleep not yet due, computed under mu when a
+	// wake is scheduled, for the sleep timer: computed there, before the pass
+	// the same change starts, as pi's microtask is, a sleep the delivery finds
+	// due has its pass still ahead.
+	sleepAt time.Time
 
 	reconcileScheduled bool
 	// reconcilingWork counts the reconcile passes underway that have work:
@@ -449,6 +454,7 @@ func (s *scheduler) open(ctx context.Context) error {
 	// Derive abort marks a crash left unapplied below cancelled owners, and
 	// finalize held outcomes.
 	s.cascadePending = true
+	s.refreshSleepAtLocked()
 	s.unlock()
 	// The host hears of open's recovery before the pass can fail it: a host
 	// arms its recovery wakeup while the wake is active. pi's microtask runs

@@ -111,6 +111,11 @@ func (rt *TaskRuntime) Agent(ctx context.Context) (*Agent, error) {
 		}()
 	}
 	p.mu.Unlock()
+	// A caller already gone fails even when the resolution is done, as pi's
+	// awaitWithContext checks the signal first; select alone picks at random.
+	if ctx.Err() != nil {
+		return nil, context.Cause(ctx)
+	}
 	select {
 	case <-call.done:
 		return call.agent, call.err

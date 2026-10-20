@@ -106,17 +106,34 @@ func (s *scheduler) reconcileWork() bool {
 // it arms the sleep timer, or tells OnWake of a change. Once however often it
 // is asked for meanwhile.
 func (s *scheduler) scheduleWakeLocked() {
-	if s.wakeScheduled || s.closing.Load() {
+	if s.closing.Load() {
 		return
 	}
-	// Without OnWake only the sleep timer listens: with no sleep and no timer
-	// there is nothing to arm or disarm. This keeps a kick cheap where pi's
-	// microtask is: a delivery competes for mu.
-	if s.onWake == nil && s.sleeping.len() == 0 && !s.timerArmed.Load() {
+	if s.onWake == nil {
+		// Without OnWake only the sleep timer listens: with no sleep and no
+		// timer there is nothing to arm or disarm. This keeps a kick cheap
+		// where pi's microtask is: a delivery competes for mu.
+		if s.sleeping.len() == 0 && !s.timerArmed.Load() {
+			return
+		}
+		s.refreshSleepAtLocked()
+	}
+	if s.wakeScheduled {
 		return
 	}
 	s.wakeScheduled = true
 	go s.deliverWake()
+}
+
+// refreshSleepAtLocked computes the sleep a delivery without OnWake arms the
+// timer for. Computed when the wake is scheduled, not at delivery: a sleep
+// that comes due in between would be neither armed nor run, as the pass the
+// same change starts may already have found it not due.
+func (s *scheduler) refreshSleepAtLocked() {
+	s.sleepAt = time.Time{}
+	if s.enabled {
+		s.sleepAt = s.sleepAtLocked()
+	}
 }
 
 // sleepAtLocked is Wake.At alone, from the sleeping tasks: all a delivery
@@ -152,10 +169,7 @@ func (s *scheduler) deliverWake() {
 		return
 	}
 	if s.onWake == nil {
-		var at time.Time
-		if s.enabled {
-			at = s.sleepAtLocked()
-		}
+		at := s.sleepAt
 		s.unlock()
 		s.armSleepTimer(at)
 		return
