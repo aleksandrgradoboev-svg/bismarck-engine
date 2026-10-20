@@ -900,6 +900,23 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    beyond the PR: the host gets the update made before it ran the call. Shown by sabotage: 50 ms
    between releasing the subagent and running the call fails the old code 10 of 10 with CI's
    message; the new case fails on the old code 20 of 20.
+   **Fix: a context read admitted before Close could fail as closed** (stage 1, session; found by
+   CI on #69, "close completes reads queued at the seal": `context` closed, want resolved). A
+   context read captures its bounds on the line and derives its entries off it, as in pi. pi's
+   continuation issues its first Storage call in the same microtask turn, ahead of the close on the
+   line, and Close waits for calls underway; later calls are refused ("closes the backend only
+   after a paged read underway"). Here the close step could seal Storage before that first call.
+   `Session.ReadOnLineThen(ctx, read, then)` (new) runs read on the line and reserves one Storage
+   call there, counted underway, so Close waits for it; the first call then makes with its context
+   takes the reservation, admitted even once Close has begun, and an unused reservation is
+   returned when then ends. `readContext` uses it, with a test-only hook, `beforeContextDerive`,
+   between its parts. A first form held Close until the whole continuation ended; it broke pi's
+   paged-read case (the second page resolved) and was replaced before commit. Cases beyond pi: the
+   continuation's first call is admitted once Close began, its second refused as closed; a
+   continuation without Storage calls holds Close only until it ends; a failed line read reserves
+   nothing; a context read held between its parts while Close seals the line resolves. Shown by
+   sabotage: 20 ms between the parts fails pi's case 10 of 10 with CI's message; sabotage of the
+   mechanism 6 of 6.
 
 ## 5. Bookkeeping
 

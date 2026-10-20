@@ -438,6 +438,34 @@ func (s *Session) ReadOnLine(job func() error) error {
 	})
 }
 
+// ReadOnLineThen runs read on the line like ReadOnLine, then, once read
+// succeeded, then off the line: a derivation of what read captured that need
+// not hold the line. As pi's continuation issues its first Storage call in the
+// same microtask turn, ahead of the close on the line, the first Storage call
+// then makes with its context is admitted even once Close has begun, and
+// Close waits for it; later calls are refused once Close has begun, as in pi.
+func (s *Session) ReadOnLineThen(ctx context.Context, read func() error, then func(ctx context.Context) error) error {
+	var lease *storageLease
+	err := s.enqueue(true, func() error {
+		if err := s.healthy(); err != nil {
+			return err
+		}
+		if err := read(); err != nil {
+			return err
+		}
+		// Reserved on the line, so the close step, which comes later on it,
+		// waits for it.
+		lease = s.storage.reserve()
+		return nil
+	})
+	if err != nil {
+		lease.release()
+		return err
+	}
+	defer lease.release()
+	return then(context.WithValue(ctx, storageLeaseKey{}, lease))
+}
+
 // ConversationDocumentOnLine is a conversation document's current
 // incarnation, version and value, for a job already running on the line
 // (see ReadOnLine). An absent document is nil.
@@ -1269,14 +1297,20 @@ func (g *guardedStorage) call(read context.Context, run func() error) (err error
 	if err := g.session.healthy(); err != nil {
 		return err
 	}
-	g.mu.Lock()
-	if g.closing {
+	if lease := leaseIn(read, g); lease != nil && lease.take() {
+		// The reserved call: admitted although Close may have begun, which
+		// waits for it.
+		defer g.underway.Done()
+	} else {
+		g.mu.Lock()
+		if g.closing {
+			g.mu.Unlock()
+			return ErrSessionClosed
+		}
+		g.underway.Add(1)
 		g.mu.Unlock()
-		return ErrSessionClosed
+		defer g.underway.Done()
 	}
-	g.underway.Add(1)
-	g.mu.Unlock()
-	defer g.underway.Done()
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -1381,6 +1415,48 @@ func (g *guardedStorage) ScanDocuments(ctx context.Context, query DocumentQuery,
 // Close closes the backend once every call underway has settled. New calls
 // are refused from here on: a paged read must not start its next page while
 // the backend closes.
+// storageLease is one Storage call reserved for a ReadOnLineThen
+// continuation: counted underway from the line on, so Close waits for it,
+// until the continuation's first call takes it or the continuation ends.
+type storageLease struct {
+	g     *guardedStorage
+	taken atomic.Bool
+}
+
+type storageLeaseKey struct{}
+
+// reserve reserves a call; nil once Close has begun.
+func (g *guardedStorage) reserve() *storageLease {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closing {
+		return nil
+	}
+	g.underway.Add(1)
+	return &storageLease{g: g}
+}
+
+// take hands the reserved call to its first caller.
+func (l *storageLease) take() bool { return l.taken.CompareAndSwap(false, true) }
+
+// release returns the reservation if no call took it.
+func (l *storageLease) release() {
+	if l != nil && l.take() {
+		l.g.underway.Done()
+	}
+}
+
+// leaseIn is the lease of g that ctx carries, if any.
+func leaseIn(ctx context.Context, g *guardedStorage) *storageLease {
+	if ctx == nil {
+		return nil
+	}
+	if lease, ok := ctx.Value(storageLeaseKey{}).(*storageLease); ok && lease != nil && lease.g == g {
+		return lease
+	}
+	return nil
+}
+
 func (g *guardedStorage) Close(ctx context.Context) error {
 	g.mu.Lock()
 	g.closing = true
