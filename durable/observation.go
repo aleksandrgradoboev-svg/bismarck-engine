@@ -273,29 +273,45 @@ type WatchEnd struct {
 	Err    error
 }
 
-// WatchListener receives one committed revision: the exact immutable value,
-// nil once retired, and the exact operations that produced it. Its context
-// carries the commit's values without its cancellation. An error ends the
-// watch with "listener_error".
-type WatchListener func(ctx context.Context, value map[string]any, ops []delta.Op) error
+// CommittedWatchListener receives one committed value: exact and immutable,
+// with the exact operations that produced it. Its context carries the
+// commit's values without its cancellation. An error ends the watch with
+// "listener_error".
+type CommittedWatchListener[T any] func(ctx context.Context, value T, ops []delta.Op) error
 
-type watchFrame struct {
-	value map[string]any
+// WatchListener receives one committed revision of a document: nil once
+// retired.
+type WatchListener = CommittedWatchListener[map[string]any]
+
+// CommittedWatchOptions shape a CommittedWatch.
+type CommittedWatchOptions[T any] struct {
+	// Replace gives the value an overflow delivers; nil delivers the newest
+	// value.
+	Replace func() T
+	// Retires reports a value that retires the watch; it is delivered last.
+	// Nil never retires.
+	Retires func(T) bool
+}
+
+type watchFrame[T any] struct {
+	value T
 	ops   []delta.Op
 	ctx   context.Context
 }
 
-// DocumentWatch is a serialized exact-frame observation of one committed
-// document incarnation, with bounded pending delivery: beyond 100 frames
-// waiting behind a busy listener they collapse into one root replacement.
-type DocumentWatch struct {
-	detach func()
-	report func(error)
+// CommittedWatch is a serialized exact-frame observation of committed
+// values (pi CommittedWatch<T>), with bounded pending delivery: beyond 100
+// frames waiting behind a busy listener they collapse into one replacement.
+// Views built over commit publications outside this package advance it.
+type CommittedWatch[T any] struct {
+	detach  func()
+	report  func(error)
+	options CommittedWatchOptions[T]
 
 	mu         sync.Mutex
-	value      map[string]any
-	pending    []watchFrame
-	listener   WatchListener
+	value      T
+	pending    []watchFrame[T]
+	listener   CommittedWatchListener[T]
 	started    bool
 	scheduled  bool
 	running    bool
@@ -305,20 +321,33 @@ type DocumentWatch struct {
 	stopCancel func() bool
 }
 
-func newDocumentWatch(value map[string]any, detach func(), report func(error)) *DocumentWatch {
-	return &DocumentWatch{value: value, detach: detach, report: report, closed: make(chan struct{})}
+// DocumentWatch observes one committed document incarnation; its value is
+// nil once the incarnation retires.
+type DocumentWatch = CommittedWatch[map[string]any]
+
+// NewCommittedWatchOf makes a serialized exact-frame watch starting at
+// value; detach runs once it ends. report receives a failing listener's
+// error.
+func NewCommittedWatchOf[T any](value T, detach func(), report func(error), options CommittedWatchOptions[T]) *CommittedWatch[T] {
+	return &CommittedWatch[T]{value: value, detach: detach, report: report, options: options, closed: make(chan struct{})}
 }
 
-// Value is the acquisition revision before Start, and the latest delivered
-// revision afterwards; nil once retired.
-func (w *DocumentWatch) Value() map[string]any {
+func newDocumentWatch(value map[string]any, detach func(), report func(error)) *DocumentWatch {
+	return NewCommittedWatchOf(value, detach, report, CommittedWatchOptions[map[string]any]{
+		Retires: func(value map[string]any) bool { return value == nil },
+	})
+}
+
+// Value is the acquisition value before Start, and the latest delivered
+// value afterwards.
+func (w *CommittedWatch[T]) Value() T {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.value
 }
 
 // Start installs the sole listener. It never calls it inline.
-func (w *DocumentWatch) Start(listener WatchListener) error {
+func (w *CommittedWatch[T]) Start(listener CommittedWatchListener[T]) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.started {
@@ -337,16 +366,16 @@ func (w *DocumentWatch) Start(listener WatchListener) error {
 
 // Stop idempotently stops future callbacks and returns the watch's terminal
 // result. A callback already running keeps running.
-func (w *DocumentWatch) Stop() WatchEnd {
+func (w *CommittedWatch[T]) Stop() WatchEnd {
 	w.terminate(WatchEnd{Reason: WatchStopped})
 	return w.End()
 }
 
 // Closed is closed when the watch terminates.
-func (w *DocumentWatch) Closed() <-chan struct{} { return w.closed }
+func (w *CommittedWatch[T]) Closed() <-chan struct{} { return w.closed }
 
 // End is the terminal result; the zero WatchEnd until Closed is closed.
-func (w *DocumentWatch) End() WatchEnd {
+func (w *CommittedWatch[T]) End() WatchEnd {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.end == nil {
@@ -356,7 +385,7 @@ func (w *DocumentWatch) End() WatchEnd {
 }
 
 // ObserveCancellation cancels the watch when ctx is done.
-func (w *DocumentWatch) ObserveCancellation(ctx context.Context) {
+func (w *CommittedWatch[T]) ObserveCancellation(ctx context.Context) {
 	stop := context.AfterFunc(ctx, w.Cancel)
 	w.mu.Lock()
 	if w.end != nil {
@@ -368,11 +397,11 @@ func (w *DocumentWatch) ObserveCancellation(ctx context.Context) {
 	w.mu.Unlock()
 }
 
-func (w *DocumentWatch) Cancel() { w.terminate(WatchEnd{Reason: WatchCancelled}) }
+func (w *CommittedWatch[T]) Cancel() { w.terminate(WatchEnd{Reason: WatchCancelled}) }
 
 // CloseSession ends the watch with "session_closed", or with
 // "session_failed" and the error when the Session failed.
-func (w *DocumentWatch) CloseSession(failure error) {
+func (w *CommittedWatch[T]) CloseSession(failure error) {
 	if failure == nil {
 		w.terminate(WatchEnd{Reason: WatchSessionClosed})
 		return
@@ -380,34 +409,45 @@ func (w *DocumentWatch) CloseSession(failure error) {
 	w.terminate(WatchEnd{Reason: WatchSessionFailed, Err: failure})
 }
 
-func (w *DocumentWatch) Advance(ctx context.Context, value map[string]any, ops []delta.Op) {
+// Advance queues one committed value and its operations.
+func (w *CommittedWatch[T]) Advance(ctx context.Context, value T, ops []delta.Op) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.end != nil || w.retired {
 		return
 	}
-	if value == nil {
+	if w.retires(value) {
 		w.retired = true
 	}
 	if len(w.pending) >= maxPendingWatchFrames {
 		w.pending = w.pending[:0]
-		w.pending = append(w.pending, watchFrame{value: value, ops: []delta.Op{replaceOp(value)}, ctx: ctx})
+		replacement := value
+		if w.options.Replace != nil {
+			replacement = w.options.Replace()
+		}
+		w.pending = append(w.pending, watchFrame[T]{value: replacement, ops: []delta.Op{w.replaceOp(replacement)}, ctx: ctx})
 	} else {
-		w.pending = append(w.pending, watchFrame{value: value, ops: ops, ctx: ctx})
+		w.pending = append(w.pending, watchFrame[T]{value: value, ops: ops, ctx: ctx})
 	}
 	if w.started {
 		w.scheduleLocked()
 	}
 }
 
-func replaceOp(value map[string]any) delta.Op {
-	if value == nil {
+func (w *CommittedWatch[T]) retires(value T) bool {
+	return w.options.Retires != nil && w.options.Retires(value)
+}
+
+// replaceOp is the root replacement an overflow delivers; a retiring value
+// replaces the root with null.
+func (w *CommittedWatch[T]) replaceOp(value T) delta.Op {
+	if w.retires(value) {
 		return delta.Replace{Value: nil}
 	}
 	return delta.Replace{Value: value}
 }
 
-func (w *DocumentWatch) scheduleLocked() {
+func (w *CommittedWatch[T]) scheduleLocked() {
 	if w.scheduled || w.running || w.end != nil {
 		return
 	}
@@ -420,7 +460,7 @@ func (w *DocumentWatch) scheduleLocked() {
 	}()
 }
 
-func (w *DocumentWatch) drain() {
+func (w *CommittedWatch[T]) drain() {
 	w.mu.Lock()
 	if w.running || w.end != nil || !w.started {
 		w.mu.Unlock()
@@ -444,7 +484,7 @@ func (w *DocumentWatch) drain() {
 			}
 			break
 		}
-		if frame.value == nil {
+		if w.retires(frame.value) {
 			w.mu.Unlock()
 			w.terminate(WatchEnd{Reason: WatchRetired})
 			w.mu.Lock()
@@ -458,7 +498,7 @@ func (w *DocumentWatch) drain() {
 	w.mu.Unlock()
 }
 
-func callWatchListener(listener WatchListener, frame watchFrame) (err error) {
+func callWatchListener[T any](listener CommittedWatchListener[T], frame watchFrame[T]) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = panicError(r)
@@ -468,7 +508,7 @@ func callWatchListener(listener WatchListener, frame watchFrame) (err error) {
 }
 
 // terminate ends the watch once: detach, drop pending frames and close.
-func (w *DocumentWatch) terminate(end WatchEnd) {
+func (w *CommittedWatch[T]) terminate(end WatchEnd) {
 	w.mu.Lock()
 	if w.end != nil {
 		w.mu.Unlock()
