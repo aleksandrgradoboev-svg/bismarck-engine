@@ -177,6 +177,38 @@ func TestNestedToolsReportTheOutputOfSeveralRunningNestedCallsAndShowThemToALate
 	expectStrings(t, "updates", updates(), []string{`c1/2 {"set":"two\n"}`, `c1/1 {"set":"one\n"}`})
 }
 
+// Beyond pi, whose nested output updates are all a slot's first output, a
+// set: a later write is an append on the nested slot's own path.
+func TestNestedToolsReportALaterOutputOfANestedCallAsAnAppend(t *testing.T) {
+	setup := newChatSetup(t)
+	installTool(t, setup.registry, nestedTool("chatty", func(ctx context.Context, _ map[string]any, api ToolExecutionAPI) (ToolExecutionResult, error) {
+		for i, line := range []string{"one\n", "two\n"} {
+			if err := api.Output([]byte(line), nil); err != nil {
+				return ToolExecutionResult{}, err
+			}
+			// Each write commits before the next.
+			if err := api.Details(ctx, map[string]any{"n": i}); err != nil {
+				return ToolExecutionResult{}, err
+			}
+		}
+		return ToolExecutionResult{Output: ai.ContentList{}}, nil
+	}))
+	installTool(t, setup.registry, batchCalling("chatty"))
+	setup.faux.SetResponses([]providers.FauxResponseStep{callStep("batch", nil), fauxText("done")})
+	h, root := openChat(t, memory.New(), setup)
+	_, log := listen(t, root)
+	waitFor(t, submit(t, root, inputDraft("go")))
+	must(t, h.WaitForIdle(bg))
+	log.quiet(t)
+	var updates []string
+	for _, event := range log.events() {
+		if update, ok := event.(ToolExecutionUpdateEvent); ok && update.Output != nil && update.ToolCallID == "c1/1" {
+			updates = append(updates, jsonOf(t, update.Output))
+		}
+	}
+	expectStrings(t, "updates", updates, []string{`{"set":"one\n"}`, `{"append":"two\n"}`})
+}
+
 func TestNestedToolsLoseTheRunningOutputOfANestedCallMadeWithoutProgressWhenItIsAborted(t *testing.T) {
 	setup := newChatSetup(t)
 	running := make(chan struct{})
