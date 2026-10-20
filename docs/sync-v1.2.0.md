@@ -706,6 +706,12 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    (kept on success, missing on failure and from the snapshot) and `compaction_end`'s error on another
    task's end come with the background cases of slice 3b; a hook's panic is equivalent to its error.
 
+   **Fix of slice 1 (d) test: the queued view acquisition waits for Close.** The case that closes the
+   Harness while a view acquisition waits for the Session line released the line right after starting
+   Close; when Close had not yet closed the views, the acquisition attached and returned no error
+   (CI, Linux `-race`). It now waits for the views to close first. A delay before Close reproduces the
+   CI failure on the old case every time and passes on the new one.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
