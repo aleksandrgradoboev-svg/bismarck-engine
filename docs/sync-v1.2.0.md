@@ -864,6 +864,12 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    is released. Shown by sabotage: a 5 ms delay before the scheduler's reservation commit fails the
    old case 20 of 20 with CI's message; the new one passes 20 of 20, also with a further 20 ms
    between reading the observed graph and rebuilding it.
+   **Fix: structured cycle case reading the reviewer's ID before the test stored it** (stage 4b,
+   found by CI). "Rejects a cycle of a hold and two waits…" stored the reviewer's ID when `start`
+   returned, while the reviewer could already run, wait and release the worker, which then waited
+   on task 0 ("Task 0 does not exist"). The reviewer now records its own ID before it waits. Shown
+   by sabotage: 50 ms between `start` returning and the test storing the ID fails the old case 5 of
+   5 with CI's message; the new one passes 20 of 20.
 
 ## 5. Bookkeeping
 
