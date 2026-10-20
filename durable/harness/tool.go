@@ -157,6 +157,11 @@ type NestedCallOptions struct {
 	// NoProgress commits no running output, details or diagnostics to the
 	// nested call's slot.
 	NoProgress bool
+	// OnAdmitted, when set, is called once the nested call is admitted (its
+	// task exists), before ExecuteTool waits for it; not when admission
+	// fails. A caller that starts calls in order waits for it before
+	// starting the next.
+	OnAdmitted func(id durable.TaskID)
 }
 
 // NestedToolExecutionResult is what ExecuteTool returns, exactly as the

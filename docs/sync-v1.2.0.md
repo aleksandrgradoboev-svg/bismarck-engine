@@ -812,6 +812,51 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    test sizes and limits, not concurrency, so the race step skips them (`raceDetector`, as harness
    does for its depth tests); the test step without it runs them; locally 35 s under race.
 
+   **Durable stage 5c, code mode** (snapshot `d2e7d8b7`; `src/codemode`: `codemode.ts`,
+   `output.ts`, `describe.ts`). `durable/codemode` is the replay-safe code mode tool on the
+   `codemode` package's deterministic `Sandbox.Start` (start time, seed, fingerprint, `OnCall`,
+   `OnIdle`, `Deliver`, `During`), with pi's documents (`pi.codemode.run`, `pi.codemode.journal`,
+   `pi.codemode.store`) and its replay: journal before delivery, a call launched only once the count
+   of calls issued before it is committed, and the divergence checks (module version, fingerprint,
+   deadline, counts, call targets and arguments, a replay that ends where the live run went on).
+   `models.*` is not ported (the engine's model access has no classifier or image generation): the
+   tool is pi's with `models: false`, and `codemode-models.test` (7) is n/a. Go forms:
+   `Options.Sandbox` is an interface `*codemode.Sandbox` satisfies; VM callbacks change state under
+   one mutex and leave commits, nested calls and deliveries to goroutines; results delivered
+   together go to the VM last first, so it processes the batch in one turn and acknowledges it
+   once, as pi's VM does with results of one microtask turn; result files are joined with the
+   environment's `JoinPath`. `Draft.Get` returns a draft for an object member, so stored values are
+   read with `At(...).Snapshot()`. Tests: `codemode.test` (41; restarts reopen JSONL; one case made
+   deterministic, as Go runs nested tasks concurrently), `codemode-describe.test` (5), and the code
+   mode replay case of `harness-telemetry`; `durable/internal/chattest` gains a telemetry adapter.
+   Beyond pi: the fingerprint is recorded on the first run; a global where the journal has a tool
+   call diverges; `searchTools()` rejects a limit that is not a positive integer; text items are
+   numbered from two; an image shown twice is saved once; tools without a namespace that do not
+   fit say so; a global made after a result does not run while that count's commit is held (a
+   global runs in this process without a commit of its own, so the FIFO commit line, which puts a
+   tool call's admission behind the count, does not hide a launch that skips the wait). Sabotage 38
+   of 40: equivalent, a delivery after a failed journal commit (the failure aborts the VM first)
+   and the first read of the output directory (the second commit reads it again, leaving an empty
+   temp directory, as in pi).
+   Fixed after CI on the PR (with one processor, `-cpu 1`, three cases failed or hung): covered
+   calls started one goroutine each, in no order, so a later call could be admitted first and a
+   call made just before the script ended could never start; pi starts a covered batch
+   synchronously in call order. Now one launcher starts them in call order, each once the one before
+   has started: a tool call once admitted (`NestedCallOptions.OnAdmitted`, new), a global once it
+   executes. And `pump`, re-run after each commit, committed counts while the VM was still
+   processing a delivered batch, a few at a time; counts alone now wait for the VM's idle on the
+   last delivered result, one commit per batch as in pi. "Results that finish together" has no
+   tick in Go: the case holds the first result's commit until all 50 globals return, so the rest
+   arrive during it and go in one commit. CI runs `./durable/codemode/...` with `-cpu 1` too, which
+   showed two more cases depending on timing: "replays results in the order they arrived" released
+   call 1 once call 2's tool returned, while 2's result still travelled through its nested task (1
+   is now released by a global the script calls on 2's result), and the restart timeout case had
+   300 ms of real time to reach its hold (the Harness's clock now moves past a 60 s deadline while
+   the call is interrupted; `chattest.Chat.Now`, new).
+   Sabotage of the fix 6 of 7; counts committed mid-batch are caught only now and then (2 of 20
+   runs with four processors): the window is a few statements between delivery and the re-run, and
+   a deterministic case needs a test-only hook (open).
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to

@@ -1469,6 +1469,9 @@ func (a *toolAPI) ExecuteTool(ctx context.Context, name string, args map[string]
 	if err != nil {
 		return NestedToolExecutionResult{}, err
 	}
+	if options.OnAdmitted != nil {
+		options.OnAdmitted(id)
+	}
 	settled, err := a.rt.WaitForTask(ctx, id)
 	if err != nil {
 		return NestedToolExecutionResult{}, err
