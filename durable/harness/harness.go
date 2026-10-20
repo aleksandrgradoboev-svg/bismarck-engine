@@ -35,6 +35,11 @@ type EnvTarget struct {
 type Options struct {
 	// Models is the model access generation uses.
 	Models ai.Models
+	// ModelsFunc, when set, replaces Models and is read at every access:
+	// each model request and each Models() of a TaskRuntime or tool API, so
+	// a host can swap catalogs, credentials, or transforms while the Harness
+	// runs. It must not block.
+	ModelsFunc func() ai.Models
 	// Registry is required; it may keep changing while the Harness runs.
 	Registry RegistryReader
 	// Settings returns the Harness-wide run policy; it is read at every
@@ -158,7 +163,7 @@ func Open(ctx context.Context, storage durable.Storage, options Options) (*Harne
 	h.tasks = newScheduler(schedulerOptions{
 		session:  h.Session,
 		registry: options.Registry,
-		models:   options.Models,
+		models:   currentModels(options),
 		agent: func(ctx context.Context, id durable.ConversationID, snapshot *RegistrySnapshot) (*Agent, error) {
 			return h.resolveAgent(ctx, id, snapshot)
 		},
@@ -606,4 +611,14 @@ func safeNow(now func() time.Time, report func(error, durable.ReportInfo)) func(
 		}()
 		return now()
 	}
+}
+
+// currentModels is Options.ModelsFunc, or Options.Models returned at every
+// call.
+func currentModels(options Options) func() ai.Models {
+	if options.ModelsFunc != nil {
+		return options.ModelsFunc
+	}
+	models := options.Models
+	return func() ai.Models { return models }
 }

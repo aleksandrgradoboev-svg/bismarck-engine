@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"slices"
 	"time"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
@@ -329,6 +331,89 @@ func sectionExtension(agent *Agent, key string) string {
 		}
 	}
 	return found
+}
+
+// toolExtension is the extension whose code a tool of agent runs: the last
+// selected one that provides or wraps it.
+func toolExtension(agent *Agent, name string) string {
+	found := ""
+	for _, extension := range agent.Extensions {
+		provides := false
+		for _, tool := range extension.Tools {
+			provides = provides || tool.Name == name
+		}
+		for _, wrap := range extension.Wraps {
+			provides = provides || (wrap.tool != "" && wrap.tool == name)
+		}
+		if provides {
+			found = extension.Name
+		}
+	}
+	return found
+}
+
+// addTools enables tools by name (pi addTools): an exact tools list gets each
+// name it lacks appended, and an edit loses the names from its Remove. An
+// unset tools already enables every tool, so nothing is written for it. An
+// exact modelTools gets each name appended; an unset or edit one gets each
+// name added to its Add, which loads deferred tools and has no effect for
+// others. By name, without the registry: a tool that is not registered now
+// is offered once it is again. Only a changed field is written, so an equal
+// value records no change.
+func addTools(tx *durable.Tx, conversationID durable.ConversationID, added []string) error {
+	doc, err := tx.Doc(AgentDoc.Conversation(conversationID))
+	if err != nil {
+		return err
+	}
+	var tools *Selection[string]
+	if _, err := draftField(doc, "tools", &tools); err != nil {
+		return err
+	}
+	if tools != nil {
+		next := *tools
+		if next.Exact {
+			next.Items = appendMissing(slices.Clone(next.Items), added)
+		} else {
+			next.Remove = slices.DeleteFunc(slices.Clone(next.Remove), func(name string) bool { return slices.Contains(added, name) })
+		}
+		if !reflect.DeepEqual(next, *tools) {
+			if err := setDraftField(doc, "tools", next); err != nil {
+				return err
+			}
+		}
+	}
+	var modelTools *Selection[string]
+	if _, err := draftField(doc, "modelTools", &modelTools); err != nil {
+		return err
+	}
+	var next Selection[string]
+	if modelTools != nil && modelTools.Exact {
+		next = *modelTools
+		next.Items = appendMissing(slices.Clone(next.Items), added)
+	} else {
+		if modelTools != nil {
+			next.Remove = slices.DeleteFunc(slices.Clone(modelTools.Remove), func(name string) bool { return slices.Contains(added, name) })
+			next.Add = slices.Clone(modelTools.Add)
+		}
+		next.Add = appendMissing(next.Add, added)
+		if len(next.Remove) == 0 {
+			next.Remove = nil
+		}
+	}
+	if modelTools != nil && reflect.DeepEqual(next, *modelTools) {
+		return nil
+	}
+	return setDraftField(doc, "modelTools", next)
+}
+
+// appendMissing appends each name of added that names lacks.
+func appendMissing(names, added []string) []string {
+	for _, name := range added {
+		if !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // resolveAgent resolves an agent from its stored state (nil: every field

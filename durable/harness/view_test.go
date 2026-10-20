@@ -166,6 +166,8 @@ func opText(t *testing.T, op delta.Op) string {
 		return "p " + jsonOfValue(t, o.Path) + " " + jsonOfValue(t, o.Index) + " " + jsonOfValue(t, o.Remove) + " " + jsonOfValue(t, o.Items)
 	case delta.Append:
 		return "a " + jsonOfValue(t, o.Path) + " " + jsonOfValue(t, o.Text)
+	case delta.Truncate:
+		return "t " + jsonOfValue(t, o.Path) + " " + jsonOfValue(t, o.Count)
 	}
 	return jsonOfValue(t, op)
 }

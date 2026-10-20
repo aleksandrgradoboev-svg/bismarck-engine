@@ -57,7 +57,7 @@ func (s *recordingStorage) commit(i int) []string {
 func testTool(name string) *ToolRegistration {
 	return &ToolRegistration{
 		Tool: ai.Tool{Name: name, Description: name + " tool", Parameters: objectSchema()},
-		Execute: func(context.Context, map[string]any, *ToolExecutionAPI) (ToolExecutionResult, error) {
+		Execute: func(context.Context, map[string]any, ToolExecutionAPI) (ToolExecutionResult, error) {
 			return ToolExecutionResult{Output: ai.ContentList{}}, nil
 		},
 	}

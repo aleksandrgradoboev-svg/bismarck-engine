@@ -17,11 +17,13 @@ import (
 // chatSetup is the models and registry that survive a close/reopen, like a
 // host process's own objects.
 type chatSetup struct {
-	faux     *providers.FauxProviderRegistration
-	models   ai.Models
-	registry Registry
-	reports  *reportLog
-	mu       sync.Mutex
+	faux   *providers.FauxProviderRegistration
+	models ai.Models
+	// modelsFunc, when set, is Options.ModelsFunc.
+	modelsFunc func() ai.Models
+	registry   Registry
+	reports    *reportLog
+	mu         sync.Mutex
 	// settings are the live Harness settings; tests change them between
 	// decisions through setSettings.
 	settings HarnessSettings
@@ -82,8 +84,9 @@ func (c *chatSetup) setNow(now func() time.Time) {
 
 func (c *chatSetup) options() Options {
 	return Options{
-		Models:   c.models,
-		Registry: c.registry,
+		Models:     c.models,
+		ModelsFunc: c.modelsFunc,
+		Registry:   c.registry,
 		Settings: func() HarnessSettings {
 			c.mu.Lock()
 			defer c.mu.Unlock()

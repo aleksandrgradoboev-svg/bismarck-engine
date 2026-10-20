@@ -81,8 +81,8 @@ func (rt *TaskRuntime) Registry() *RegistrySnapshot { return rt.phase.snapshot()
 // Settings returns the Harness settings, resolved at each call.
 func (rt *TaskRuntime) Settings() Settings { return rt.s.settings() }
 
-// Models returns the Harness model access.
-func (rt *TaskRuntime) Models() ai.Models { return rt.s.models }
+// Models returns the Harness model access, read at each call.
+func (rt *TaskRuntime) Models() ai.Models { return rt.s.models() }
 
 // Agent returns the task's conversation's agent, resolved at most once per
 // phase, at first use, with the invocation's context, and fixed for the
