@@ -108,21 +108,44 @@ func TestReplacesRatherThanInheritsTheEnvironment(t *testing.T) {
 	equal(t, output, "::explicit", "output")
 }
 
-func TestUsesStdinForLegacyWSLBash(t *testing.T) {
+func stringPtr(s string) *string { return &s }
+
+// pi#9490 (upstream 61060ddf): legacy WSL detection must also handle a custom
+// Windows directory; an empty SystemRoot falls back to X:\Windows.
+func TestSelectsTheCommandTransportForLegacyWSLBashPaths(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake launcher is a POSIX script")
 	}
-	root := tempDir(t)
-	// On POSIX the backslashes are part of one file name.
-	shellPath := `C:\Windows\System32\bash.exe`
-	noErr(t, os.WriteFile(filepath.Join(root, shellPath), []byte("#!/bin/sh\nprintf 'args:%s\\n' \"$*\" >&2\nexec /bin/bash \"$@\"\n"), 0o755))
-	t.Chdir(root)
-	t.Setenv("PATH", root+string(os.PathListSeparator)+os.Getenv("PATH"))
-	result, output, err := collect(env.NewLocalWith(root, env.LocalOptions{ShellPath: shellPath}), ctx, `name='World'; echo "Hello, ${name}!"`, nil)
-	noErr(t, err)
-	equal(t, result.ExitCode, 0, "exit code")
-	if !strings.Contains(output, "Hello, World!") || !strings.Contains(output, "args:-s") {
-		t.Fatalf("output %q", output)
+	for _, c := range []struct {
+		shellPath  string
+		systemRoot *string
+		arg        string
+	}{
+		{`C:\Windows\System32\bash.exe`, nil, "-s"},
+		{`D:\WinNT\System32\bash.exe`, stringPtr(`D:\WinNT`), "-s"},
+		{`D:\WinNT\Sysnative\bash.exe`, stringPtr(`D:\WinNT`), "-s"},
+		{`D:\WinNT\System32\bash.exe`, stringPtr(""), "-c"},
+		{`E:\Windows\System32\bash.exe`, stringPtr(`D:\WinNT`), "-c"},
+	} {
+		t.Run(c.shellPath, func(t *testing.T) {
+			root := tempDir(t)
+			// On POSIX the backslashes are part of one file name.
+			noErr(t, os.WriteFile(filepath.Join(root, c.shellPath), []byte("#!/bin/sh\nprintf 'args:%s\\n' \"$*\" >&2\nexec /bin/bash \"$@\"\n"), 0o755))
+			t.Chdir(root)
+			t.Setenv("PATH", root+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("SystemRoot", "")
+			if c.systemRoot == nil {
+				noErr(t, os.Unsetenv("SystemRoot"))
+			} else {
+				t.Setenv("SystemRoot", *c.systemRoot)
+			}
+			result, output, err := collect(env.NewLocalWith(root, env.LocalOptions{ShellPath: c.shellPath}), ctx, `name='World'; echo "Hello, ${name}!"`, nil)
+			noErr(t, err)
+			equal(t, result.ExitCode, 0, "exit code")
+			if !strings.Contains(output, "Hello, World!") || !strings.Contains(output, "args:"+c.arg) {
+				t.Fatalf("output %q, want args:%s", output, c.arg)
+			}
+		})
 	}
 }
 

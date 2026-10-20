@@ -19,9 +19,84 @@ import (
 // normalization. It mishandles `-c "<cmd>"` quoting, so commands go via stdin.
 var legacyWSLBash = regexp.MustCompile(`^[a-z]:\\windows\\(?:system32|sysnative)\\bash\.exe$`)
 
-// IsLegacyWSLBashPath is pi's isLegacyWslBashPath.
+// absoluteWindowsDir is a drive-absolute Windows directory.
+var absoluteWindowsDir = regexp.MustCompile(`(?i)^[a-z]:[\\/]`)
+
+// IsLegacyWSLBashPath is pi's isLegacyWslBashPath (upstream 61060ddf): the
+// launcher in System32 or Sysnative under SystemRoot, the actual Windows
+// directory; only when SystemRoot is unset or empty, under the conventional
+// X:\Windows. A SystemRoot that is not drive-absolute matches nothing.
 func IsLegacyWSLBashPath(path string) bool {
-	return legacyWSLBash.MatchString(strings.ToLower(strings.ReplaceAll(path, "/", `\`)))
+	normalized := strings.ToLower(WinNormalize(path))
+	if systemRoot := os.Getenv("SystemRoot"); systemRoot != "" {
+		if !absoluteWindowsDir.MatchString(systemRoot) {
+			return false
+		}
+		for _, directory := range []string{"System32", "Sysnative"} {
+			if normalized == strings.ToLower(WinJoin(systemRoot, directory, "bash.exe")) {
+				return true
+			}
+		}
+		return false
+	}
+	return legacyWSLBash.MatchString(normalized)
+}
+
+// WinNormalize is node's path.win32.normalize for the drive-absolute and
+// relative paths the shell code compares, on any OS: separators become
+// backslashes, repeated ones collapse, "." segments drop, ".." removes the
+// segment before it but never the drive, and a trailing separator stays.
+func WinNormalize(path string) string {
+	if path == "" {
+		return "."
+	}
+	path = strings.ReplaceAll(path, "/", `\`)
+	prefix := ""
+	if len(path) >= 2 && path[1] == ':' {
+		prefix, path = path[:2], path[2:]
+	}
+	absolute := strings.HasPrefix(path, `\`)
+	trailing := strings.HasSuffix(path, `\`)
+	var segments []string
+	for _, segment := range strings.Split(path, `\`) {
+		switch segment {
+		case "", ".":
+		case "..":
+			if len(segments) > 0 && segments[len(segments)-1] != ".." {
+				segments = segments[:len(segments)-1]
+			} else if !absolute {
+				segments = append(segments, segment)
+			}
+		default:
+			segments = append(segments, segment)
+		}
+	}
+	out := strings.Join(segments, `\`)
+	if absolute {
+		out = `\` + out
+	}
+	if trailing && out != "" && !strings.HasSuffix(out, `\`) {
+		out += `\`
+	}
+	if out == "" && prefix == "" {
+		return "."
+	}
+	return prefix + out
+}
+
+// WinJoin is node's path.win32.join: the non-empty parts joined with
+// backslashes, then normalized.
+func WinJoin(parts ...string) string {
+	var kept []string
+	for _, part := range parts {
+		if part != "" {
+			kept = append(kept, part)
+		}
+	}
+	if len(kept) == 0 {
+		return "."
+	}
+	return WinNormalize(strings.Join(kept, `\`))
 }
 
 // Shell is how commands run: Shell with Args and the command appended, or,
@@ -96,17 +171,17 @@ func ResolveShell(custom string, exists func(string) bool, hint string) (Shell, 
 }
 
 // TaskkillPath resolves Windows' taskkill.exe by absolute path so killing a
-// process tree does not depend on PATH, porting upstream 7af2d27dc (pi#6596):
+// process tree does not depend on PATH, porting upstream 7af2d27dc (pi#6596)
+// as amended by 61060ddf (pi#9490):
 //
-//	join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe")
+//	join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe")
 //
 // It has no build constraint so the path arithmetic is testable everywhere.
-// LookupEnv rather than Getenv reproduces `??`: only an absent SystemRoot
-// takes the fallback, while a present-but-empty one is kept and join() drops
-// the empty leading segment, as pi does.
+// `||` falls back for an absent and for an empty SystemRoot alike, so the
+// path is always absolute.
 func TaskkillPath() string {
-	systemRoot, ok := os.LookupEnv("SystemRoot")
-	if !ok {
+	systemRoot := os.Getenv("SystemRoot")
+	if systemRoot == "" {
 		systemRoot = `C:\Windows`
 	}
 	return filepath.Join(systemRoot, "System32", "taskkill.exe")
