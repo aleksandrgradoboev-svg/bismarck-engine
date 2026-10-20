@@ -870,6 +870,20 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    on task 0 ("Task 0 does not exist"). The reviewer now records its own ID before it waits. Shown
    by sabotage: 50 ms between `start` returning and the test storing the ID fails the old case 5 of
    5 with CI's message; the new one passes 20 of 20.
+   **Fix: a fail-fast sibling could run before its mark** (stage 4b, scheduler; found locally with
+   one processor, 9 of 40 runs of "recovery marks fail-fast siblings a crash left unmarked"). Open
+   queues fail-fast checks for a reconcile pass, and a check marks the members of a waiter with a
+   failure among them; the reservation pass could come first and start a member's phase, so after
+   a restart a sibling of a failed child ran instead of aborting (live, the same when a member fails
+   and a sibling is still pending). pi's pass marks before it reserves. Now a member whose owner has
+   a check not committed yet is not reserved in run mode (as work below a cancelled owner waits for
+   its cascade mark); the pass keeps the checks it took as being checked until its commit, then
+   reserves again, which also starts the members of a check that found no failure and so commits
+   nothing that would wake the scheduler. A test-only hook, `beforeReconcileCommit`, holds the pass
+   before its commit. Cases beyond pi: a sibling does not start while the pass is held; the members
+   of a check without a failure run once it commits. Sabotage: without the guard the held case fails
+   40 of 40 (the old case 20 of 40); without keeping taken checks until the commit, 31 of 40;
+   without reserving again after it, the no-failure case stalls 6 of 6.
 
 ## 5. Bookkeeping
 
