@@ -15,7 +15,8 @@ import (
 // pi packages/durable/test/session-watches.test.ts
 
 var WatchDoc = durable.MustDefineDoc(durable.DocDef{
-	Kind: "watch.state", Version: 1, Scope: durable.ScopeSession,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "watch.state", Version: 1, Scope: durable.ScopeSession,
 	Initial: func(any) map[string]any {
 		return map[string]any{"value": 0, "items": []any{"a", "b"}, "retained": map[string]any{"label": "stable"}}
 	},
@@ -502,11 +503,13 @@ func TestWatchListenerFailureEndsOnlyTheAffectedWatch(t *testing.T) {
 
 var (
 	watchMigrationOld = durable.MustDefineDoc(durable.DocDef{
-		Kind: "watch.migration", Version: 1, Scope: durable.ScopeSession,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "watch.migration", Version: 1, Scope: durable.ScopeSession,
 		Initial: func(any) map[string]any { return map[string]any{"value": 3} },
 	})
 	watchMigrationCurrent = durable.MustDefineDoc(durable.DocDef{
-		Kind: "watch.migration", Version: 2, Scope: durable.ScopeSession,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "watch.migration", Version: 2, Scope: durable.ScopeSession,
 		Initial: func(any) map[string]any { return map[string]any{"value": 0, "migrated": false} },
 		Migrate: func(value map[string]any, _ int) map[string]any {
 			return map[string]any{"value": value["value"], "migrated": true}

@@ -14,9 +14,9 @@ import (
 func stateInitial(any) map[string]any { return map[string]any{"value": 0} }
 
 func TestDefinitionValidatesPersistedVersionSemantics(t *testing.T) {
-	_, err := durable.DefineDoc(durable.DocDef{Kind: "k", Version: 0, Scope: durable.ScopeSession, Initial: stateInitial})
+	_, err := durable.DefineDoc(durable.DocDef{Kind: "k", Version: 0, Scope: durable.ScopeSession, Initial: stateInitial, CheckpointWhen: durable.NeverCheckpoint})
 	errorContains(t, err, "positive integer")
-	d, err := durable.DefineDoc(durable.DocDef{Kind: "", Version: 1, Scope: durable.ScopeSession, Initial: stateInitial})
+	d, err := durable.DefineDoc(durable.DocDef{Kind: "", Version: 1, Scope: durable.ScopeSession, Initial: stateInitial, CheckpointWhen: durable.NeverCheckpoint})
 	if err != nil || d.Definition().Kind != "" {
 		t.Fatalf("empty kind: %v", err)
 	}
@@ -24,22 +24,22 @@ func TestDefinitionValidatesPersistedVersionSemantics(t *testing.T) {
 
 func TestDefinitionValidatesDocumentSemantics(t *testing.T) {
 	for _, def := range []durable.DocDef{
-		{Kind: "k", Version: 1, Scope: "global", Initial: stateInitial},
-		{Kind: "k", Version: 1, Scope: durable.ScopeSession, History: durable.HistoryLatest, Initial: stateInitial},
-		{Kind: "k", Version: 1, Scope: durable.ScopeTask, Fork: durable.ForkCurrent, Initial: stateInitial},
-		{Kind: "k", Version: 1, Scope: durable.ScopeConversation, Initial: stateInitial},
+		{Kind: "k", Version: 1, Scope: "global", Initial: stateInitial, CheckpointWhen: durable.NeverCheckpoint},
+		{Kind: "k", Version: 1, Scope: durable.ScopeSession, History: durable.HistoryLatest, Initial: stateInitial, CheckpointWhen: durable.NeverCheckpoint},
+		{Kind: "k", Version: 1, Scope: durable.ScopeTask, Fork: durable.ForkCurrent, Initial: stateInitial, CheckpointWhen: durable.NeverCheckpoint},
+		{Kind: "k", Version: 1, Scope: durable.ScopeConversation, Initial: stateInitial, CheckpointWhen: durable.NeverCheckpoint},
 		// Latest-only history keeps nothing to fork as of.
-		{Kind: "k", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkAsOf, Initial: stateInitial},
-		{Kind: "k", Version: 1, Scope: durable.ScopeSession},
+		{Kind: "k", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkAsOf, Initial: stateInitial, CheckpointWhen: durable.NeverCheckpoint},
+		{Kind: "k", Version: 1, Scope: durable.ScopeSession, CheckpointWhen: durable.NeverCheckpoint},
 	} {
 		if _, err := durable.DefineDoc(def); err == nil {
 			t.Errorf("accepted %+v", def)
 		}
 	}
 	for _, def := range []durable.DocDef{
-		{Kind: "k", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkInitial, Initial: stateInitial},
-		{Kind: "k", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf, Initial: stateInitial},
-		{Kind: "k", Version: 1, Scope: durable.ScopeTask, Family: true, Initial: stateInitial},
+		{Kind: "k", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkInitial, Initial: stateInitial, CheckpointWhen: durable.NeverCheckpoint},
+		{Kind: "k", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf, Initial: stateInitial, CheckpointWhen: durable.NeverCheckpoint},
+		{Kind: "k", Version: 1, Scope: durable.ScopeTask, Family: true, Initial: stateInitial, CheckpointWhen: durable.NeverCheckpoint},
 	} {
 		if _, err := durable.DefineDoc(def); err != nil {
 			t.Errorf("rejected %+v: %v", def, err)
@@ -47,10 +47,22 @@ func TestDefinitionValidatesDocumentSemantics(t *testing.T) {
 	}
 }
 
+// pi 5c1736f8 requires checkpointWhen by type (@ts-expect-error); Go checks it
+// when the definition is made, for documents and families alike.
+func TestDefinitionRequiresAnExplicitCheckpointPolicyForDocumentsAndFamilies(t *testing.T) {
+	for _, family := range []bool{false, true} {
+		_, err := durable.DefineDoc(durable.DocDef{Kind: "t.missing-checkpoint", Version: 1, Family: family, Scope: durable.ScopeSession, Initial: stateInitial})
+		errorContains(t, err, "requires a checkpoint policy")
+	}
+	if durable.NeverCheckpoint(map[string]any{}, nil, durable.CheckpointInfo{DeltasSinceBase: 1000}) {
+		t.Fatal("NeverCheckpoint asked for a base")
+	}
+}
+
 func TestDefinitionReferencesRejectTheWrongOwnerOrKey(t *testing.T) {
 	ts := openTestSession(t)
 	conversationID := createConversation(t, ts.session)
-	sessionFamily := durable.MustDefineDoc(durable.DocDef{Kind: "t.session-family", Version: 1, Family: true, Scope: durable.ScopeSession, Initial: stateInitial})
+	sessionFamily := durable.MustDefineDoc(durable.DocDef{Kind: "t.session-family", Version: 1, Family: true, Scope: durable.ScopeSession, Initial: stateInitial, CheckpointWhen: durable.NeverCheckpoint})
 	for _, c := range []struct {
 		name string
 		ref  durable.DocRef

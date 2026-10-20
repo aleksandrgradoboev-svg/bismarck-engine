@@ -17,12 +17,13 @@ import (
 var uuidV7 = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 var noteDoc = durable.MustDefineDoc(durable.DocDef{
-	Kind:    "test.note",
-	Version: 1,
-	Scope:   durable.ScopeConversation,
-	History: "rewindable",
-	Fork:    "asOf",
-	Initial: func(any) map[string]any { return map[string]any{"text": ""} },
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "test.note",
+	Version:        1,
+	Scope:          durable.ScopeConversation,
+	History:        "rewindable",
+	Fork:           "asOf",
+	Initial:        func(any) map[string]any { return map[string]any{"text": ""} },
 })
 
 func appendMessage(t *testing.T, conversation *Conversation, text string) durable.EntryRecord {

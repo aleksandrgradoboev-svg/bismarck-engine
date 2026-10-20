@@ -20,6 +20,11 @@ func sessionDoc(def durable.DocDef) *durable.Doc {
 	if def.Version == 0 {
 		def.Version = 1
 	}
+	// pi's tests write `checkpointWhen: () => false` where no policy is under
+	// test.
+	if def.CheckpointWhen == nil {
+		def.CheckpointWhen = durable.NeverCheckpoint
+	}
 	return durable.MustDefineDoc(def)
 }
 
@@ -614,7 +619,8 @@ func TestMigrationLeavesUnaccessedDocumentsUntouched(t *testing.T) {
 func TestHistoryMigratesCurrentAndHistoricalValuesAndFollowsForks(t *testing.T) {
 	rewindable := func(kind string, version int, family bool, initial func(any) map[string]any, migrate func(map[string]any, int) map[string]any) *durable.Doc {
 		return durable.MustDefineDoc(durable.DocDef{
-			Kind: kind, Version: version, Family: family, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
+			CheckpointWhen: durable.NeverCheckpoint,
+			Kind:           kind, Version: version, Family: family, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
 			Initial: initial, Migrate: migrate,
 		})
 	}

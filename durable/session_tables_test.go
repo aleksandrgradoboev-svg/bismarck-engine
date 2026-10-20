@@ -15,17 +15,20 @@ import (
 var workTask = testTask{name: "test.work", version: 1, checkpoint: `{"phase":"start"}`}
 
 var ProgressDoc = durable.MustDefineDoc(durable.DocDef{
-	Kind: "test.progress", Version: 1, Scope: durable.ScopeTask,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "test.progress", Version: 1, Scope: durable.ScopeTask,
 	Initial: func(any) map[string]any { return map[string]any{"lines": []any{}} },
 })
 
 var StepDoc = durable.MustDefineDoc(durable.DocDef{
-	Kind: "test.step", Version: 1, Family: true, Scope: durable.ScopeTask,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "test.step", Version: 1, Family: true, Scope: durable.ScopeTask,
 	Initial: func(any) map[string]any { return map[string]any{"lines": []any{}} },
 })
 
 var NotesDoc = durable.MustDefineDoc(durable.DocDef{
-	Kind: "test.notes", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "test.notes", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryRewindable, Fork: durable.ForkAsOf,
 	Initial: func(any) map[string]any { return map[string]any{"text": ""} },
 })
 

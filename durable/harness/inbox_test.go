@@ -311,7 +311,7 @@ func TestInboxReadsQueueModesWhenTheFinalBoundaryCommitRunsOnTheSessionLine(t *t
 	// Occupy the line, let the answer queue its boundary commit behind it,
 	// then change the mode.
 	held := storage.holdCommits()
-	marker := durable.MustDefineDoc(durable.DocDef{Kind: "test.marker", Version: 1, Scope: durable.ScopeSession, Initial: func(any) map[string]any { return map[string]any{"n": float64(0)} }})
+	marker := durable.MustDefineDoc(durable.DocDef{Kind: "test.marker", Version: 1, Scope: durable.ScopeSession, Initial: func(any) map[string]any { return map[string]any{"n": float64(0)} }, CheckpointWhen: durable.NeverCheckpoint})
 	occupying := async(func() (struct{}, error) {
 		return struct{}{}, root.Commit(bg, func(tx *durable.Tx) error {
 			doc, err := tx.Doc(marker.Session())

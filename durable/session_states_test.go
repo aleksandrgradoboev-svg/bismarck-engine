@@ -13,14 +13,16 @@ import (
 // pi packages/durable/test/session-states.test.ts
 
 var StateDoc = durable.MustDefineDoc(durable.DocDef{
-	Kind: "state.state", Version: 1, Scope: durable.ScopeSession,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "state.state", Version: 1, Scope: durable.ScopeSession,
 	Initial: func(any) map[string]any {
 		return map[string]any{"value": 0, "retained": map[string]any{"label": "stable"}}
 	},
 })
 
 var StateFamilyDoc = durable.MustDefineDoc(durable.DocDef{
-	Kind: "state.family", Version: 1, Family: true, Scope: durable.ScopeSession,
+	CheckpointWhen: durable.NeverCheckpoint,
+	Kind:           "state.family", Version: 1, Family: true, Scope: durable.ScopeSession,
 	Initial: func(seed any) map[string]any { return map[string]any{"value": len(seed.(string))} },
 })
 
@@ -180,7 +182,8 @@ func TestStatePublishesRetirementAndNeverFollowsAReplacement(t *testing.T) {
 
 func TestStateColdLoadsADefinitionFreeForkCopy(t *testing.T) {
 	copied := durable.MustDefineDoc(durable.DocDef{
-		Kind: "state.copied", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkCurrent,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "state.copied", Version: 1, Scope: durable.ScopeConversation, History: durable.HistoryLatest, Fork: durable.ForkCurrent,
 		Initial: func(any) map[string]any { return map[string]any{"value": 0} },
 	})
 	ts := openTestSession(t)
@@ -206,11 +209,13 @@ func TestStateColdLoadsADefinitionFreeForkCopy(t *testing.T) {
 
 var (
 	migrationOld = durable.MustDefineDoc(durable.DocDef{
-		Kind: "state.migration", Version: 1, Scope: durable.ScopeSession,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "state.migration", Version: 1, Scope: durable.ScopeSession,
 		Initial: func(any) map[string]any { return map[string]any{"value": 3} },
 	})
 	migrationCurrent = durable.MustDefineDoc(durable.DocDef{
-		Kind: "state.migration", Version: 2, Scope: durable.ScopeSession,
+		CheckpointWhen: durable.NeverCheckpoint,
+		Kind:           "state.migration", Version: 2, Scope: durable.ScopeSession,
 		Initial: func(any) map[string]any { return map[string]any{"value": 0, "migrated": false} },
 		Migrate: func(value map[string]any, _ int) map[string]any {
 			return map[string]any{"value": value["value"], "migrated": true}

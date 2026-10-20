@@ -48,9 +48,15 @@ type DocDef struct {
 	// definition supports one.
 	Migrate func(value map[string]any, fromVersion int) map[string]any
 	// CheckpointWhen returns true to store an ordinary change as a complete
-	// base instead of a delta.
+	// base instead of a delta. Required, with no default (pi 5c1736f8):
+	// NeverCheckpoint keeps ordinary changes as deltas.
 	CheckpointWhen func(value map[string]any, ops []delta.Op, info CheckpointInfo) bool
 }
+
+// NeverCheckpoint is the checkpoint policy that stores every ordinary change
+// as a delta (pi's `() => false`): only the bases a document requires are
+// written, so replay grows while the document is live.
+func NeverCheckpoint(map[string]any, []delta.Op, CheckpointInfo) bool { return false }
 
 // Doc is a validated document definition, passed explicitly to typed access.
 type Doc struct{ def DocDef }
@@ -63,6 +69,10 @@ func DefineDoc(def DocDef) (*Doc, error) {
 	}
 	if def.Initial == nil {
 		return nil, fmt.Errorf("Document %s requires an initial value", def.Kind)
+	}
+	// pi requires it by type; a Go field can always be left nil.
+	if def.CheckpointWhen == nil {
+		return nil, fmt.Errorf("Document %s requires a checkpoint policy; NeverCheckpoint keeps ordinary changes as deltas", def.Kind)
 	}
 	switch def.Scope {
 	case ScopeSession, ScopeTask:
