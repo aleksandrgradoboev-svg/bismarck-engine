@@ -19,7 +19,7 @@ import (
 
 // Ported from pi packages/durable/test/harness-input-entries.test.ts: inputs
 // placed as application entries, and data-only writes appended at once. The
-// two cases that hold a tool come with slice 2.
+// two cases that hold a tool are in input_entries_tools_test.go.
 
 // requestLog records the role and text of each request message.
 type requestLog struct {
@@ -31,7 +31,7 @@ func (l *requestLog) step(reply *ai.AssistantMessage) providers.FauxResponseStep
 	return func(_ context.Context, req ai.TranscriptContext, _ *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
 		lines := make([]string, len(req.Messages))
 		for i, message := range req.Messages {
-			lines[i] = roles([]ai.Message{message})[0] + ":" + textOf(durable.EntryRecord{Model: []ai.Message{message}})
+			lines[i] = string(message.MessageRole()) + ":" + textOf(durable.EntryRecord{Model: []ai.Message{message}})
 		}
 		l.mu.Lock()
 		l.requests = append(l.requests, lines)
