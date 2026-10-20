@@ -87,9 +87,14 @@ func drive(t *testing.T, limits *OutputLimits) *liveDrive {
 	d.h, d.root = openChat(t, memory.New(), setup)
 	d.live = recordLive(t, d.h)
 	d.done = submit(t, d.root, inputDraft("go"))
+	// The intent commit must have reached the recorder too, not only the
+	// state: commit subscribers run after the state is readable, so a step
+	// would otherwise take it for its own commit.
 	eventually(t, func() bool {
 		slots := liveSlots(t, d.h, d.root)
-		return len(slots) > 0 && slots[0].Status == slotRunning
+		return len(slots) > 0 && slots[0].Status == slotRunning && slices.ContainsFunc(d.live.all(), func(ops []string) bool {
+			return slices.Contains(ops, `s ["tools",0,"status"] "running"`)
+		})
 	})
 	return d
 }
