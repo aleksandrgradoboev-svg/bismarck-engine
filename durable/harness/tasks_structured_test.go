@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1718,6 +1719,73 @@ func TestStructuredRecoveryMarksFailFastSiblingsACrashLeftUnmarked(t *testing.T)
 	}
 	if n.logged("run:c2") {
 		t.Fatal("c2 ran")
+	}
+	must(t, o.h.Close(bg))
+}
+
+// The same recovery with the reconcile pass held before it commits its
+// marks: the reservation pass, which may come first, does not start c2's
+// phase meanwhile.
+func TestStructuredRecoveryStartsNoFailFastSiblingBeforeTheReconcilePassMarksIt(t *testing.T) {
+	n := newNodes(t)
+	directory := t.TempDir()
+	s := n.seed(t, directory, []string{"c1", "c2"}, func(set func(durable.TaskID, func(*durable.TaskRecord)), s seeded) {
+		set(s.children[0], func(r *durable.TaskRecord) { r.State = failedState() })
+		set(s.parent, func(r *durable.TaskRecord) { r.State = waitingState(t, s.children, durable.JoinFailFast) })
+	})
+	release := make(chan struct{})
+	var once sync.Once
+	open := func() { once.Do(func() { close(release) }) }
+	hook := func() { <-release }
+	beforeReconcileCommit.Store(&hook)
+	t.Cleanup(func() { open(); beforeReconcileCommit.Store(nil) })
+	var ranWhileHeld atomic.Bool
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		ranWhileHeld.Store(n.logged("run:c2"))
+		open()
+	}()
+	o := n.openNodes(t, openJSONL(t, directory))
+	if got := outcomeOf(t, o.h, s.children[1]); got != durable.OutcomeAborted {
+		t.Fatalf("c2 = %s", got)
+	}
+	if ranWhileHeld.Load() || n.logged("run:c2") {
+		t.Fatal("c2 ran")
+	}
+	if got := outcomeOf(t, o.h, s.parent); got != durable.OutcomeCompleted {
+		t.Fatalf("parent = %s", got)
+	}
+	must(t, o.h.Close(bg))
+}
+
+// A fail-fast check that finds no failure marks nothing, so its commit wakes
+// nothing: the members the reservation pass skipped meanwhile still run.
+func TestStructuredRecoveryRunsTheMembersOfAFailFastCheckThatFindsNoFailure(t *testing.T) {
+	n := newNodes(t)
+	directory := t.TempDir()
+	s := n.seed(t, directory, []string{"c1", "c2"}, func(set func(durable.TaskID, func(*durable.TaskRecord)), s seeded) {
+		set(s.parent, func(r *durable.TaskRecord) { r.State = waitingState(t, s.children, durable.JoinFailFast) })
+	})
+	release := make(chan struct{})
+	var once sync.Once
+	open := func() { once.Do(func() { close(release) }) }
+	hook := func() { <-release }
+	beforeReconcileCommit.Store(&hook)
+	t.Cleanup(func() { open(); beforeReconcileCommit.Store(nil) })
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		open()
+	}()
+	o := n.openNodes(t, openJSONL(t, directory))
+	n.open("c1", "completed")
+	n.open("c2", "completed")
+	for i, child := range s.children {
+		if got := outcomeOf(t, o.h, child); got != durable.OutcomeCompleted {
+			t.Fatalf("c%d = %s", i+1, got)
+		}
+	}
+	if !n.logged("run:c1") || !n.logged("run:c2") {
+		t.Fatal("a member did not run")
 	}
 	must(t, o.h.Close(bg))
 }

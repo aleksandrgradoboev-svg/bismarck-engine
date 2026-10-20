@@ -194,7 +194,11 @@ type scheduler struct {
 	finalizeChecks *set[durable.TaskID]
 	waitersOn      map[durable.TaskID]*set[durable.TaskID]
 	failFastChecks *set[durable.TaskID]
-	abandoned      *set[durable.TaskID]
+	// failFastChecking are the checks a reconcile pass took and has not
+	// committed yet; with failFastChecks, the waiters whose members do not
+	// start a phase until their marks are in.
+	failFastChecking *set[durable.TaskID]
+	abandoned        *set[durable.TaskID]
 	// sleeping are the sleeping live tasks, due or not: the candidates of
 	// wakeDueLocked.
 	sleeping *set[durable.TaskID]
@@ -276,6 +280,7 @@ func newScheduler(options schedulerOptions) *scheduler {
 		finalizeChecks:      newSet[durable.TaskID](),
 		waitersOn:           map[durable.TaskID]*set[durable.TaskID]{},
 		failFastChecks:      newSet[durable.TaskID](),
+		failFastChecking:    newSet[durable.TaskID](),
 		abandoned:           newSet[durable.TaskID](),
 		sleeping:            newSet[durable.TaskID](),
 		parkedTasks:         newSet[durable.TaskID](),
@@ -380,6 +385,11 @@ func installerOf(snapshot *RegistrySnapshot, task Task) string {
 	}
 	return ""
 }
+
+// beforeReconcileCommit, set only by tests, runs before a reconcile pass
+// commits its marks: a test holds the pass there to show that no task its
+// fail-fast checks may mark starts a phase meanwhile.
+var beforeReconcileCommit atomic.Pointer[func()]
 
 // open loads live tasks and changes surviving running tasks back to pending,
 // counting the restart. It dispatches nothing. A task that reaches the
@@ -854,7 +864,13 @@ func (s *scheduler) reconcile() {
 	s.cascadePending = false
 	checks := s.failFastChecks.values()
 	s.failFastChecks.clear()
+	for _, id := range checks {
+		s.failFastChecking.add(id)
+	}
 	s.unlock()
+	if hook := beforeReconcileCommit.Load(); hook != nil {
+		(*hook)()
+	}
 	err := s.session.Commit(s.ctx, func(tx *durable.Tx) error {
 		s.mu.Lock()
 		defer s.unlock()
@@ -948,6 +964,14 @@ func (s *scheduler) reconcile() {
 		s.failSession(err)
 	}
 	s.mu.Lock()
+	// The checks' marks are in: their members may be reserved, in run mode or
+	// to abort.
+	for _, id := range checks {
+		s.failFastChecking.delete(id)
+	}
+	if len(checks) > 0 {
+		s.kickLocked()
+	}
 	s.settleIdle()
 	s.unlock()
 }
@@ -1205,6 +1229,19 @@ func (s *scheduler) reserve() ([]reservation, error) {
 				s.cascadePending = true
 				s.scheduleReconcile()
 				continue
+			}
+			// Likewise work whose owner has a fail-fast check not committed yet:
+			// a failure among its siblings marks it. pi's pass marks before it
+			// reserves; here the reconcile pass may come later. A pass that took
+			// the check reserves again once it committed.
+			if mode == modeRun && record.Owner != nil {
+				if s.failFastChecks.has(*record.Owner) {
+					s.scheduleReconcile()
+					continue
+				}
+				if s.failFastChecking.has(*record.Owner) {
+					continue
+				}
 			}
 			// An abort handler cut off the restart limit's times in a row would
 			// run forever; nothing is left to park it for.
