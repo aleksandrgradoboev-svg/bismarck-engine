@@ -31,6 +31,12 @@ jobs:
         run: go vet ./...
       - name: test
         run: go test -count=1 ./...
+      # Durable code mode starts calls, delivers results and commits on
+      # goroutines; with one processor each goroutine runs to its end before
+      # the next, an order several processors rarely give. PR #70's ordering
+      # and batching defects showed only there.
+      - name: test with one processor (durable code mode)
+        run: go test -count=1 -cpu 1 ./durable/codemode/...
       # codemode runs each VM, tool call and timer on its own goroutine, and the
       # MCP client and server manager connect in the background, and tools
       # change the session's tool loadout while the loop reads it; the

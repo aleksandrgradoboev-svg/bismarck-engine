@@ -832,11 +832,25 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    Beyond pi: the fingerprint is recorded on the first run; a global where the journal has a tool
    call diverges; `searchTools()` rejects a limit that is not a positive integer; text items are
    numbered from two; an image shown twice is saved once; tools without a namespace that do not
-   fit say so. Sabotage 37 of 40: equivalent, a delivery after a failed journal commit (the failure
-   aborts the VM first) and the first read of the output directory (the second commit reads it
-   again, leaving an empty temp directory, as in pi); not caught, launching a call before its count
-   is committed — the session's FIFO commit line puts the count commit first, so only a crash
-   window shows it, and a test needs a test-only hook (open).
+   fit say so; a global made after a result does not run while that count's commit is held (a
+   global runs in this process without a commit of its own, so the FIFO commit line, which puts a
+   tool call's admission behind the count, does not hide a launch that skips the wait). Sabotage 38
+   of 40: equivalent, a delivery after a failed journal commit (the failure aborts the VM first)
+   and the first read of the output directory (the second commit reads it again, leaving an empty
+   temp directory, as in pi).
+   Fixed after CI on the PR (with one processor, `-cpu 1`, three cases failed or hung): covered
+   calls started one goroutine each, in no order, so a later call could be admitted first and a
+   call made just before the script ended could never start; pi starts a covered batch
+   synchronously in call order. Now one launcher starts them in call order, each once the one before
+   has started: a tool call once admitted (`NestedCallOptions.OnAdmitted`, new), a global once it
+   executes. And `pump`, re-run after each commit, committed counts while the VM was still
+   processing a delivered batch, a few at a time; counts alone now wait for the VM's idle on the
+   last delivered result, one commit per batch as in pi. "Results that finish together" has no
+   tick in Go: the case holds the first result's commit until all 50 globals return, so the rest
+   arrive during it and go in one commit. CI runs `./durable/codemode/...` with `-cpu 1` too.
+   Sabotage of the fix 6 of 7; counts committed mid-batch are caught only now and then (2 of 20
+   runs with four processors): the window is a few statements between delivery and the re-run, and
+   a deterministic case needs a test-only hook (open).
 
 ## 5. Bookkeeping
 
