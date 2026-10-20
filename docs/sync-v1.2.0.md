@@ -856,6 +856,13 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    Sabotage of the fix 6 of 7; counts committed mid-batch are caught only now and then (2 of 20
    runs with four processors): the window is a few statements between delivery and the re-run, and
    a deterministic case needs a test-only hook (open).
+   **Fix: compaction cases queueing answers after a reopen resumed** (slice 3, found by CI). Six
+   cases reopened the chat (`reopenCompaction`) and only then queued the faux model's
+   summary or agent answer; the resumed compaction could ask first, get "No scripted summary
+   response" and fail. In pi the queue is filled in the same turn, before the resumed work runs.
+   `reopenCompaction` now takes the answers and queues them before `Resume`; a failed compaction
+   reports its error text. Shown by sabotage: a 50 ms delay after `Resume` fails the old cases with
+   CI's message ("compaction 20 = … failed …, want completed", 3 of 3); the new ones pass 5 of 5.
 
 ## 5. Bookkeeping
 

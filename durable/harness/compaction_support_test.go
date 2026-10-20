@@ -227,7 +227,11 @@ func (c *compactionChat) result(t *testing.T, id durable.TaskID) CompactionResul
 	t.Helper()
 	outcome := c.outcome(t, id)
 	if outcome.Status != durable.OutcomeCompleted {
-		t.Fatalf("compaction %d = %+v, want completed", id, outcome)
+		message := ""
+		if outcome.Error != nil {
+			message = outcome.Error.Message
+		}
+		t.Fatalf("compaction %d = %s (%q), want completed", id, outcome.Status, message)
 	}
 	var result CompactionResult
 	must(t, json.Unmarshal(outcome.Result, &result))

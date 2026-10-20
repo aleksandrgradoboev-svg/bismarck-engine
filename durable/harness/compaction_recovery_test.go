@@ -95,10 +95,16 @@ func firstCompaction(t *testing.T, dir string) *compactionChat {
 }
 
 // reopenCompaction closes chat's Harness and opens its directory again.
-func reopenCompaction(t *testing.T, dir string, chat *compactionChat) *compactionChat {
+// reopenCompaction closes the chat and reopens it on the same files; script,
+// when set, queues the faux model's answers before Resume, as the resumed
+// work may send its request at once.
+func reopenCompaction(t *testing.T, dir string, chat *compactionChat, script func(*compactionScript)) *compactionChat {
 	t.Helper()
 	must(t, chat.h.Close(bg))
 	h, root := openChat(t, openJSONL(t, dir), chat.setup)
+	if script != nil {
+		script(chat.faux)
+	}
 	must(t, h.Resume())
 	return &compactionChat{h: h, root: root, setup: chat.setup, faux: chat.faux}
 }
@@ -111,7 +117,7 @@ func TestCompactionRecoveryRepeatsNothingAfterReopenOnceTheSummaryIsPlaced(t *te
 	entries := chatEntries(t, chat.root)
 	usage, err := chat.h.Snapshot(bg, UsageDoc.Conversation(chat.root.ID))
 	must(t, err)
-	chat = reopenCompaction(t, dir, chat)
+	chat = reopenCompaction(t, dir, chat, nil)
 	must(t, chat.h.WaitForIdle(bg))
 	if n := chat.faux.summaryCount(); n != 1 {
 		t.Fatalf("summary requests = %d", n)
@@ -145,8 +151,7 @@ func TestCompactionRecoveryRerunsSelectAndItsHookAfterACrashInSelect(t *testing.
 	}})
 	id := chat.compact(t, nil)
 	awaitSignal(t, reached, "the first hook call")
-	chat = reopenCompaction(t, dir, chat)
-	chat.faux.pushSummary(summaryStep("SUMMARY"))
+	chat = reopenCompaction(t, dir, chat, func(f *compactionScript) { f.pushSummary(summaryStep("SUMMARY")) })
 	chat.result(t, id)
 	if calls != 2 {
 		t.Fatalf("hook calls = %d, want 2", calls)
@@ -182,8 +187,7 @@ func TestCompactionRecoveryResendsAnInterruptedSummarizationOnceAndCountsOnlyThe
 	if phase, _ := CheckpointPhase(getTask(t, chat.h, id).State.Checkpoint); phase != phaseSummarize {
 		t.Fatalf("phase = %s, want summarize", phase)
 	}
-	chat = reopenCompaction(t, dir, chat)
-	chat.faux.pushSummary(summaryStep("SUMMARY"))
+	chat = reopenCompaction(t, dir, chat, func(f *compactionScript) { f.pushSummary(summaryStep("SUMMARY")) })
 	chat.result(t, id)
 	if n := chat.faux.summaryCount(); n != 2 {
 		t.Fatalf("summary requests = %d", n)
@@ -229,8 +233,7 @@ func TestCompactionRecoveryResumesARetryBackoffAfterReopen(t *testing.T) {
 		t.Fatalf("summary requests = %d", n)
 	}
 	now.set(121_000)
-	chat = reopenCompaction(t, dir, chat)
-	chat.faux.pushSummary(summaryStep("SUMMARY"))
+	chat = reopenCompaction(t, dir, chat, func(f *compactionScript) { f.pushSummary(summaryStep("SUMMARY")) })
 	chat.result(t, id)
 	if n := chat.faux.summaryCount(); n != 2 {
 		t.Fatalf("summary requests = %d", n)
@@ -247,8 +250,7 @@ func TestCompactionRecoveryKeepsAQueuedSummaryAcrossReopenAndPlacesItAtTheNextBo
 	awaitSignal(t, reached, "the busy request")
 	chat.faux.pushSummary(summaryStep("SUMMARY"))
 	result := chat.result(t, chat.compact(t, nil))
-	chat = reopenCompaction(t, dir, chat)
-	chat.faux.pushAgent(fauxText("answered"))
+	chat = reopenCompaction(t, dir, chat, func(f *compactionScript) { f.pushAgent(fauxText("answered")) })
 	if status := waitSubmission(t, chat.h, input.ID).Status; status != durable.SubmissionDone {
 		t.Fatalf("input = %s", status)
 	}
