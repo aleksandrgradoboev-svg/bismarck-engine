@@ -856,6 +856,14 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    Sabotage of the fix 6 of 7; counts committed mid-batch are caught only now and then (2 of 20
    runs with four processors): the window is a few statements between delivery and the re-run, and
    a deterministic case needs a test-only hook (open).
+   **Fix: task graph case racing the late child** (stage 4b, found by CI on main). "Follows every
+   live task through its statuses…" compared the observed graph with a rebuild from Storage once the
+   parent was completing, while the scheduler could still be starting the late child on its own
+   pass: the rebuild saw it running, the observed graph pending. In pi the comparison happens in the
+   same turn; here the case waits until the late child runs, after which nothing commits until it
+   is released. Shown by sabotage: a 5 ms delay before the scheduler's reservation commit fails the
+   old case 20 of 20 with CI's message; the new one passes 20 of 20, also with a further 20 ms
+   between reading the observed graph and rebuilding it.
    **Fix: compaction cases queueing answers after a reopen resumed** (slice 3, found by CI). Six
    cases reopened the chat (`reopenCompaction`) and only then queued the faux model's
    summary or agent answer; the resumed compaction could ask first, get "No scripted summary
