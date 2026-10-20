@@ -56,14 +56,7 @@ type ToolSlot struct {
 	Name   string `json:"name"`
 	// Status is "pending", "running" or "done".
 	Status string `json:"status"`
-	// Output is the retained running output, and DroppedBytes and
-	// DroppedLines what the bounds dropped.
-	Output       *string `json:"output,omitempty"`
-	DroppedBytes int     `json:"droppedBytes,omitempty"`
-	DroppedLines int     `json:"droppedLines,omitempty"`
-	// Details is the last Details value.
-	Details     any              `json:"details,omitempty"`
-	Diagnostics []ToolDiagnostic `json:"diagnostics,omitempty"`
+	SlotProgress
 	// TaskID is absent for a call not started yet (sequential round) and
 	// for a call its request did not offer, which starts done with the
 	// Entry the generation wrote.
@@ -73,24 +66,124 @@ type ToolSlot struct {
 	Entry *durable.EntryID `json:"entry,omitempty"`
 }
 
+// SlotProgress is what a running tool call publishes, shared by
+// model-issued and nested calls.
+type SlotProgress struct {
+	// Output is the retained running output, and DroppedBytes and
+	// DroppedLines what the bounds dropped.
+	Output       *string `json:"output,omitempty"`
+	DroppedBytes int     `json:"droppedBytes,omitempty"`
+	DroppedLines int     `json:"droppedLines,omitempty"`
+	// Details is the last Details value.
+	Details     any              `json:"details,omitempty"`
+	Diagnostics []ToolDiagnostic `json:"diagnostics,omitempty"`
+}
+
+// NestedToolSlot is the presentation of one nested call, a call a running
+// tool made through ExecuteTool, in pi.live nestedTools. CallID is
+// "<parent call ID>/<key>"; slots are found by task ID.
+type NestedToolSlot struct {
+	CallID       string         `json:"callId"`
+	ParentCallID string         `json:"parentCallId"`
+	ParentTaskID durable.TaskID `json:"parentTaskId"`
+	Name         string         `json:"name"`
+	TaskID       durable.TaskID `json:"taskId"`
+	// Arguments are what the call was made with, replaced by the arguments
+	// it runs with, after repair, BeforeTool and coercion, once it starts
+	// executing.
+	Arguments map[string]any `json:"arguments"`
+	// Status is "pending", "running" or "done".
+	Status string `json:"status"`
+	SlotProgress
+	// Summary is, once done, how the call ended, for a status line; the
+	// result itself is in the caller's NestedCallDoc.
+	Summary *NestedToolSummary `json:"summary,omitempty"`
+}
+
+// NestedToolSummary is how a nested call ended: an error flag, its
+// execution time, its spend, and up to 500 characters of error text.
+type NestedToolSummary struct {
+	IsError    bool      `json:"isError"`
+	DurationMs *int64    `json:"durationMs,omitempty"`
+	Usage      *ai.Usage `json:"usage,omitempty"`
+	Error      string    `json:"error,omitempty"`
+}
+
 // toolKind is the built-in tool task's kind.
 const toolKind = "pi.tool"
 
-// toolSlotDraft is the slot of tool task taskID in pi.live tools; nil when
-// it has none. Nested slots come with the nested calls of the port.
+// toolSlotDraft is the slot of tool task taskID, model-issued or nested, if
+// pi.live still lists it. Nested slots are found by binary search: a tool may
+// make thousands of nested calls, each of which looks up its slot in several
+// commits, and the list holds them in ascending task ID.
 func toolSlotDraft(live *delta.Draft, taskID durable.TaskID) *delta.Draft {
-	tools := live.At("tools")
-	if tools == nil {
+	if tools := live.At("tools"); tools != nil {
+		for i := range tools.Len() {
+			slot := tools.At(i)
+			if slot == nil {
+				continue
+			}
+			if id, ok := slot.Get("taskId"); ok && id == float64(taskID) {
+				return slot
+			}
+		}
+	}
+	nested := live.At("nestedTools")
+	if nested == nil {
 		return nil
 	}
-	for i := range tools.Len() {
-		slot := tools.At(i)
-		if slot == nil {
-			continue
-		}
-		if id, ok := slot.Get("taskId"); ok && id == float64(taskID) {
+	low, high := 0, nested.Len()-1
+	for low <= high {
+		middle := (low + high) / 2
+		slot := nested.At(middle)
+		id, _ := slot.Get("taskId")
+		candidate, _ := id.(float64)
+		switch {
+		case candidate == float64(taskID):
 			return slot
+		case candidate < float64(taskID):
+			low = middle + 1
+		default:
+			high = middle - 1
 		}
+	}
+	return nil
+}
+
+// isNestedSlot reports whether a slot draft is a nested call's.
+func isNestedSlot(slot *delta.Draft) bool {
+	return slot.Has("parentTaskId")
+}
+
+// removeNestedSlots removes the nested slots below tool task taskID,
+// transitively; the list holds parents before their children.
+func removeNestedSlots(live *delta.Draft, taskID durable.TaskID) error {
+	nested := live.At("nestedTools")
+	if nested == nil {
+		return nil
+	}
+	removed := map[float64]bool{float64(taskID): true}
+	below := make([]bool, nested.Len())
+	for i := range nested.Len() {
+		slot := nested.At(i)
+		parent, _ := slot.Get("parentTaskId")
+		id, _ := slot.Get("taskId")
+		if p, _ := parent.(float64); removed[p] {
+			below[i] = true
+			if task, ok := id.(float64); ok {
+				removed[task] = true
+			}
+		}
+	}
+	for i := len(below) - 1; i >= 0; i-- {
+		if below[i] {
+			if _, err := nested.Splice(i, 1); err != nil {
+				return err
+			}
+		}
+	}
+	if nested.Len() == 0 {
+		return live.Delete("nestedTools")
 	}
 	return nil
 }

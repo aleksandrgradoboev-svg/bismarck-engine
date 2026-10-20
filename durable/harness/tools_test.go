@@ -1382,8 +1382,8 @@ func TestToolProgressAnswersAnAbortedToolWithOnlyItsDurableOutputDiscardingBuffe
 }
 
 // Ported from pi packages/durable/test/harness-callers.test.ts: the two
-// cases without nested calls; the three that probe executeTool come with the
-// nested calls of the port.
+// cases without nested calls; the three that probe executeTool are in
+// callers_nested_test.go.
 
 func callerTool(name string) *ToolRegistration {
 	return &ToolRegistration{

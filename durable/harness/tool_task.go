@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
@@ -15,6 +17,7 @@ import (
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/chord/output"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/durable/env"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // The built-in tool task (pi packages/durable/src/harness/tool.ts). This
@@ -49,6 +52,23 @@ type ToolTaskInput struct {
 	Progress *bool `json:"progress,omitempty"`
 }
 
+// MarshalJSON writes a nested call's call as pi stores it: a tool call
+// block, with its "type".
+func (in ToolTaskInput) MarshalJSON() ([]byte, error) {
+	type plain ToolTaskInput
+	if in.Call == nil {
+		return json.Marshal(plain(in))
+	}
+	block, err := json.Marshal(ai.ContentList{*in.Call})
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(struct {
+		plain
+		Call json.RawMessage `json:"call"`
+	}{plain(in), block[1 : len(block)-1]})
+}
+
 // Tool task phases.
 const (
 	toolPhaseCall    = "call"
@@ -73,6 +93,44 @@ type ToolTaskResult struct {
 }
 
 type toolTask = Running[ToolTaskInput, ToolTaskCheckpoint]
+
+// beforeNestedAdmission, set only by tests, runs before a nested call's
+// admission commits: goroutines start admissions in no fixed order, so a test
+// holds one there to make it commit after its caller returned, as pi's
+// synchronous admissions can.
+var beforeNestedAdmission atomic.Pointer[func(key string)]
+
+// madeNestedCalls is the memo of a tool task that made a nested call, in any
+// attempt, committed before the first admission of each attempt: only then
+// can pi.live hold slots below it, which settling removes. A crash between
+// the two only costs a scan.
+const madeNestedCalls = "pi.tool.madeNestedCalls"
+
+// NestedCallState is one nested call of a running tool: its task, and once
+// it ended, its result.
+type NestedCallState struct {
+	// TaskID is absent only inside the commit that creates the call; a
+	// creation that fails leaves no member.
+	TaskID *durable.TaskID `json:"taskId,omitempty"`
+	// Result is exactly what ExecuteTool returns; absent while running, and
+	// for a call the scheduler faulted or orphaned.
+	Result *NestedToolExecutionResult `json:"result,omitempty"`
+}
+
+// NestedCallDoc is the nested calls of a tool call: a task-scoped family of
+// the calling task keyed by the nested call's key, so a rerun finds the calls
+// it already made, and the caller reads each result. Created with the nested
+// task; the nested call's terminal commit adds its result. One document per
+// call, so no commit rewrites the others. Retires with the caller.
+var NestedCallDoc = durable.MustDefineDoc(durable.DocDef{
+	Kind:    "pi.tool.nested-call",
+	Version: 1,
+	Scope:   durable.ScopeTask,
+	Family:  true,
+	Initial: func(any) map[string]any { return map[string]any{} },
+	// The document retires with its task.
+	CheckpointWhen: durable.NeverCheckpoint,
+})
 
 // ToolTask is the built-in tool task: it resolves the called tool among its
 // phase agent's tools, validates, runs BeforeTool, records intent, executes,
@@ -106,9 +164,6 @@ func init() {
 
 // callTool is the call phase.
 func callTool(ctx context.Context, task *toolTask, rt *TaskRuntime) error {
-	if task.Input.Kind == toolCallNested {
-		return notPorted("nested tool calls")
-	}
 	call, err := readToolCall(ctx, rt, task.Input)
 	if err != nil {
 		return err
@@ -119,11 +174,11 @@ func callTool(ctx context.Context, task *toolTask, rt *TaskRuntime) error {
 	}
 	if tool == nil {
 		unavailable := harnessError("tool_unavailable", fmt.Sprintf("Tool %s is not available", call.Name))
-		return settleTool(ctx, rt, task.Input, call, endingCompleted, func(*ToolSlot) ToolExecutionResult { return unavailable }, nil)
+		return settleTool(ctx, rt, task.Input, call, endingCompleted, func(*SlotProgress) ToolExecutionResult { return unavailable }, nil)
 	}
 	invalidResult := func(message string) error {
 		result := harnessError("invalid_arguments", message)
-		return settleTool(ctx, rt, task.Input, call, endingCompleted, func(*ToolSlot) ToolExecutionResult { return result }, nil)
+		return settleTool(ctx, rt, task.Input, call, endingCompleted, func(*SlotProgress) ToolExecutionResult { return result }, nil)
 	}
 	args, problem := prepareArguments(tool, call.Arguments)
 	if problem == "" {
@@ -161,7 +216,7 @@ func callTool(ctx context.Context, task *toolTask, rt *TaskRuntime) error {
 	}
 	if block != nil {
 		blocked := harnessError("blocked", "Tool call blocked: "+*block)
-		return settleTool(ctx, rt, task.Input, call, endingCompleted, func(*ToolSlot) ToolExecutionResult { return blocked }, nil)
+		return settleTool(ctx, rt, task.Input, call, endingCompleted, func(*SlotProgress) ToolExecutionResult { return blocked }, nil)
 	}
 	validated, problem := validateArguments(tool, call.ToolCall, args)
 	if problem != "" {
@@ -185,6 +240,14 @@ func callTool(ctx context.Context, task *toolTask, rt *TaskRuntime) error {
 			if err := slot.Set("status", slotRunning); err != nil {
 				return nil, err
 			}
+			// A nested slot shows the arguments the call runs with, which
+			// repair, hooks, and coercion may have changed. Compared with the
+			// input, which the slot got at admission.
+			if isNestedSlot(slot) && task.Input.Call != nil && !jsonAlike(task.Input.Call.Arguments, final) {
+				if err := setDraftField(slot, "arguments", final); err != nil {
+					return nil, err
+				}
+			}
 		}
 		return Next(ToolTaskCheckpoint{Phase: toolPhaseExecute, Arguments: final, Replay: replay})
 	}); err != nil {
@@ -197,9 +260,6 @@ func callTool(ctx context.Context, task *toolTask, rt *TaskRuntime) error {
 // the current policy both say safe; otherwise the call fails as interrupted,
 // answered with the slot's durable output.
 func executeTool(ctx context.Context, task *toolTask, rt *TaskRuntime) error {
-	if task.Input.Kind == toolCallNested {
-		return notPorted("nested tool calls")
-	}
 	call, err := readToolCall(ctx, rt, task.Input)
 	if err != nil {
 		return err
@@ -234,15 +294,12 @@ func executeTool(ctx context.Context, task *toolTask, rt *TaskRuntime) error {
 	// Failed records cancellation intent, so the call's owned conversations,
 	// left unsupervised, are aborted.
 	ending := toolEnding{status: durable.OutcomeFailed, message: message}
-	return settleTool(ctx, rt, task.Input, call, ending, func(slot *ToolSlot) ToolExecutionResult { return fromSlot(slot, "interrupted", message) }, nil)
+	return settleTool(ctx, rt, task.Input, call, ending, func(slot *SlotProgress) ToolExecutionResult { return fromSlot(slot, "interrupted", message) }, nil)
 }
 
 // abortTool settles an abort-marked call; one abandoned after a restart says
 // whether it may have run.
 func abortTool(ctx context.Context, task *toolTask, rt *TaskRuntime) error {
-	if task.Input.Kind == toolCallNested {
-		return notPorted("nested tool calls")
-	}
 	call, err := readToolCall(ctx, rt, task.Input)
 	if err != nil {
 		return err
@@ -255,7 +312,7 @@ func abortTool(ctx context.Context, task *toolTask, rt *TaskRuntime) error {
 			code, message = "abandoned", fmt.Sprintf("Tool %s was not started: its caller ended with a restart", call.Name)
 		}
 	}
-	return settleTool(ctx, rt, task.Input, call, endingAborted, func(slot *ToolSlot) ToolExecutionResult { return fromSlot(slot, code, message) }, nil)
+	return settleTool(ctx, rt, task.Input, call, endingAborted, func(slot *SlotProgress) ToolExecutionResult { return fromSlot(slot, code, message) }, nil)
 }
 
 // resolveTool is the called tool among the tools the model is offered for a
@@ -418,6 +475,9 @@ func runTool(ctx context.Context, rt *TaskRuntime, input ToolTaskInput, call Too
 		ending = toolEnding{status: durable.OutcomeFailed, message: fmt.Sprintf("Tool %s threw", call.Name)}
 	}
 	api.end()
+	// No admission starts after the end; let those underway commit, so
+	// settlement aborts and lists their calls.
+	api.admissions.Wait()
 	rep.mu.Lock()
 	rep.output.End()
 	rep.mu.Unlock()
@@ -426,7 +486,7 @@ func runTool(ctx context.Context, rt *TaskRuntime, input ToolTaskInput, call Too
 	pending := progress.Stop()
 	settled, err := finalToolResult(ctx, rt, input, call, tool, result, rep)
 	if err == nil {
-		err = settleTool(ctx, rt, input, call, ending, func(*ToolSlot) ToolExecutionResult { return settled }, durationMs)
+		err = settleTool(ctx, rt, input, call, ending, func(*SlotProgress) ToolExecutionResult { return settled }, durationMs)
 	}
 	for _, waiter := range pending {
 		if err != nil {
@@ -641,21 +701,59 @@ func finalToolResult(ctx context.Context, rt *TaskRuntime, input ToolTaskInput, 
 	if droppedBytes > 0 {
 		harness = append(harness, truncatedDiagnostic(droppedBytes, droppedLines, string(rep.limits.Retain)))
 	}
+	nested := input.Kind == toolCallNested
 	if broken := structuredOutputError(tool, final); broken != "" {
 		final.StructuredOutput = nil
-		// The model never sees structured output, so its call stands; the
-		// host learns of the broken tool.
-		extension := ""
-		if agent, err := rt.Agent(ctx); err == nil {
-			extension = toolExtension(agent, tool.Name)
+		if nested {
+			final.IsError = true
+			harness = append(harness, toolDiagnostic("invalid_structured_output", broken))
+		} else {
+			// The model never sees structured output, so its call stands;
+			// the host learns of the broken tool.
+			extension := ""
+			if agent, err := rt.Agent(ctx); err == nil {
+				extension = toolExtension(agent, tool.Name)
+			}
+			if err := rt.Report(errors.New(broken), ReportFrom{Extension: extension}); err != nil {
+				return ToolExecutionResult{}, err
+			}
 		}
-		if err := rt.Report(errors.New(broken), ReportFrom{Extension: extension}); err != nil {
-			return ToolExecutionResult{}, err
+	}
+	// Programs get the tool's own value: without a schema, its output. The
+	// model reads only the output, so model-issued calls skip both.
+	if nested && tool.StructuredOutputSchema == nil {
+		final.StructuredOutput = outputValue(bounded)
+	}
+	// A schema tool's error result without structured output has its text
+	// only in the output, which programs never get: it becomes an error
+	// diagnostic, as a thrown error's message does, unless one says what went
+	// wrong already.
+	if nested && tool.StructuredOutputSchema != nil && final.IsError && final.StructuredOutput == nil && !hasError(final.Diagnostics, harness) {
+		var texts []string
+		for _, item := range bounded {
+			if text, ok := item.(ai.TextContent); ok {
+				texts = append(texts, text.Text)
+			}
+		}
+		if text := strings.Join(texts, "\n"); text != "" {
+			harness = append(harness, toolDiagnostic("tool_error", text))
 		}
 	}
 	final.Output = bounded
 	final.Diagnostics = append(final.Diagnostics, harness...)
 	return final, nil
+}
+
+// hasError reports whether any of the lists holds an error diagnostic.
+func hasError(lists ...[]ToolDiagnostic) bool {
+	for _, list := range lists {
+		for _, diagnostic := range list {
+			if diagnostic.Severity == "error" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // sameContent reports whether two content lists are the same list.
@@ -697,13 +795,40 @@ func structuredOutputError(tool *ToolRegistration, result ToolExecutionResult) s
 	return fmt.Sprintf("Tool %s returned structuredOutput that does not match its schema: %s: %s", tool.Name, errs[0].Path, errs[0].Message)
 }
 
-// settleTool commits the tool's terminal state and marks its slot done: a
-// model-issued call appends its result entry and ends with the entry ID.
-// build receives the slot, so interruption and abort can report the durable
-// partial output.
-func settleTool(ctx context.Context, rt *TaskRuntime, input ToolTaskInput, call ToolHookCall, ending toolEnding, build func(slot *ToolSlot) ToolExecutionResult, durationMs *int64) error {
-	if input.Kind == toolCallNested {
-		return notPorted("nested tool calls")
+// settleTool commits the tool's terminal state and marks its slot done. A
+// model-issued call appends its result entry and ends with the entry ID; a
+// nested call writes its result to the caller's NestedCallDoc, records its
+// usage, and ends with a small receipt. Nested calls this call left running
+// are aborted first, so they report into their slots before the slots below
+// the call leave pi.live. build receives the slot, so interruption and abort
+// can report the durable partial output.
+func settleTool(ctx context.Context, rt *TaskRuntime, input ToolTaskInput, call ToolHookCall, ending toolEnding, build func(slot *SlotProgress) ToolExecutionResult, durationMs *int64) error {
+	// A crash in between leaves the call in execute: a safe rerun reattaches
+	// to the calls, an interruption ends here. Every live nested call the
+	// task owns, also those an earlier attempt made and this one never
+	// called again.
+	owned, err := rt.OwnedTasks(ctx)
+	if err != nil {
+		return err
+	}
+	var nestedIDs []durable.TaskID
+	for _, record := range owned {
+		var owner ToolTaskInput
+		if record.Kind == toolKind && json.Unmarshal(record.Input, &owner) == nil && owner.Kind == toolCallNested {
+			nestedIDs = append(nestedIDs, record.ID)
+		}
+	}
+	// Read before the settling commit: no admission starts after the call
+	// ended, and those underway were awaited.
+	memo, err := rt.Memo(ctx, madeNestedCalls)
+	if err != nil {
+		return err
+	}
+	madeNested := string(memo) == "true"
+	// Mark them all before waiting for any: one may run until a sibling is
+	// cancelled.
+	if err := abortAll(ctx, rt, nestedIDs); err != nil {
+		return err
 	}
 	return rt.Commit(ctx, func(tx *durable.Tx, _ durable.TaskRecord) (*durable.TaskState, error) {
 		live, err := liveDraft(tx, rt.ConversationID)
@@ -711,40 +836,84 @@ func settleTool(ctx context.Context, rt *TaskRuntime, input ToolTaskInput, call 
 			return nil, err
 		}
 		slotDraft := toolSlotDraft(live, rt.TaskID)
-		var slot *ToolSlot
+		var slot *SlotProgress
 		if slotDraft != nil {
 			snapshot, err := slotDraft.Snapshot()
 			if err != nil {
 				return nil, err
 			}
-			var decoded ToolSlot
+			var decoded SlotProgress
 			if err := decodeValue(snapshot, &decoded); err != nil {
 				return nil, err
 			}
 			slot = &decoded
 		}
 		result := build(slot)
-		now, err := rt.Now()
-		if err != nil {
-			return nil, err
-		}
-		entry, err := appendToolResult(tx, rt.ConversationID, call.ToolCall, result, now.UnixMilli(), durationMs)
-		if err != nil {
-			return nil, err
-		}
-		if slotDraft != nil {
-			if err := finishSlot(slotDraft); err != nil {
+		var settled ToolTaskResult
+		if input.Kind == toolCallNested {
+			nested, err := nestedResult(rt.TaskID, result, durationMs)
+			if err != nil {
 				return nil, err
 			}
-			if err := slotDraft.Set("entry", float64(entry.ID)); err != nil {
+			if nested.Usage != nil {
+				if err := recordUsage(tx, rt.ConversationID, "tools", call.Name, *nested.Usage); err != nil {
+					return nil, err
+				}
+			}
+			if input.Parent == nil {
+				return nil, fmt.Errorf("Nested call %s names no caller", call.ID)
+			}
+			// The caller is never terminal before its owned nested calls, so
+			// its document is open; another task in it is a bug, not a race.
+			state, err := tx.Doc(NestedCallDoc.Task(*input.Parent).Member(input.Key, nil))
+			if err != nil {
 				return nil, err
 			}
+			if id, _ := state.Get("taskId"); id != float64(rt.TaskID) {
+				return nil, fmt.Errorf("Nested call %s is not in its caller's index", call.ID)
+			}
+			if err := setDraftField(state, "result", nested); err != nil {
+				return nil, err
+			}
+			if slotDraft != nil && isNestedSlot(slotDraft) {
+				if err := finishSlot(slotDraft); err != nil {
+					return nil, err
+				}
+				if err := setDraftField(slotDraft, "summary", summaryOf(nested, result.Output)); err != nil {
+					return nil, err
+				}
+			}
+			settled = ToolTaskResult{Kind: toolCallNested}
+		} else {
+			now, err := rt.Now()
+			if err != nil {
+				return nil, err
+			}
+			entry, err := appendToolResult(tx, rt.ConversationID, call.ToolCall, result, now.UnixMilli(), durationMs)
+			if err != nil {
+				return nil, err
+			}
+			if slotDraft != nil && !isNestedSlot(slotDraft) {
+				if err := finishSlot(slotDraft); err != nil {
+					return nil, err
+				}
+				if err := slotDraft.Set("entry", float64(entry.ID)); err != nil {
+					return nil, err
+				}
+			}
+			id := entry.ID
+			settled = ToolTaskResult{Kind: toolCallModel, EntryID: &id}
+			if result.Control != nil && ending.status == durable.OutcomeCompleted {
+				control := *result.Control
+				settled.Control = &control
+			}
 		}
-		id := entry.ID
-		settled := ToolTaskResult{Kind: toolCallModel, EntryID: &id}
-		if result.Control != nil && ending.status == durable.OutcomeCompleted {
-			control := *result.Control
-			settled.Control = &control
+		// A call that made no nested calls, in any attempt, has no slots
+		// below it; skipping the scan keeps many leaves linear.
+		if madeNested {
+			if err := removeNestedSlots(live, rt.TaskID); err != nil {
+				return nil, err
+			}
 		}
 		raw, err := json.Marshal(settled)
 		if err != nil {
@@ -760,7 +929,7 @@ func settleTool(ctx context.Context, rt *TaskRuntime, input ToolTaskInput, call 
 
 // fromSlot is an error result from the slot's durable partial output,
 // details and diagnostics.
-func fromSlot(slot *ToolSlot, code, message string) ToolExecutionResult {
+func fromSlot(slot *SlotProgress, code, message string) ToolExecutionResult {
 	result := ToolExecutionResult{Output: ai.ContentList{}, IsError: true}
 	if slot != nil {
 		result.Diagnostics = slices.Clone(slot.Diagnostics)
@@ -774,6 +943,237 @@ func fromSlot(slot *ToolSlot, code, message string) ToolExecutionResult {
 	}
 	result.Diagnostics = append(result.Diagnostics, toolDiagnostic(code, message))
 	return result
+}
+
+// abortAll marks every task of ids before waiting for any, as one may run
+// until a sibling is cancelled, then waits for them all; the first error
+// wins.
+func abortAll(ctx context.Context, rt *TaskRuntime, ids []durable.TaskID) error {
+	errs := make(chan error, len(ids))
+	for _, id := range ids {
+		go func() { errs <- rt.AbortOwned(ctx, id) }()
+	}
+	var first error
+	for range ids {
+		if err := <-errs; err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
+}
+
+// nestedResult is a nested call's result as stored and returned: strict
+// JSON, without the output, which only the model reads, and without
+// controls, which only model-issued calls apply.
+func nestedResult(taskID durable.TaskID, result ToolExecutionResult, durationMs *int64) (NestedToolExecutionResult, error) {
+	nested := NestedToolExecutionResult{TaskID: taskID, IsError: result.IsError, Diagnostics: slices.Clone(result.Diagnostics), DurationMs: durationMs}
+	if nested.Diagnostics == nil {
+		nested.Diagnostics = []ToolDiagnostic{}
+	}
+	if result.Usage != nil {
+		usage := *result.Usage
+		nested.Usage = &usage
+	}
+	for _, field := range []struct {
+		value any
+		out   *json.RawMessage
+	}{{result.StructuredOutput, &nested.StructuredOutput}, {result.Details, &nested.Details}} {
+		if field.value == nil {
+			continue
+		}
+		strict, err := toValue(field.value)
+		if err != nil {
+			return NestedToolExecutionResult{}, err
+		}
+		raw, err := json.Marshal(strict)
+		if err != nil {
+			return NestedToolExecutionResult{}, err
+		}
+		*field.out = raw
+	}
+	return nested, nil
+}
+
+// maxSummaryErrorChars is the error text a nested call's summary keeps.
+const maxSummaryErrorChars = 500
+
+// summaryOf is how a nested call ended, for its slot: error text, from its
+// diagnostics or else its output, bounded.
+func summaryOf(result NestedToolExecutionResult, out ai.ContentList) NestedToolSummary {
+	summary := NestedToolSummary{IsError: result.IsError, DurationMs: result.DurationMs, Usage: result.Usage}
+	if result.IsError {
+		summary.Error = sliceUTF16(errorTextOf(result, out), maxSummaryErrorChars)
+	}
+	return summary
+}
+
+// sliceUTF16 is the first n UTF-16 code units of s, as JS's slice(0, n); a
+// surrogate pair the cut would split is left out whole, as Go strings hold
+// no lone surrogate.
+func sliceUTF16(s string, n int) string {
+	units := 0
+	for i, r := range s {
+		width := 1
+		if r >= 0x10000 {
+			width = 2
+		}
+		if units+width > n {
+			return s[:i]
+		}
+		units += width
+	}
+	return s
+}
+
+// errorTextOf is the error messages of a nested result, else the text items
+// of its output, joined with newlines.
+func errorTextOf(result NestedToolExecutionResult, out ai.ContentList) string {
+	var lines []string
+	for _, diagnostic := range result.Diagnostics {
+		if diagnostic.Severity == "error" {
+			lines = append(lines, diagnostic.Message)
+		}
+	}
+	if len(lines) > 0 {
+		return strings.Join(lines, "\n")
+	}
+	for _, item := range out {
+		if text, ok := item.(ai.TextContent); ok {
+			lines = append(lines, text.Text)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// outputValue is what programs get of a tool's output when it declares no
+// schema: one text item as its string, one image as itself, nothing as "",
+// and anything else as the content list.
+func outputValue(out ai.ContentList) any {
+	switch {
+	case len(out) == 0:
+		return ""
+	case len(out) > 1:
+		return out
+	}
+	switch only := out[0].(type) {
+	case ai.TextContent:
+		return only.Text
+	case ai.ImageContent:
+		// The block alone, with its type, as a content list encodes it.
+		return map[string]any{"type": "image", "data": only.Data, "mimeType": only.MimeType}
+	}
+	return out
+}
+
+// fallbackResult is what the caller gets for a nested call without a stored
+// result: one the scheduler faulted or orphaned.
+func fallbackResult(taskID durable.TaskID, name string, outcome *durable.TaskOutcome) NestedToolExecutionResult {
+	status, message := "", fmt.Sprintf("Tool %s ended without a result", name)
+	if outcome != nil {
+		status = outcome.Status
+		switch outcome.Status {
+		case durable.OutcomeFaulted:
+			reason := ""
+			if outcome.Error != nil {
+				reason = outcome.Error.Message
+			}
+			message = fmt.Sprintf("Tool %s failed: %s", name, reason)
+		case durable.OutcomeOrphaned:
+			message = fmt.Sprintf("Tool %s could not resume: %s", name, outcome.Reason)
+		}
+	}
+	return NestedToolExecutionResult{TaskID: taskID, IsError: true, Diagnostics: harnessError(status, message).Diagnostics}
+}
+
+// checkKey rejects an explicit nested call key that could collide: keys are
+// path segments of the call ID, so they hold no "/", and are never plain
+// positive integers, which default keys use. "__proto__" stays reserved, as
+// it was when keys indexed a JSON object.
+func checkKey(key string) error {
+	positive := key != "" && key[0] >= '1' && key[0] <= '9' && strings.Trim(key, "0123456789") == ""
+	if key == "" || strings.Contains(key, "/") || key == "__proto__" || positive {
+		raw, _ := json.Marshal(key)
+		return fmt.Errorf(`Nested call key %s must be non-empty, without "/", not "__proto__", and not a positive integer`, raw)
+	}
+	return nil
+}
+
+// startNestedCall creates nested call key of the call parentCallID in one
+// commit: its tool task, owned by the calling task, its slot, and its
+// NestedCallDoc. A key already made returns that call's task when it names
+// the same tool and arguments.
+func startNestedCall(ctx context.Context, rt *TaskRuntime, parentCallID, name string, args map[string]any, key string, noProgress, abandonOnRestart bool) (durable.TaskID, error) {
+	strict, err := strictObject(args)
+	if err != nil {
+		return 0, err
+	}
+	call := ai.ToolCall{ID: parentCallID + "/" + key, Name: name, Arguments: strict}
+	var id durable.TaskID
+	replayed := false
+	err = rt.Commit(ctx, func(tx *durable.Tx, _ durable.TaskRecord) (*durable.TaskState, error) {
+		// Opened, or created empty for a key not made yet.
+		state, err := tx.Doc(NestedCallDoc.Task(rt.TaskID).Member(key, nil))
+		if err != nil {
+			return nil, err
+		}
+		if existing, ok := state.Get("taskId"); ok {
+			existingID := durable.TaskID(existing.(float64))
+			record, err := tx.Task(existingID)
+			if err != nil {
+				return nil, err
+			}
+			var input ToolTaskInput
+			same := record != nil && json.Unmarshal(record.Input, &input) == nil && input.Kind == toolCallNested &&
+				input.Call != nil && input.Call.Name == name && jsonAlike(input.Call.Arguments, call.Arguments)
+			if !same {
+				return nil, fmt.Errorf("Nested call %s was already made with another tool or other arguments", call.ID)
+			}
+			id = existingID
+			replayed = state.Has("result")
+			return nil, nil
+		}
+		parent := rt.TaskID
+		input := ToolTaskInput{Kind: toolCallNested, Parent: &parent, ParentCallID: parentCallID, Key: key, Call: &call}
+		if noProgress {
+			progress := false
+			input.Progress = &progress
+		}
+		created, err := CreateTask(tx, ToolTask, input, durable.TaskOptions{
+			Ownership:        durable.TaskOwnership{Kind: durable.OwnershipTask, TaskID: rt.TaskID},
+			AbandonOnRestart: abandonOnRestart,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if err := state.Set("taskId", float64(created)); err != nil {
+			return nil, err
+		}
+		live, err := liveDraft(tx, rt.ConversationID)
+		if err != nil {
+			return nil, err
+		}
+		if live.At("nestedTools") == nil {
+			if err := live.Set("nestedTools", []any{}); err != nil {
+				return nil, err
+			}
+		}
+		slot, err := toValue(NestedToolSlot{CallID: call.ID, ParentCallID: parentCallID, ParentTaskID: rt.TaskID, Name: name, TaskID: created, Arguments: strict, Status: slotPending})
+		if err != nil {
+			return nil, err
+		}
+		if _, err := live.At("nestedTools").Push(slot); err != nil {
+			return nil, err
+		}
+		id = created
+		return nil, nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	if replayed {
+		telemetry.SpanFrom(ctx).AddEvent("pi.durable.replay", telemetry.SpanAttributes{"tool.name": name})
+	}
+	return id, nil
 }
 
 // harnessError is an error result the Harness writes itself: no content and
@@ -896,6 +1296,15 @@ type toolAPI struct {
 
 	mu    sync.Mutex
 	ended bool
+	// sequence numbers this invocation's calls without a key, so a rerun
+	// that calls in the same order reattaches.
+	sequence int
+	// admissions are the nested call admissions underway; cleanup waits for
+	// them, so it sees every nested call.
+	admissions sync.WaitGroup
+	// memoMu guards memoDone, this attempt's commit of madeNestedCalls.
+	memoMu   sync.Mutex
+	memoDone bool
 }
 
 func (a *toolAPI) end() {
@@ -1039,6 +1448,65 @@ func (a *toolAPI) WatchDoc(ctx context.Context, ref durable.DocRef) (*durable.Do
 	return a.rt.WatchDoc(ctx, ref)
 }
 
-func (a *toolAPI) ExecuteTool(context.Context, string, map[string]any, NestedCallOptions) (NestedToolExecutionResult, error) {
-	return NestedToolExecutionResult{}, notPorted("nested tool calls")
+func (a *toolAPI) ExecuteTool(ctx context.Context, name string, args map[string]any, options NestedCallOptions) (NestedToolExecutionResult, error) {
+	a.mu.Lock()
+	if a.ended {
+		a.mu.Unlock()
+		return NestedToolExecutionResult{}, fmt.Errorf("Tool call %s has settled", a.call.ID)
+	}
+	key := options.Key
+	if key == "" {
+		a.sequence++
+		key = strconv.Itoa(a.sequence)
+	} else if err := checkKey(key); err != nil {
+		a.mu.Unlock()
+		return NestedToolExecutionResult{}, err
+	}
+	// Registered now, so cleanup waits for it.
+	a.admissions.Add(1)
+	a.mu.Unlock()
+	id, err := a.admit(ctx, name, args, key, options.NoProgress)
+	if err != nil {
+		return NestedToolExecutionResult{}, err
+	}
+	settled, err := a.rt.WaitForTask(ctx, id)
+	if err != nil {
+		return NestedToolExecutionResult{}, err
+	}
+	snapshot, err := a.rt.Snapshot(ctx, NestedCallDoc.Task(a.rt.TaskID).Member(key, nil))
+	if err != nil {
+		return NestedToolExecutionResult{}, err
+	}
+	var state NestedCallState
+	if err := decodeValue(snapshot, &state); err != nil {
+		return NestedToolExecutionResult{}, err
+	}
+	// A nested call the scheduler faulted or orphaned stored none.
+	if state.Result == nil {
+		return fallbackResult(id, name, settled.State.Outcome), nil
+	}
+	return *state.Result, nil
+}
+
+// admit commits the madeNestedCalls memo once per attempt, then starts the
+// nested call; it ends the admission either way.
+func (a *toolAPI) admit(ctx context.Context, name string, args map[string]any, key string, noProgress bool) (durable.TaskID, error) {
+	defer a.admissions.Done()
+	// The memo first, once per attempt; a failed one is tried again by the
+	// next call.
+	a.memoMu.Lock()
+	if !a.memoDone {
+		if _, err := a.rt.MemoOr(ctx, madeNestedCalls, true); err != nil {
+			a.memoMu.Unlock()
+			return 0, err
+		}
+		a.memoDone = true
+	}
+	a.memoMu.Unlock()
+	if hook := beforeNestedAdmission.Load(); hook != nil {
+		(*hook)(key)
+	}
+	// A caller that can rerun reattaches to its nested calls after a restart;
+	// any other caller never resumes, so they are abandoned.
+	return startNestedCall(ctx, a.rt, a.call.ID, name, args, key, noProgress, a.tool.Replay != ReplaySafe)
 }
