@@ -517,6 +517,13 @@ func TestViewRejectsAnAcquisitionCancelledOrClosedWhileItWaitsForTheSessionLine(
 	queued := async(func() (*durable.DocumentWatch, error) { return root.Watch(bg) })
 	parked(t, 1, "durable.(*Session).enqueue(", "harness.(*conversationViews).attach")
 	closing := async(func() (struct{}, error) { return struct{}{}, h.Close(bg) })
+	// The queued acquisition is refused only once Close has closed the
+	// views; releasing the line before that lets it attach.
+	eventually(t, func() bool {
+		h.views.mu.Lock()
+		defer h.views.mu.Unlock()
+		return h.views.closed
+	})
 	release()
 	_, err = await(t, blocking)
 	must(t, err)
