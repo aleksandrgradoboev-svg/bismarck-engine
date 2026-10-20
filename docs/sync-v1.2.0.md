@@ -493,10 +493,12 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    `PollAfterMs` of 0 means "not said" in `ai` (pi: 0 polls at once), so it waits the default
    5 s. Fixed on the way: `HarnessSettings.RestartLimit` of 0 resolved to 0, and a limit of 0
    parked every task (`Restarts >= 0`); pi takes the default below one restart, and so does Go
-   now (negative stays "never", pi's Infinity). Sabotage 12 of 17. Equivalent: the retry phase's
-   attempt in `pi.live` (the request phase writes it again at once, in pi as well). Unchecked, as
-   in pi: an early wake of the poll phase (no case wakes a reopened poll before it is due), a
-   still deferred result polling strictly later (caught only when two polls share a millisecond),
+   now (negative stays "never", pi's Infinity). Added beyond pi, for mechanisms no case of pi's
+   checks: a poll stored as a running phase by an earlier version sleeps again instead of
+   fetching, and a still deferred result polls strictly later than the poll that returned it
+   (made certain by a clock stepped back during the poll; pi's case catches it only when two
+   polls share a millisecond). Sabotage 14 of 17. Equivalent: the retry phase's attempt in
+   `pi.live` (the request phase writes it again at once, in pi as well). Unchecked, as in pi:
    the default poll wait and the backoff's cap.
 
 ## 5. Bookkeeping
