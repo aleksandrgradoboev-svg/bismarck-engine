@@ -782,6 +782,31 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    the diagonal pruning (a speed optimization; no difference on the oracle); the symlink kind in
    edit is caught on Linux only (`Stat` is `Lstat`).
 
+   **Durable stage 5b, images and tool search** (snapshot `d2e7d8b7`; `src/images`, `search.ts`,
+   `src/tool-search`). `durable/images` is the image processor (`NewImages`) in pure Go: the standard
+   decoders with `x/image`'s BMP and WebP, the standard PNG and JPEG encoders. Its decisions are
+   pi's `prepare`, which differ from the coding pipeline's: pass-through only for an upright inline
+   image within the limits (base64 `<=` the limit), scale `min(1, maxW/w, maxH/h)` rounded, PNG then
+   JPEG 80/70/55/40 (JPEG first for a JPEG source), then both sides times 3/4 until 1×1. EXIF is
+   durable's own reader (`exif.ts`: unsigned sizes, a WebP EXIF chunk taken without checking its
+   size). The pixel work — orientation and a bilinear downscale — moves unchanged from `coding` to
+   `internal/imaging`; Photon resamples with Lanczos3, so tests check sizes, formats, limits and
+   block colours rather than bytes. pi prepares in a worker thread so as not to block node's event
+   loop; Go needs none: `Prepare` runs on the calling goroutine, is safe for concurrent use and
+   stops between encodings on a cancelled ctx. The BM25 ranking of `coding/toolsearch` moves
+   unchanged to `internal/search` (pi's `search.ts` is a copy of the coding agent's), and
+   `durable/toolsearch` is the `tool_search` tool and a fresh `tool-search` extension per call. Test
+   support for packages on the Harness: `durable/internal/chattest` (chat through the exported API)
+   and `durable/internal/imagetest` (pi's image fixtures, encoded by the standard library). Tests:
+   `tools-images` — read without a processor, of a changing image, and `imageDimensions` in
+   `durable/tools` (10), the processor, EXIF and worker cases as goroutine cases in `durable/images`
+   (13 + 8 orientations); n/a the event-loop worker case, the two `toBase64` cases and
+   `images-wasm-module`; `tool-search` (6). Beyond pi: an image whose base64 is exactly the limit
+   passes through; rounding of the scaled side; shrinking by 3/4; shrinking on once one side is 1;
+   cancellation; the lower JPEG qualities before shrinking; tool_search's query and limit checks,
+   callers and replay, no control without matches, the first description line, its search text and
+   the extension name. Sabotage 27 of 27, including the two image branches of read missed in 5a-1.
+
 ## 5. Bookkeeping
 
 - `docs/UPSTREAM.md` keeps sky-valley's journal up to `5806068c2`; this file continues it to
