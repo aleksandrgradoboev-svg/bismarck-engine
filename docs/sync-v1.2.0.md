@@ -520,12 +520,12 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    `harness-input-entries` without the two that hold a tool (9 of 11); its untyped-caller case
    checks how the entry is queued and placed, since `InputEntry` has no other fields, and its
    non-string kind cannot be written in Go. Adapted: batches are delivered off the commit, so the
-   cases wait until no batch arrives for 50 ms. Sabotage 16 of 23. Waiting for slice 2: a turn
+   cases wait until no batch arrives for 50 ms. Added beyond pi: a commit while a partial is in
+   flight that leaves it unchanged sends no `message_update`. Sabotage 17 of 23. Waiting for slice 2: a turn
    ending at a completing hold (a generation holds its outcome only while it owns live tool
    tasks), and the thinking delta. Duplicate: the cancellation check after attaching (attach
    checks it on the line). Unchecked, as in pi: `task_failed`, the generations held at
-   attachment, a block sent whole in the same batch as its deltas, and a commit during streaming
-   that leaves the partial unchanged (it would send an empty `message_update`). The slice 1 (c)
+   attachment, and a block sent whole in the same batch as its deltas. The slice 1 (c)
    sabotage's display-only fast path and outcome cleanup are now caught.
 
 ## 5. Bookkeeping
