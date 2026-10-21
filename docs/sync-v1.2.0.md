@@ -947,10 +947,12 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    record before anything else of the pass runs; here the abort invocation's goroutine read it when
    it started, and could see the upgrade. A reservation now carries the record as it committed it
    (running, migrated), and the abort handler gets that one; the live check stays. Test-only hook
-   `beforeAbortStart`. Case beyond pi: the child's abort start held until the cascade's upgrade is
-   committed still runs with reason `restart`. Shown by sabotage: 50 ms at the start of the abort
-   goroutine fails pi's case 5 of 5 with CI's message; reading the live record again fails the new
-   case 5 of 5.
+   `beforeAbortStart`. Cases beyond pi: the child's abort start held until the cascade's upgrade is
+   committed still runs with reason `restart`; an abort reservation that migrates an older record
+   gives the handler the migrated, running record. Shown by sabotage: 50 ms at the start of the
+   abort goroutine fails pi's case 5 of 5 with CI's message; reading the live record again fails the
+   first new case 5 of 5; reserving the record as it was before the commit fails the second 3 of 3
+   (version 1, pending, the old checkpoint), which nothing caught before.
 
 ## 5. Bookkeeping
 
