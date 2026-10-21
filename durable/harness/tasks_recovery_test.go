@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"sync"
@@ -692,6 +693,53 @@ func TestBlockedMigratesAtReservationLeavesTheRecordWhenMigrationFailsAndRetries
 	defer mu.Unlock()
 	if !reflect.DeepEqual(migrations, []int{1}) {
 		t.Fatalf("migrations = %v", migrations)
+	}
+	must(t, o.h.Close(bg))
+}
+
+// An abort reservation migrates an older record like a run reservation does,
+// and the abort handler gets the migrated record it committed.
+func TestRecoveryGivesAnAbortHandlerTheRecordItsReservationMigrated(t *testing.T) {
+	directory := t.TempDir()
+	o := openRoot(t, nil, openOptions{storage: openJSONL(t, directory)})
+	id := start(t, o.root, versionedTask(t, 1, "v1", nil), false)
+	must(t, o.h.Close(bg))
+
+	var mu sync.Mutex
+	var got []string
+	v2, err := DefineTask(TaskSpec[any, stepState, any]{
+		Name:    "test.versioned",
+		Version: 2,
+		Initial: func(any) stepState { return stepState{Phase: "run"} },
+		Phases: map[string]func(context.Context, *stepTask, *TaskRuntime) error{
+			"migrated": func(ctx context.Context, _ *stepTask, rt *TaskRuntime) error {
+				return rt.Commit(ctx, completeWith("v2"))
+			},
+		},
+		Abort: func(ctx context.Context, task *stepTask, rt *TaskRuntime) error {
+			mu.Lock()
+			got = append(got, fmt.Sprintf("version %d, %s, phase %s", task.Record.Version, task.Record.State.Status, task.Checkpoint.Phase))
+			mu.Unlock()
+			return rt.Commit(ctx, abortWith("v2"))
+		},
+		Migrate: func(json.RawMessage, json.RawMessage, int) (any, stepState, error) {
+			return nil, stepState{Phase: "migrated"}, nil
+		},
+	})
+	must(t, err)
+	o = openRoot(t, []Task{v2}, openOptions{storage: openJSONL(t, directory)})
+	if marked, err := o.h.AbortTask(bg, id); err != nil || marked != "marked" {
+		t.Fatalf("abort = %q, %v", marked, err)
+	}
+	must(t, o.h.Resume())
+	receipt := waitDone(t, o.h, id)
+	if receipt.Version != 2 || receipt.State.Outcome.Status != durable.OutcomeAborted {
+		t.Fatalf("receipt = %s", jsonOf(t, receipt))
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if want := []string{"version 2, running, phase migrated"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("abort handler got %v, want %v", got, want)
 	}
 	must(t, o.h.Close(bg))
 }

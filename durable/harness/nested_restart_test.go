@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
@@ -639,6 +640,52 @@ func TestNestedRestartAbandonsTheChildTasksAReplayUnsafeToolCreatedAndAwaitedInM
 	must(t, h.Close(bg))
 
 	h, _ = openRecovering(t, dir, setup, nil)
+	if status := waitSubmission(t, h, id).Status; status != durable.SubmissionDone {
+		t.Fatalf("status = %s", status)
+	}
+	expectStrings(t, "phases", phases.all(), []string{"work", "abort " + durable.AbortReasonRestart})
+}
+
+// The abort handler of a child abandoned after a restart gets the record its
+// reservation committed: the failing tool's cascade, which upgrades the
+// child's restart mark to a request, may commit before the handler's
+// goroutine starts, and pi's handler, reading the live record in the
+// reserving turn, never sees it.
+func TestNestedRestartGivesTheAbortHandlerTheRecordItsReservationCommitted(t *testing.T) {
+	dir := t.TempDir()
+	setup := newChatSetup(t)
+	phases := &recordingLog{}
+	started := make(chan struct{})
+	worker := workerTask(t, "test.direct-worker", phases, phases, "abort ", started)
+	must(t, setup.registry.Install(&Extension{Name: "direct-worker", Tasks: []Task{worker}}))
+	var workerID atomic.Int64
+	work := spawnTool(worker, &workerID)
+	work.Name = "work"
+	installTool(t, setup.registry, work)
+	setup.faux.SetResponses([]providers.FauxResponseStep{callStep("work", nil), fauxText("done")})
+	h, root := openUnscheduled(t, dir, setup)
+	id := submit(t, root, inputDraft("go")).ID
+	awaitSignal(t, started, "the worker")
+	must(t, h.Close(bg))
+
+	upgraded := make(chan struct{})
+	hold := func(task durable.TaskID) {
+		if int64(task) != workerID.Load() {
+			return
+		}
+		select {
+		case <-upgraded:
+		case <-time.After(10 * time.Second):
+		}
+	}
+	beforeAbortStart.Store(&hold)
+	t.Cleanup(func() { beforeAbortStart.Store(nil) })
+	h, _ = openRecovering(t, dir, setup, nil)
+	eventually(t, func() bool {
+		record := getTask(t, h, durable.TaskID(workerID.Load()))
+		return record.AbortRequested && record.AbortReason == ""
+	})
+	close(upgraded)
 	if status := waitSubmission(t, h, id).Status; status != durable.SubmissionDone {
 		t.Fatalf("status = %s", status)
 	}

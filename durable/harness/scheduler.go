@@ -126,6 +126,11 @@ type reservation struct {
 	invocation *invocation
 	task       Task
 	snapshot   *RegistrySnapshot
+	// record is the task as the reservation committed it. An abort handler
+	// gets it, as pi's does, which reads the live record before anything
+	// else of the reserving pass runs; a goroutine starting later could see a
+	// mark another task's commit upgraded meanwhile.
+	record durable.TaskRecord
 }
 
 type failedMigration struct {
@@ -390,6 +395,11 @@ func installerOf(snapshot *RegistrySnapshot, task Task) string {
 // commits its marks: a test holds the pass there to show that no task its
 // fail-fast checks may mark starts a phase meanwhile.
 var beforeReconcileCommit atomic.Pointer[func()]
+
+// beforeAbortStart, set only by tests, runs as an abort invocation's
+// goroutine starts: a test holds it there while another task's commit
+// changes the record, to show the handler gets the reserved one.
+var beforeAbortStart atomic.Pointer[func(id durable.TaskID)]
 
 // open loads live tasks and changes surviving running tasks back to pending,
 // counting the restart. It dispatches nothing. A task that reaches the
@@ -1267,15 +1277,18 @@ func (s *scheduler) reserve() ([]reservation, error) {
 				}
 				continue
 			}
+			reserved := record.Clone()
 			if resolved.Version != record.Version || record.State.Status != durable.TaskRunning {
-				if err := tx.SetTask(withState(resolved, durable.TaskState{Status: durable.TaskRunning, Checkpoint: resolved.State.Checkpoint})); err != nil {
+				reserved = withState(resolved, durable.TaskState{Status: durable.TaskRunning, Checkpoint: resolved.State.Checkpoint})
+				if err := tx.SetTask(reserved); err != nil {
 					return err
 				}
+				reserved = reserved.Clone()
 			}
 			// Registered on the line, so marks and later reservations see it and
 			// close joins it; end makes it a candidate again.
 			s.runnable.delete(id)
-			reservations = append(reservations, reservation{invocation: s.createInvocation(record, mode, installerOf(snapshot, task)), task: task, snapshot: snapshot})
+			reservations = append(reservations, reservation{invocation: s.createInvocation(record, mode, installerOf(snapshot, task)), task: task, snapshot: snapshot, record: reserved})
 		}
 		return nil
 	})
@@ -1577,12 +1590,16 @@ func (s *scheduler) decide(ctx context.Context, tx *durable.Tx, current durable.
 // without an outcome faults.
 func (s *scheduler) runAbort(r reservation) {
 	inv := r.invocation
+	if hook := beforeAbortStart.Load(); hook != nil {
+		(*hook)(inv.taskID)
+	}
 	s.mu.Lock()
-	current, ok := s.live[inv.taskID]
+	_, ok := s.live[inv.taskID]
 	s.unlock()
 	if !ok || s.closing.Load() {
 		return
 	}
+	current := r.record
 	ph := &phase{snapshot: func() *RegistrySnapshot { return r.snapshot }, task: func() Task { return r.task }}
 	runtime := s.newRuntime(inv, ph)
 	s.phase(inv, &current, func(ctx context.Context) *durable.TaskRecord {
