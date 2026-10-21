@@ -953,6 +953,11 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    abort goroutine fails pi's case 5 of 5 with CI's message; reading the live record again fails the
    first new case 5 of 5; reserving the record as it was before the commit fails the second 3 of 3
    (version 1, pending, the old checkpoint), which nothing caught before.
+   **CI: the durable harness also runs with one processor**, as code mode does since #70: each
+   goroutine then runs to its end before the next, an order several processors rarely give. The two
+   20,000-task chain tests are skipped there (depth, not ordering; they outrun their 10 s wait) and
+   still run in the test step. A rare failure of "sleeps without an invocation" seen once locally
+   in this mode, whose message was not kept, is left for this step to report.
 
 ## 5. Bookkeeping
 
