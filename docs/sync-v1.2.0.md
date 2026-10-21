@@ -958,6 +958,9 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    20,000-task chain tests are skipped there (depth, not ordering; they outrun their 10 s wait) and
    still run in the test step. A rare failure of "sleeps without an invocation" seen once locally
    in this mode, whose message was not kept, is left for this step to report.
+   **Not ported: `IndexedDbStorage`** (pi `16f5f0af`, 2026-10-21, after the snapshot): a browser
+   storage backed by IndexedDB, only additions (`storage/indexeddb.ts` and its test). The engine
+   has no browser; memory, JSONL and SQLite storage cover its hosts. n/a.
 
 ## 5. Bookkeeping
 
