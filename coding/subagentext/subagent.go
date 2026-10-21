@@ -112,6 +112,13 @@ type Options struct {
 	// in the background does. Should Background refuse, the call goes on in
 	// the foreground. Not in pi.
 	Detach func(callID string) (detach <-chan struct{}, release func())
+	// BaseTools are tool names (patterns, as in an agent's tools list) every
+	// agent keeps on top of its own tools list: what the host gives any
+	// subagent whatever its definition says — asking the user, say. An agent
+	// without a tools list has all its tools anyway. A name the subagent's
+	// session lacks is ignored. Not in pi, where the subagent extension builds
+	// the child's command line itself.
+	BaseTools []string
 }
 
 // BackgroundRun runs a call handed to Options.Background.
@@ -874,7 +881,7 @@ func (r *runner) runAgent(ctx context.Context, callID string, agents []Agent, t 
 		return fail(err.Error())
 	}
 	if len(def.Tools) > 0 {
-		match := coding.ToolNameMatcher(def.Tools)
+		match := coding.ToolNameMatcher(append(slices.Clone(def.Tools), r.opts.BaseTools...))
 		var active []string
 		for _, d := range child.AllTools() {
 			if match(d.Tool.Name) {

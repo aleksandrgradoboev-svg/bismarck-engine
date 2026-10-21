@@ -541,6 +541,33 @@ func TestAgentTools(t *testing.T) {
 	}
 }
 
+// TestBaseToolsGoOnTopOfAnAgentsList: the host's base tools stay active in an
+// agent whatever its tools list, run after run, and a name the child lacks is
+// left out.
+func TestBaseToolsGoOnTopOfAnAgentsList(t *testing.T) {
+	f := newFixture(t)
+	writeAgent(t, f.userDir, "reader.md", "---\nname: reader\ndescription: Reads\ntools: read\n---\nbody")
+	f.reg.SetResponses(steps(2, answer(func(string) string { return "ok" })))
+	f.opts.BaseTools = []string{"edit", "nonexistent"}
+	f.opts.NewSession = func(_ context.Context, spec ChildSpec) (*coding.Session, error) {
+		child := coding.NewSession(coding.SessionOptions{Model: spec.Model, Cwd: spec.Cwd, ToolNames: []string{"read", "bash", "edit", "grep"}, NoContextFiles: true, NoSkills: true})
+		f.children = append(f.children, child)
+		return child, nil
+	}
+	for range 2 {
+		if _, err := f.run(t, map[string]any{"agent": "reader", "task": "t"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i, c := range f.children {
+		got := c.ActiveToolNames()
+		slices.Sort(got)
+		if want := []string{"edit", "read"}; !slices.Equal(got, want) {
+			t.Fatalf("run %d: active tools = %v, want %v", i, got, want)
+		}
+	}
+}
+
 func TestAbort(t *testing.T) {
 	f := newFixture(t)
 	writeAgent(t, f.userDir, "scout.md", "---\nname: scout\ndescription: Recon\n---\nbody")
