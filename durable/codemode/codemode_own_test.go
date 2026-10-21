@@ -158,3 +158,104 @@ func TestCodemodeSaysWhenToolsWithoutANamespaceDoNotFitTheBudget(t *testing.T) {
 		t.Fatalf("section of a tool that fits = %q", text)
 	}
 }
+
+// A count the VM reports while a later result is committed but not yet
+// delivered waits for the VM to process that result too, then both commit
+// together: the journal never records the first count beside a later entry
+// without its own. Holding the idle for result 1 until result 2 is committed,
+// and the delivery of result 2 until that idle is recorded, makes the window
+// certain; without the hooks the VM rarely idles in it.
+func TestCodemodeCommitsACountReportedBeforeALaterCommittedResultIsDeliveredWithThatResultsCount(t *testing.T) {
+	releaseB := make(chan struct{})
+	idled := make(chan struct{})
+	committed := make(chan struct{})
+	var idledOnce, committedOnce sync.Once
+	idle := func(seq int) {
+		if seq != 1 {
+			return
+		}
+		idledOnce.Do(func() { close(idled) })
+		select {
+		case <-committed:
+		case <-time.After(10 * time.Second):
+			t.Error("result 2 was never committed while the idle for result 1 was held")
+		}
+	}
+	deliver := func(c *call, deliveries []delivery) {
+		if len(deliveries) == 0 || deliveries[0].seq != 2 {
+			return
+		}
+		committedOnce.Do(func() { close(committed) })
+		for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(time.Millisecond) {
+			c.mu.Lock()
+			_, recorded := c.acks[1]
+			c.mu.Unlock()
+			if recorded {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Error("the idle for result 1 was never recorded")
+				return
+			}
+		}
+	}
+	beforeIdle.Store(&idle)
+	beforeDeliver.Store(&deliver)
+	t.Cleanup(func() {
+		beforeIdle.Store(nil)
+		beforeDeliver.Store(nil)
+	})
+	a := Global{Name: "a", Execute: func(ctxT, rawT, harness.ToolExecutionAPI) (any, error) { return 1, nil }}
+	b := Global{Name: "b", Execute: func(ctx ctxT, _ rawT, _ harness.ToolExecutionAPI) (any, error) {
+		select {
+		case <-releaseB:
+			return 2, nil
+		case <-ctx.Done():
+			return nil, context.Cause(ctx)
+		}
+	}}
+	c3 := Global{Name: "c", Execute: func(ctxT, rawT, harness.ToolExecutionAPI) (any, error) { return 3, nil }}
+	c := newTestChat(t, []Global{a, b, c3}, nil)
+	c.chat.Faux.SetResponses([]providers.FauxResponseStep{script(`const [x, y] = await Promise.all([a(), b()]); return x + y + (await c())`), chattest.Done})
+	h, root := c.chat.Open(t, memory.New(), nil)
+	var mu sync.Mutex
+	var partial []string
+	unsubscribe, err := h.SubscribeCommits(func(publication durable.CommitPublication, _ context.Context) {
+		for _, change := range publication.Changes {
+			document, ok := change.(durable.DocumentChange)
+			if !ok || document.Record.Kind != JournalDoc.Definition().Kind || document.Value == nil {
+				continue
+			}
+			entries, _ := document.Value["entries"].([]any)
+			if len(entries) < 2 {
+				continue
+			}
+			first, _ := entries[0].(map[string]any)
+			second, _ := entries[1].(map[string]any)
+			_, firstCounted := first["issuedAfter"]
+			_, secondCounted := second["issuedAfter"]
+			if firstCounted && !secondCounted {
+				raw, _ := json.Marshal(document.Value)
+				mu.Lock()
+				partial = append(partial, string(raw))
+				mu.Unlock()
+			}
+		}
+	})
+	must(t, err)
+	defer unsubscribe()
+	go func() {
+		select {
+		case <-idled:
+		case <-time.After(10 * time.Second):
+		}
+		close(releaseB)
+	}()
+	chattest.SubmitAndWait(t, root, "go")
+	expectResult(t, resultOf(t, root), "6", false)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(partial) > 0 {
+		t.Fatalf("the count after result 1 committed alone: %s", partial[0])
+	}
+}

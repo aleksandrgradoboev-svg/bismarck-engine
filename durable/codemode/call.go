@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf16"
 
@@ -824,7 +825,20 @@ func deliverAll(run *sandbox.Run, deliveries []delivery) {
 	}
 }
 
+// beforeIdle and beforeDeliver, set only by tests, run as the VM reports idle
+// and between a batch's commit and its delivery. A count recorded while a
+// later result is committed but not yet delivered waits for the VM to catch
+// up; the VM rarely idles in that window by itself, so a test holds both
+// sides there.
+var (
+	beforeIdle    atomic.Pointer[func(seq int)]
+	beforeDeliver atomic.Pointer[func(c *call, deliveries []delivery)]
+)
+
 func (c *call) onIdle(seq, issued int) {
+	if hook := beforeIdle.Load(); hook != nil {
+		(*hook)(seq)
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.stoppedLocked() {
@@ -1429,6 +1443,9 @@ func (c *call) pump() {
 	}
 	run := c.run
 	c.mu.Unlock()
+	if hook := beforeDeliver.Load(); hook != nil {
+		(*hook)(c, deliveries)
+	}
 	deliverAll(run, deliveries)
 	c.mu.Lock()
 	c.launchCoveredLocked()
