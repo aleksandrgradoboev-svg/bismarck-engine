@@ -2,7 +2,6 @@ package harness
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
@@ -255,7 +254,7 @@ func TestInboxCountsFailedAttemptsConvertedPartialsAndToolUsageReplacedByAfterTo
 	}})
 	retryable := providers.FauxAssistantMessage(ai.ContentList{}, ai.StopError)
 	retryable.ErrorMessage = "503 Service Unavailable"
-	setup.faux.SetResponses([]providers.FauxResponseStep{fauxStep(retryable), holdCall(), fauxText("done"), fauxText(strings.Repeat("x", 400))})
+	setup.faux.SetResponses([]providers.FauxResponseStep{fauxStep(retryable), holdCall(), fauxText("done"), fauxText(interruptedText("x"))})
 	h, root := openChat(t, memory.New(), setup)
 	setup.setSettings(retrySettings(true, 1, 1))
 	waitFor(t, submit(t, root, inputDraft("a")))

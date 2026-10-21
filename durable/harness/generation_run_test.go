@@ -234,7 +234,7 @@ func (e errorString) Error() string { return string(e) }
 
 func TestGenerationConvertsTheCommittedPartialWhenAbortedDuringStreaming(t *testing.T) {
 	setup := newChatSetupWith(t, providers.RegisterFauxProviderOptions{TokensPerSecond: 20, MinTokenSize: 1, MaxTokenSize: 1})
-	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText(strings.Repeat("x", 400))})
+	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText(interruptedText("x"))})
 	h, root := openChat(t, memory.New(), setup)
 	h.Resume()
 	submission := submit(t, root, inputDraft("hi"))
