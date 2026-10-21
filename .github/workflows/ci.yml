@@ -37,6 +37,12 @@ jobs:
       # and batching defects showed only there.
       - name: test with one processor (durable code mode)
         run: go test -count=1 -cpu 1 ./durable/codemode/...
+      # The durable harness schedules, wakes and joins invocations on
+      # goroutines the same way. Its two 20,000-task chain tests measure depth,
+      # not ordering, and with one processor outrun their 10 s wait; the test
+      # step runs them.
+      - name: test with one processor (durable harness)
+        run: go test -count=1 -cpu 1 -skip 'TestRetentionForgetsA20000DeepChainOfEndedTasksWithoutRecursion|TestOwnershipTracksOwnershipChainsDeeperThanTheCallStack' ./durable/harness/...
       # codemode runs each VM, tool call and timer on its own goroutine, and the
       # MCP client and server manager connect in the background, and tools
       # change the session's tool loadout while the loop reads it; the
