@@ -928,6 +928,16 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    600 ms before Close fails the old reopen case 3 of 3 with CI's message and duration (0.74 s);
    the same delay before the abort fails the two sibling cases on the old code; the new code passes
    under it.
+   **Test: a count reported mid-batch commits with the later result's count** (stage 5, code mode;
+   closes the gap left by #70). A count the VM reports while a later result is committed but not
+   yet delivered waits until the VM has processed that result, then both commit together, as pi
+   commits the counts of a batch processed in one turn. The VM rarely idles in that window, so
+   sabotage of the guard was caught only by chance (2 of 20 under `-cpu 4`). Two test-only hooks,
+   `beforeIdle` (entering the VM's idle report) and `beforeDeliver` (between a batch's commit and
+   its delivery), hold the idle for result 1 until result 2 is committed and the delivery of
+   result 2 until that idle is recorded. Case beyond pi: no journal revision records the count
+   after result 1 beside a second entry without its own count. Shown by sabotage: without the guard
+   the case fails 3 of 3.
 
 ## 5. Bookkeeping
 
