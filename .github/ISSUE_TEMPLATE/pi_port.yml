@@ -1,0 +1,25 @@
+name: Port a pi change
+description: A change in pi that the engine should follow, or a difference from pi
+labels: [pi-port]
+body:
+  - type: input
+    id: commit
+    attributes:
+      label: pi commit or release
+      description: The commit in earendil-works/pi, or the release, that the engine should follow.
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What changes
+      description: What the pi change does, and which engine package it touches.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Why it is in scope
+      description: >-
+        Some of pi is out of scope on purpose (the TUI, the JavaScript extensions runtime, see
+        "Differences from pi" in the README). Say why this change belongs in an embedded engine.
