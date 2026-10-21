@@ -928,6 +928,19 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    600 ms before Close fails the old reopen case 3 of 3 with CI's message and duration (0.74 s);
    the same delay before the abort fails the two sibling cases on the old code; the new code passes
    under it.
+   **Fix: an abort handler could get a mark upgraded after its reservation** (stage 4b, scheduler;
+   found by CI on #78, -race, "abandons the child tasks a replay-unsafe tool created": phases
+   `abort `, want `abort restart`). After a reopen one pass reserves the replay-unsafe tool's run
+   and the abort of its child, abandoned with reason `restart`. The tool fails ("interrupted and
+   may have partially run"), and its cascade upgrades the child's restart mark to a request. pi's
+   `#start` runs to its first await in the reserving turn, so its abort handler reads the live
+   record before anything else of the pass runs; here the abort invocation's goroutine read it when
+   it started, and could see the upgrade. A reservation now carries the record as it committed it
+   (running, migrated), and the abort handler gets that one; the live check stays. Test-only hook
+   `beforeAbortStart`. Case beyond pi: the child's abort start held until the cascade's upgrade is
+   committed still runs with reason `restart`. Shown by sabotage: 50 ms at the start of the abort
+   goroutine fails pi's case 5 of 5 with CI's message; reading the live record again fails the new
+   case 5 of 5.
 
 ## 5. Bookkeeping
 
