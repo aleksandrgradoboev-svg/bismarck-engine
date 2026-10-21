@@ -549,7 +549,7 @@ func TestEventsEndTheStreamWithTheHarness(t *testing.T) {
 
 func TestEventsStartAMessageAtTheFirstCommittedPartialAndEndItWithTheConvertedEntryOnAbort(t *testing.T) {
 	setup := newChatSetupWith(t, providers.RegisterFauxProviderOptions{TokensPerSecond: 100, MinTokenSize: 1, MaxTokenSize: 1})
-	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText(strings.Repeat("x", 400))})
+	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText(interruptedText("x"))})
 	h, root := openChat(t, memory.New(), setup)
 	_, log := listen(t, root)
 	submission := submit(t, root, inputDraft("hi"))

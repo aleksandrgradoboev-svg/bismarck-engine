@@ -917,6 +917,17 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
    nothing; a context read held between its parts while Close seals the line resolves. Shown by
    sabotage: 20 ms between the parts fails pi's case 10 of 10 with CI's message; sabotage of the
    mechanism 6 of 6.
+   **Fix: tests interrupting a paced faux answer could interrupt it after it had finished** (stage
+   1; found by CI on #58, "keeps usage totals exact across reopen": stop reasons `[stop stop]`, want
+   stop, aborted, stop). faux sends four characters per token, so pi's 400 characters at 200 tokens
+   per second stream in half a second; a slow runner closed only after the answer had committed,
+   and the reopened run had nothing to convert. Test defect, not product. The five cases that close
+   or abort mid-stream (the reopen case, generation-recovery's resend, abort during streaming, the
+   events abort case, inbox usage of converted partials) stream 40 000 characters instead, which
+   outlast any test; the interruption ends them at once, so they take no longer. Shown by sabotage:
+   600 ms before Close fails the old reopen case 3 of 3 with CI's message and duration (0.74 s);
+   the same delay before the abort fails the two sibling cases on the old code; the new code passes
+   under it.
 
 ## 5. Bookkeeping
 

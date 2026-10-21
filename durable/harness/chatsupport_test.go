@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -196,6 +197,15 @@ func awaitSignal(t *testing.T, signal <-chan struct{}, what string) {
 // fauxText is a faux final answer with text.
 func fauxText(text string) providers.FauxResponseStep {
 	return providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{providers.FauxText(text)}, ai.StopStop))
+}
+
+// interruptedText is the text of a paced faux answer that a test interrupts
+// mid-stream. faux sends four characters per token, so pi's 400 characters
+// at 200 tokens per second stream in half a second, and a slow runner closed
+// or aborted after the answer had finished; 40 000 outlast any test at 20
+// tokens per second or more, and the interruption still ends them at once.
+func interruptedText(char string) string {
+	return strings.Repeat(char, 40_000)
 }
 
 // inputDraft is an input submission of plain text.

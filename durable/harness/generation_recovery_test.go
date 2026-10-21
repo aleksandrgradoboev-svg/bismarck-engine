@@ -183,7 +183,7 @@ func TestGenerationRecoveryResendsARequestInterruptedBeforeAnyPartialWithoutRepe
 func TestGenerationRecoveryConvertsACommittedPartialIntoAnAbortedEntryAndResendsTheSameMessages(t *testing.T) {
 	dir := t.TempDir()
 	slow := newChatSetupWith(t, providers.RegisterFauxProviderOptions{TokensPerSecond: 20, MinTokenSize: 1, MaxTokenSize: 1})
-	slow.faux.SetResponses([]providers.FauxResponseStep{fauxText(strings.Repeat("z", 400))})
+	slow.faux.SetResponses([]providers.FauxResponseStep{fauxText(interruptedText("z"))})
 	h, root := openChat(t, openJSONL(t, dir), slow)
 	h.Resume()
 	values := watchLive(t, h)
@@ -438,7 +438,7 @@ func TestGenerationRecoveryRunsAPrintStyleTurnAndReadsTheDurableAnswerAfterReope
 func TestInboxKeepsUsageTotalsExactAcrossReopenCountingAPartialConvertedAfterReopenOnce(t *testing.T) {
 	dir := t.TempDir()
 	setup := newChatSetupWith(t, providers.RegisterFauxProviderOptions{TokensPerSecond: 200, MinTokenSize: 1, MaxTokenSize: 1})
-	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText("first"), fauxText(strings.Repeat("x", 400)), fauxText("again")})
+	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText("first"), fauxText(interruptedText("x")), fauxText("again")})
 	h, root := openChat(t, openJSONL(t, dir), setup)
 	waitFor(t, submit(t, root, inputDraft("a")))
 	submit(t, root, inputDraft("b"))
