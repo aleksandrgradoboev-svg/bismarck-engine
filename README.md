@@ -6,6 +6,23 @@ The agent engine of **Bismarck**: a Go implementation of [pi](https://github.com
 (Mario Zechner, MIT) — pi's unified LLM API, agent loop and coding agent, with pi's extensions for
 MCP and agents — embedded as a library, with no Node.js runtime.
 
+## Why
+
+- **An agent inside your Go program.** One `go get`, no Node.js process beside it, no external
+  workflow server: the agent loop, the providers, the coding tools and MCP are packages you import.
+- **Agents that survive a restart** (`durable`, experimental). Conversations, tasks and tool calls
+  are committed to memory, JSONL or SQLite storage (no cgo); after a crash the harness resumes
+  where it stopped. A tool interrupted mid-call is retried only if it is marked safe to replay,
+  and otherwise reported as "interrupted and may have partially run" — the engine does not guess.
+- **MCP and code mode.** MCP servers from a shared `mcp.json`, and a QuickJS sandbox in which the
+  model writes JavaScript that calls the tools.
+- **pi as the reference.** Behaviour follows pi commit by commit, differences are written down, and
+  every test of a new mechanism is checked by turning the mechanism off (see
+  [CONTRIBUTING.md](CONTRIBUTING.md)).
+
+Contributions, test runs on your platform and bug reports are welcome — start with
+[CONTRIBUTING.md](CONTRIBUTING.md) or an issue labelled `good first issue`.
+
 ## Origin
 
 - The code started on 2026-10-15 from [sky-valley/pi](https://github.com/sky-valley/pi), a Go port
@@ -52,10 +69,14 @@ go test ./...          # live-API tests skip without keys
 go build -o pi ./cmd/pi
 ```
 
-CI runs `gofmt`, `go vet` and `go test` on Linux and Windows, and the race detector over the
-concurrent parts (codemode, MCP, nested tool calls, the tool registry) on Linux. The module's
-dependencies are the standard library, `golang.org/x/{image,text}` and `github.com/tetratelabs/wazero`
-(Apache-2.0, pure Go, for codemode); `internal/policy` enforces the list.
+CI runs `gofmt`, `go vet` and `go test` on Linux and Windows, `durable/codemode` and
+`durable/harness` again with one processor, and the race detector over the concurrent parts
+(durable, codemode, MCP, subagents, nested tool calls, the tool registry, telemetry) on Linux. The
+module's dependencies are the standard library, `golang.org/x/{image,text}` and
+`github.com/tetratelabs/wazero` (Apache-2.0, pure Go, for codemode); `internal/policy` enforces the
+list. The SQLite driver for `durable` is a separate module,
+[`durable/storage/sqlite/modernc`](durable/storage/sqlite/modernc/) (`modernc.org/sqlite`, no cgo).
+How changes are checked is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Using the library
 
