@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -634,7 +635,7 @@ func discoveryGlobals(tools []agent.AgentTool, samples map[string]string, namesp
 
 // execute runs one script (pi executeCodemode). Without a session scripts
 // cannot call tools.
-func execute(ctx context.Context, toolCallID string, params map[string]any, onUpdate agent.ToolUpdateFunc, session Session, store *Store) (agent.AgentToolResult, error) {
+func execute(ctx context.Context, toolCallID string, params map[string]any, onUpdate agent.ToolUpdateFunc, session Session, store *Store, noticeNames []string) (agent.AgentToolResult, error) {
 	startedAt := time.Now()
 	source, _ := params["code"].(string)
 	parsed, err := codemode.ParseSource(source)
@@ -644,6 +645,7 @@ func execute(ctx context.Context, toolCallID string, params map[string]any, onUp
 
 	var mu sync.Mutex
 	var calls []*NestedCall
+	var notices []notice
 	snapshot := func() Details {
 		mu.Lock()
 		defer mu.Unlock()
@@ -704,8 +706,10 @@ func execute(ctx context.Context, toolCallID string, params map[string]any, onUp
 					return nil, err
 				}
 				outcome := session.ExecuteTool(callCtx, toolCallID, tool.Name, args, nil)
+				found := noticesOf(noticeNames, tool.Name, outcome.Result)
 				mu.Lock()
 				record.ID = outcome.ToolCall.ID
+				notices = append(notices, found...)
 				mu.Unlock()
 				if outcome.IsError {
 					status := CallError
@@ -806,6 +810,14 @@ func execute(ctx context.Context, toolCallID string, params map[string]any, onUp
 		maxTokens = *parsed.Options.MaxOutputTokens
 	}
 	truncated, fullPath := truncateOutput(joinAdjacentText(items), maxTokens)
+	// After truncation, so no notice is cut, and checked against what the
+	// truncated output still shows.
+	mu.Lock()
+	found := slices.Clone(notices)
+	mu.Unlock()
+	if block := formatNotices(found, truncated); block != "" {
+		truncated = append(truncated, ai.TextContent{Text: block})
+	}
 	// After truncation, which joins the text items and moves images after
 	// them, so each path stays next to its image and is never cut.
 	saved, err := saveImages(truncated)
@@ -853,6 +865,11 @@ type Options struct {
 	Store *Store
 	// Loadout configures how the tool presents the loadout.
 	Loadout LoadoutOptions
+	// Notices names top-level fields of nested call results (a warning, a
+	// staleness or truncation mark) whose values reach the model even when
+	// the script does not print them or its output is truncated: they are
+	// appended to the output. Empty — none; see notices.go.
+	Notices []string
 }
 
 // Definition is the codemode tool (pi createCodemodeToolDefinition plus
@@ -860,6 +877,7 @@ type Options struct {
 // scripts — and registered inactive: activate it by name.
 func Definition(opts Options) coding.ToolDefinition {
 	inactive := false
+	notices := noticeFields(opts.Notices)
 	tool := agent.AgentTool{
 		Name:  ToolName,
 		Label: ToolName,
@@ -872,7 +890,7 @@ func Definition(opts Options) coding.ToolDefinition {
 		// JSON-escaped string.
 		ConstrainedSampling: &ai.ConstrainedSamplingConfig{Type: ai.ConstrainedSamplingGrammar, Variants: ai.GrammarVariants{OpenAILark: codemode.SourceGrammar}},
 		Execute: func(ctx context.Context, toolCallID string, params map[string]any, onUpdate agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
-			return execute(ctx, toolCallID, params, onUpdate, opts.Session, opts.Store)
+			return execute(ctx, toolCallID, params, onUpdate, opts.Session, opts.Store, notices)
 		},
 	}
 	return coding.ToolDefinition{

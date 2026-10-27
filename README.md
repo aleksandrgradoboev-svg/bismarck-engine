@@ -146,6 +146,10 @@ them: `import _ "github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
   and a wait there would stall the rest of a parallel batch.
 - codemode's `store()` keeps its values in memory for the session; pi writes them to the session
   file per branch.
+- codemode can carry tool notices (`codemodetool.Options.Notices`, not in pi, off by default): the
+  host names top-level fields of nested call results — a warning, a staleness or truncation mark —
+  and their values are appended to the script's output when the script did not print them or
+  truncation cut them out.
 - Not ported: the interactive TUI and its host layer, the JavaScript extensions runtime (pi's
   built-in extensions are wired in Go instead), codemode's `models.*` script globals (classifiers
   and image generation), MCP OAuth sign-in, and the wire APIs that would need a further
