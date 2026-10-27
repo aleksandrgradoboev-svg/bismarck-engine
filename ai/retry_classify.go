@@ -25,6 +25,11 @@ import (
 //     an astral character is excluded, not counted as two. Go strings cannot
 //     hold a lone surrogate; an invalid UTF-8 byte decodes as one U+FFFD,
 //     which "." matches in both.
+//
+// Beyond literals, "." and "?", the alternatives use a few more constructs
+// (pi 0fbdbd3f, 6e491cfa), each translated by translateProviderErrorAlternative:
+// "(?:...)" groups with "|" inside, "\S" and "+", and the lookarounds
+// "(?<![a-z0-9])" and "(?![a-z0-9])", which RE2 lacks.
 type providerErrorPattern struct {
 	source string // RegExp.prototype.source: the alternatives joined with "|"
 	re     *regexp.Regexp
@@ -34,27 +39,126 @@ type providerErrorPattern struct {
 // matching the same text where every "." is flanked by ASCII literals.
 const jsDot = `[^\n\r\x{2028}\x{2029}\x{10000}-\x{10FFFF}]`
 
-// nonCapturingGroups blanks the delimiters of "(?:...)" groups for the syntax
-// check in buildProviderErrorPattern; a bare "(" still fails it.
-var nonCapturingGroups = strings.NewReplacer("(?:", "", ")", "")
+// jsSpaceChars are the characters of \s in a JavaScript RegExp, WhiteSpace and
+// LineTerminator, as the inside of an RE2 class. RE2's \s is [\t\n\f\r ] only.
+const jsSpaceChars = `\t\n\v\f\r \x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}`
+
+// jsSpace is \s of a JavaScript RegExp. jsNonSpace is its \S: RE2's would also
+// match \v, U+00A0, U+FEFF and the Unicode spaces. An astral character is two
+// code units \S matches one by one, so "\S+" spans it as RE2 does a code point.
+const (
+	jsSpace    = `[` + jsSpaceChars + `]`
+	jsNonSpace = `[^` + jsSpaceChars + `]`
+)
+
+// The lookarounds the alternatives use, and their RE2 stand-ins. A stand-in
+// consumes the character the lookaround only looks at, so it tests the same
+// only at the edge of an alternative, where nothing else of the alternative
+// claims that character; RegExp.prototype.test asks nothing more than whether
+// some match exists. "[a-z0-9]" under "i" is [A-Za-z0-9], which the
+// lowercased input reduces to [a-z0-9]; no non-ASCII character folds into it
+// without the "u" flag.
+const (
+	jsNotAfterAlnum   = `(?<![a-z0-9])`
+	jsNotBeforeAlnum  = `(?![a-z0-9])`
+	re2NotAfterAlnum  = `(?:^|[^a-z0-9])`
+	re2NotBeforeAlnum = `(?:[^a-z0-9]|$)`
+)
 
 func buildProviderErrorPattern(patterns []string) providerErrorPattern {
 	alternatives := make([]string, len(patterns))
 	for i, pattern := range patterns {
-		// A non-capturing group "(?:...)" means the same in RE2 and JavaScript,
-		// so it is allowed (upstream 7bd01fb9: "provider.?returned.?(?:an.?)?error").
-		if strings.ContainsAny(nonCapturingGroups.Replace(pattern), `\^$|*+()[]{}`) {
-			// Lowercasing would corrupt escapes and classes (\S is not \s), and
-			// RE2 and JavaScript disagree on several of them.
-			panic(fmt.Sprintf("ai: provider error pattern %q uses RegExp syntax beyond literals, \".\" and \"?\"; "+
-				"teach buildProviderErrorPattern its JavaScript semantics before adding it", pattern))
-		}
-		alternatives[i] = strings.ReplaceAll(asciiLower(pattern), ".", jsDot)
+		alternatives[i] = translateProviderErrorAlternative(pattern)
 	}
 	return providerErrorPattern{
-		source: strings.Join(patterns, "|"),
+		// RegExp.prototype.source escapes "/" (EscapeRegExpPattern), which
+		// "http/?2 stream failed" carries since upstream 698a2d23.
+		source: strings.ReplaceAll(strings.Join(patterns, "|"), "/", `\/`),
 		re:     regexp.MustCompile(strings.Join(alternatives, "|")),
 	}
+}
+
+// translateProviderErrorAlternative is one alternative as RE2 matching the
+// same text as JavaScript's RegExp with "i" and without "u" does, against
+// input lowercased by asciiLower. It panics on any syntax it was not taught:
+// lowercasing would corrupt escapes and classes (\S is not \s), and RE2 and
+// JavaScript disagree on several of them.
+func translateProviderErrorAlternative(pattern string) string {
+	unsupported := func(what string) {
+		panic(fmt.Sprintf("ai: provider error pattern %q uses %s; "+
+			"teach translateProviderErrorAlternative its JavaScript semantics before adding it", pattern, what))
+	}
+	var out strings.Builder
+	rest := pattern
+	if strings.HasPrefix(rest, jsNotAfterAlnum) {
+		out.WriteString(re2NotAfterAlnum)
+		rest = rest[len(jsNotAfterAlnum):]
+	}
+	suffix := ""
+	if strings.HasSuffix(rest, jsNotBeforeAlnum) {
+		suffix = re2NotBeforeAlnum
+		rest = rest[:len(rest)-len(jsNotBeforeAlnum)]
+	}
+	depth := 0
+	for rest != "" {
+		switch {
+		case strings.HasPrefix(rest, "(?:"):
+			// A non-capturing group means the same in RE2 and JavaScript
+			// (upstream 7bd01fb9: "provider.?returned.?(?:an.?)?error").
+			out.WriteString("(?:")
+			rest = rest[3:]
+			depth++
+			continue
+		case strings.HasPrefix(rest, `\S`):
+			out.WriteString(jsNonSpace)
+			rest = rest[2:]
+			continue
+		case strings.HasPrefix(rest, jsNotAfterAlnum), strings.HasPrefix(rest, jsNotBeforeAlnum):
+			unsupported("a lookaround away from the edge of the alternative")
+		}
+		c := rest[0]
+		rest = rest[1:]
+		switch c {
+		case ')':
+			if depth == 0 {
+				unsupported(`an unbalanced ")"`)
+			}
+			depth--
+			out.WriteByte(c)
+		case '|':
+			// At the top level "|" would split the alternative itself.
+			if depth == 0 {
+				unsupported(`"|" outside a group`)
+			}
+			out.WriteByte(c)
+		case '?', '+':
+			out.WriteByte(c)
+		case '.':
+			// jsDot is JavaScript's "." only between ASCII literals: next to
+			// \S or a non-ASCII character, a code unit and a code point part.
+			before := pattern[:len(pattern)-len(rest)-1]
+			after := strings.TrimPrefix(rest, "?")
+			if strings.HasSuffix(before, `\S`) || strings.HasSuffix(before, `\S+`) ||
+				(before != "" && before[len(before)-1] >= 0x80) ||
+				strings.HasPrefix(after, `\`) || (after != "" && after[0] >= 0x80) {
+				unsupported(`"." beside something other than an ASCII literal`)
+			}
+			out.WriteString(jsDot)
+		case '\\', '^', '$', '*', '(', '[', ']', '{', '}':
+			unsupported(fmt.Sprintf("RegExp syntax %q", c))
+		default:
+			// Byte by byte: UTF-8 sequences pass through untouched.
+			if 'A' <= c && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			out.WriteByte(c)
+		}
+	}
+	if depth != 0 {
+		unsupported(`an unclosed "(?:"`)
+	}
+	out.WriteString(suffix)
+	return out.String()
 }
 
 // MatchString is RegExp.prototype.test on s.
@@ -103,6 +207,9 @@ var nonRetryableProviderLimitErrorPattern = buildProviderErrorPattern([]string{
 	// Sign in with ChatGPT: the subscription's shared usage limit, which resets
 	// after hours rather than seconds.
 	"subscription_sharing_usage_limit_exceeded",
+	// Sign in with ChatGPT on a ChatGPT Business plan: a usage limit set by the
+	// workspace admin. Only the admin can raise it (upstream cedefc53).
+	"subscription_sharing_workplace_individual_usage_limit_exceeded",
 })
 
 // retryableProviderErrorPattern matches provider/transport error text that
@@ -118,14 +225,12 @@ var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 	"model is at capacity", // upstream 3874b3e9
 	"rate.?limit",
 	"too many requests",
-	"429",
-	"500",
-	"502",
-	"503",
-	"504",
-	"520", // Cloudflare unknown-error status (#9627)
-	"524", // Cloudflare origin-timeout status (#6239)
-	"service.?unavailable",
+	// 520 is Cloudflare's unknown-error status (#9627), 524 its origin timeout
+	// (#6239). Status codes must not be part of a longer word or number, e.g. a
+	// request id or byte count (#11057, upstream 6e491cfa).
+	"(?<![a-z0-9])(?:429|500|502|503|504|520|524)(?![a-z0-9])",
+	// Also matches "The service is temporarily unavailable" (#10965, upstream 550f1f3e).
+	"service.?(?:is.?)?(?:temporarily.?)?unavailable",
 	"server.?error",
 	"internal.?error",
 
@@ -134,6 +239,16 @@ var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 	// "The upstream provider returned an error" (#10842, upstream 7bd01fb9).
 	"provider.?returned.?(?:an.?)?error",
 	"exceeded request buffer limit while retrying upstream",
+	// Gateway failure relaying the upstream response stream, sent as an OpenAI
+	// Responses `response.failed` event without an error code (#10920,
+	// upstream 7efebff1).
+	"unable to forward upstream",
+	// Other gateway upstream failures relayed as `response.failed` error codes
+	// (#10920, upstream 698a2d23).
+	"upstream.?request.?failed",
+	"upstream_stream_read_error",
+	"stream was interrupted",
+	"http/?2 stream failed",
 
 	// Network, proxy, and fetch transport failures. This includes OpenAI Codex
 	// raw-fetch failures such as "upstream connect", "connection refused", and
@@ -144,6 +259,9 @@ var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 	"connection.?lost",
 	"other side closed",
 	"fetch failed",
+	// node-fetch system errors, e.g. the Google ADC OAuth token refresh used by
+	// google-vertex. The reason is often empty (#10996, upstream 0fbdbd3f).
+	"request to \\S+ failed, reason:",
 	// DNS resolution failures surface as node/libuv transport errors (#6904).
 	"getaddrinfo",
 	"ENOTFOUND",
@@ -167,6 +285,10 @@ var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 	"stream ended before message_stop",
 	"stream ended before a terminal response event",
 	"http2 request did not get a response",
+	// Codex CLI mid-stream disconnect, relayed by proxies that wrap the Codex
+	// CLI, e.g. "stream disconnected before completion: stream closed before
+	// response.completed" (#11057, upstream 29057ece).
+	"stream disconnected before completion",
 	// Node ERR_HTTP2_STREAM_CANCEL: the HTTP/2 session died before the request was
 	// sent, e.g. after the Bedrock SDK's 5-minute session timeout (#10379,
 	// upstream 5b6c792b). Kept for parity with pi's classifier.

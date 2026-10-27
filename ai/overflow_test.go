@@ -57,14 +57,76 @@ func TestIsContextOverflowErrors(t *testing.T) {
 	}
 }
 
-// Regression for #9482.
+// Regression for #9482. HTTP 413 is a request-size error for every provider,
+// but a bodyless HTTP 400 is only known to indicate overflow for Cerebras.
 func TestIsContextOverflowBodylessOnlyForCerebras(t *testing.T) {
-	for _, text := range []string{"400 status code (no body)", "413 status code (no body)"} {
-		if !IsContextOverflow(overflowErrorMessage(text, "cerebras"), 131072) {
-			t.Fatalf("cerebras %q is not an overflow", text)
+	const text = "400 status code (no body)"
+	if !IsContextOverflow(overflowErrorMessage(text, "cerebras"), 131072) {
+		t.Fatalf("cerebras %q is not an overflow", text)
+	}
+	if IsContextOverflow(overflowErrorMessage(text, "opencode-go"), 1000000) {
+		t.Fatalf("opencode-go %q is an overflow", text)
+	}
+}
+
+// The 413 pattern is provider-agnostic, so a single Copilot-prefixed string and
+// a single non-Copilot string cover both branches of the regex; the bare forms
+// cover the raw SDK output (pi 73f8de80).
+func TestIsContextOverflowHTTP413(t *testing.T) {
+	for _, text := range []string{
+		`github-copilot API error (413): {"message":"failed to parse request","code":""}`, // formatProviderError prefix
+		"custom-provider API error (413): Payload Too Large",                              // any provider, not just Copilot
+		`413 {"error":{"message":"failed to parse request","code":""}}`,                   // raw SDK error
+		"413", // bare status at end of string
+	} {
+		// The request can exceed the byte limit even with zero usage and a large token window.
+		if !IsContextOverflow(overflowErrorMessage(text, ""), 1_000_000) {
+			t.Errorf("%q with a 1M window is not an overflow", text)
 		}
-		if IsContextOverflow(overflowErrorMessage(text, "opencode-go"), 1000000) {
-			t.Fatalf("opencode-go %q is an overflow", text)
+		if !IsContextOverflow(overflowErrorMessage(text, ""), 0) {
+			t.Errorf("%q without a window is not an overflow", text)
+		}
+	}
+	for _, text := range []string{
+		`github-copilot API error (400): {"message":"failed to parse request","code":""}`, // other status, same body
+		"custom-provider API error (429): Too many requests",
+		`github-copilot API error (400): {"message":"failed to parse request: invalid value 413"}`,  // 413 in the body only
+		"custom-provider API error (400): upstream mentioned OpenAI API error (413): invalid input", // 413 not at start
+		"custom-provider API error (4130): invalid input",                                           // 413 is a prefix, not the status
+		"4130 failed to parse request",                                                              // bare 4130 is not 413
+	} {
+		if IsContextOverflow(overflowErrorMessage(text, ""), 0) {
+			t.Errorf("%q is an overflow", text)
+		}
+	}
+	// pi "limits HTTP-status matching to failed responses".
+	message := overflowErrorMessage(`OpenAI API error (413): {"message":"failed to parse request"}`, "")
+	for _, stop := range []StopReason{StopAborted, StopStop} {
+		message.StopReason = stop
+		if IsContextOverflow(message, 0) {
+			t.Errorf("stop %s is an overflow", stop)
+		}
+	}
+}
+
+// The ways the 413 pattern's JavaScript semantics differ from RE2's: \s takes
+// the vertical tab, no-break space and BOM, and "i" folds the letters of
+// "API error" but lets no Unicode fold into \w. Beyond pi.
+func TestHTTPRequestSizeOverflowPatternJavaScriptSemantics(t *testing.T) {
+	r := func(code rune) string { return string(code) }
+	for text, want := range map[string]bool{
+		"413\vfailed":                     true,
+		"413" + r(0xa0) + "failed":        true,  // NO-BREAK SPACE
+		"413" + r(0xfeff) + "failed":      true,  // BOM
+		"413" + r(0x85) + "failed":        false, // NEL is not \s in JavaScript
+		"x api ERROR (413): y":            true,
+		r(0x212a) + " API error (413): y": false, // KELVIN SIGN is not \w
+		r(0x17f) + " API error (413): y":  false, // LONG S is not \w
+		"API error (413): y":              false, // [\w -]+ needs a character
+		"github copilot API error (413):": true,
+	} {
+		if got := httpRequestSizeOverflowPattern.MatchString(text); got != want {
+			t.Errorf("match %+q = %v, want %v", text, got, want)
 		}
 	}
 }
