@@ -110,6 +110,12 @@ type harness struct {
 // screenshot registered next to it.
 func setup(t *testing.T, opts coding.SessionOptions, extra ...coding.ToolDefinition) *harness {
 	t.Helper()
+	return setupNotices(t, nil, opts, extra...)
+}
+
+// setupNotices is setup with the codemode tool's Options.Notices.
+func setupNotices(t *testing.T, notices []string, opts coding.SessionOptions, extra ...coding.ToolDefinition) *harness {
+	t.Helper()
 	h := &harness{t: t, model: &fauxModel{}, mode: ModeOn}
 	opts.Model = &ai.Model{ID: "m", Api: "faux", Provider: "faux", ContextWindow: 100000, MaxTokens: 8192, Input: []string{"text", "image"}}
 	if opts.Cwd == "" {
@@ -121,7 +127,7 @@ func setup(t *testing.T, opts coding.SessionOptions, extra ...coding.ToolDefinit
 	h.sess.RegisterTools(Definition(Options{Session: h.sess, Store: &Store{}, Loadout: LoadoutOptions{
 		Mode:         func() Mode { return h.mode },
 		InlineBudget: func() *int { return h.budget },
-	}}))
+	}, Notices: notices}))
 	// pi's harness starts with initialActiveToolNames ["codemode"] and
 	// activates the extension's tools on registration (includeAllExtensionTools).
 	active := []string{ToolName}
