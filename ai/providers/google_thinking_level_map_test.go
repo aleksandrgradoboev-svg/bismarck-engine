@@ -285,10 +285,11 @@ func TestGoogleSimpleUnresolvableLevelFailsStream(t *testing.T) {
 }
 
 // googleThinkingCaptureFile holds pi's thinkingConfig for a table of models and
-// reasoning levels, captured under node at upstream 16235fd93 by
+// reasoning levels, captured under node at upstream e3bc05e8 (Gemini 4 and
+// later use levels since 1692bba6; the rest as at 16235fd93) by
 // testdata/google-thinking/capture-thinking-config.mts. Each case carries its
 // own fixture, so both sides build the same model.
-const googleThinkingCaptureFile = "testdata/google-thinking/thinking-config-16235fd93.json"
+const googleThinkingCaptureFile = "testdata/google-thinking/thinking-config-e3bc05e8.json"
 
 type googleThinkingCase struct {
 	Name               string              `json:"name"`

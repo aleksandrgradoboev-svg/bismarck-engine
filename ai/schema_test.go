@@ -452,6 +452,23 @@ func TestKeywordRoundTrip(t *testing.T) {
 	}
 }
 
+// The tuple form of items (an array of schemas), which the typed field cannot
+// hold, travels as written; it used to be dropped.
+func TestItemsTupleFormRoundTrips(t *testing.T) {
+	src := `{"type":"array","items":[{"type":"string"},{"const":1}]}`
+	var s Schema
+	if err := json.Unmarshal([]byte(src), &s); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != src {
+		t.Fatalf("round trip = %s, want %s", raw, src)
+	}
+}
+
 // TestSchemaCloneNoAliasing: Clone promises that nothing reachable from the
 // copy aliases the receiver. The fixture must populate every reference-typed
 // field (pointer/map/slice/any) with a non-zero value — the test fails on any
