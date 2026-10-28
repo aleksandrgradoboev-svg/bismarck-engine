@@ -3,13 +3,13 @@
 // in package ai.
 //
 //   node --experimental-strip-types capture.mts <extraction> <out.json> <sha>
-//   e.g. ... capture.mts <dir> classify-06a46693.json 06a46693
+//   e.g. ... capture.mts <dir> classify-59ca40cf.json 59ca40cf
 //
 // <extraction> holds packages/ai at <sha> (`git archive <sha> packages/ai` from
 // the upstream clone). No node_modules is needed: utils/retry.ts has only a
 // type import, which --experimental-strip-types erases, and fauxAssistantMessage
-// is rebuilt below. classify-06a46693.json was captured from src at v1.2.0
-// (06a46693), the release that ships that source.
+// is rebuilt below. classify-59ca40cf.json was captured from src at 59ca40cf
+// (after v1.4.0); the last commit to change utils/retry.ts is 6e491cfa.
 //
 // Every row records three answers: isRetryableAssistantError on the message
 // retry.test.ts would build (fauxAssistantMessage), and RegExp.prototype.test of
@@ -22,7 +22,9 @@
 // unchanged), and the inputs where a JavaScript RegExp without the "u" flag
 // and Go's RE2 disagree: "." never matches \r, U+2028 or U+2029, and an astral
 // character is two UTF-16 code units a single "." cannot span; "i" folds ASCII
-// letters only, so U+212A KELVIN SIGN is not "k" and U+017F LONG S is not "s".
+// letters only, so U+212A KELVIN SIGN is not "k" and U+017F LONG S is not "s";
+// "\S" excludes \v, U+00A0, U+FEFF and the Unicode spaces, which RE2's takes;
+// and the lookarounds around the status codes, which RE2 lacks.
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -84,6 +86,11 @@ const wrappedDnsLookupError =
 	"The pending stream has been canceled (caused by: getaddrinfo ENOTFOUND bedrock-runtime.us-east-1.amazonaws.com)";
 const chatGPTUsageLimitMessage =
 	'OpenAI API error (429): {"code":"subscription_sharing_usage_limit_exceeded","message":"Usage limit reached."}';
+const chatGPTWorkspaceLimitMessage =
+	'OpenAI API error (429): {"code":"subscription_sharing_workplace_individual_usage_limit_exceeded","message":"Usage limit reached."}';
+// cp is the character with that code point, spelled out so no tool on the way
+// to this file can decode an escape.
+const cp = (code: number) => String.fromCodePoint(code);
 const azurePeakLoadError =
 	"The system is currently experiencing high demand and cannot process your request. Your request exceeds the maximum usage size allowed during peak load. For improved capacity reliability, consider switching to Provisioned Throughput.";
 
@@ -112,6 +119,20 @@ const rows: Row[] = [
 	error("pi: temporary ChatGPT user error", "subscription_sharing_user_unavailable: User cannot be loaded."),
 	error("pi: HTTP/2 pending stream cancellation (#10379)", "The pending stream has been canceled"),
 	error("pi: HTTP/2 pending stream cancellation, wrapped (#10379)", "The pending stream has been canceled (caused by: socket closed)"),
+	error("pi: service temporarily unavailable (#10965)", "The service is temporarily unavailable. Please retry later."),
+	error("pi: Bedrock ServiceUnavailableException", "Service unavailable: The service is temporarily unavailable."),
+	error("pi: node-fetch failure, empty reason (#10996)", "request to https://oauth2.googleapis.com/token failed, reason:"),
+	error("pi: node-fetch failure (#10996)", "request to https://oauth2.googleapis.com/token failed, reason: connect ECONNREFUSED 127.0.0.1:9"),
+	error("pi: gateway forward failure (#10920)", "unknown: Unable to forward upstream stream"),
+	error("pi: gateway upstream request failure (#10920)", "upstream_error: Upstream request failed"),
+	error("pi: gateway upstream stream read error (#10920)", "upstream_stream_read_error: Upstream response stream was interrupted"),
+	error("pi: gateway HTTP/2 stream failure (#10920)", "Upstream HTTP/2 stream failed"),
+	error("pi: ChatGPT Business workspace usage limit", chatGPTWorkspaceLimitMessage),
+	error(
+		"pi: status code inside a request id (#11057)",
+		'401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},"request_id":"req_011CU503xyz"}',
+	),
+	error("pi: status code inside a byte count (#11057)", "400 image exceeds 5 MB maximum: 5316784 bytes > 5242880 bytes"),
 
 	// isRetryableAssistantError's guard: only stopReason "error" with error text.
 	{ covers: "guard: stop", stopReason: "stop", errorMessage: "overloaded" },
@@ -129,24 +150,36 @@ const rows: Row[] = [
 	error("model is at capacity", "Selected model is at capacity"),
 	error("rate.?limit", "rate_limit_error"),
 	error("too many requests", "Too Many Requests"),
-	error("429", "HTTP 429"),
-	error("500", "status 500"),
-	error("502", "status 502"),
-	error("503", "status 503"),
-	error("504", "status 504"),
-	error("520", "status 520"),
-	error("524", "status 524"),
-	error("service.?unavailable", "Service Unavailable"),
+	error("status codes: 429", "HTTP 429"),
+	error("status codes: 500", "status 500"),
+	error("status codes: 502", "status 502"),
+	error("status codes: 503", "status 503"),
+	error("status codes: 504", "status 504"),
+	error("status codes: 520", "status 520"),
+	error("status codes: 524", "status 524"),
+	error("status codes: at the start", "429"),
+	error("status codes: in parentheses", "(503)"),
+	error("status codes: after a line break", "line1" + cp(0x0a) + "502"),
+	error("service unavailable", "Service Unavailable"),
+	error("service unavailable: is", "service is unavailable"),
+	error("service unavailable: temporarily", "Service temporarily unavailable"),
 	error("server.?error", "server_error"),
 	error("internal.?error", "InternalError"),
 	error("provider.?returned.?(?:an.?)?error", "Provider returned error"),
 	error("provider.?returned.?(?:an.?)?error: an", "The upstream provider returned an error"),
+	error("unable to forward upstream", "Unable To Forward Upstream"),
+	error("upstream.?request.?failed", "upstream request failed"),
+	error("upstream_stream_read_error", "UPSTREAM_STREAM_READ_ERROR"),
+	error("stream was interrupted", "Stream Was Interrupted"),
+	error("http/?2 stream failed", "http2 stream failed"),
+	error("http/?2 stream failed: slash", "HTTP/2 Stream Failed"),
 	error("network.?error", "NetworkError when attempting to fetch resource."),
 	error("connection.?error", "Connection error."),
 	error("connection.?refused", "connection refused"),
 	error("connection.?lost", "Connection lost"),
 	error("other side closed", "SocketError: other side closed"),
 	error("fetch failed", "TypeError: fetch failed"),
+	error("request to non-space failed, reason:", "Request to x failed, reason:"),
 	error("getaddrinfo", "GETADDRINFO"),
 	error("ENOTFOUND", "enotfound"),
 	error("EAI_AGAIN", "eai_again"),
@@ -163,6 +196,7 @@ const rows: Row[] = [
 	error("ended without", "stream ended without message_stop"),
 	error("stream ended before message_stop", "Anthropic stream ended before message_stop"),
 	error("http2 request did not get a response", "http2 request did not get a response"),
+	error("stream disconnected before completion", "Stream disconnected before completion: stream closed before response.completed"),
 	error("pending stream has been canceled", "PENDING STREAM HAS BEEN CANCELED"),
 	error("retry delay", "Retry delay 120000ms exceeds maxRetryDelayMs"),
 	error("you can retry your request", "the model is busy; you can retry your request"),
@@ -182,6 +216,10 @@ const rows: Row[] = [
 	error("quota exceeded", "Quota Exceeded: 429"),
 	error("billing", "BILLING 502"),
 	error("subscription_sharing_usage_limit_exceeded", "Subscription_Sharing_Usage_Limit_Exceeded (429)"),
+	error(
+		"subscription_sharing_workplace_individual_usage_limit_exceeded",
+		"SUBSCRIPTION_SHARING_WORKPLACE_INDIVIDUAL_USAGE_LIMIT_EXCEEDED 503",
+	),
 
 	// Limit near-misses: the retryable status stands.
 	error("near-miss limit", "GoUsageLimit 429"),
@@ -233,6 +271,37 @@ const rows: Row[] = [
 	error("dot: JS excludes U+2028", "provider\u2028returned error"),
 	error("dot: astral is two code units", "Service\u{1F600}Unavailable"),
 
+	// Near-misses of the alternatives added after v1.2.0.
+	error("near-miss: status code after a letter", "a429"),
+	error("near-miss: status code before a letter", "429b"),
+	error("near-miss: status code after a digit", "1500"),
+	error("near-miss: status code before a digit", "5034"),
+	error("near-miss: status code after an uppercase letter", "X503"),
+	error("near-miss", "unable to forward"),
+	error("near-miss", "upstream failed"),
+	error("near-miss", "http/3 stream failed"),
+	error("near-miss", "stream disconnected"),
+	error("near-miss", "request to  failed, reason:"),
+	error("near-miss", "request to x failed"),
+	error("near-miss", "service is temporarily not available"),
+
+	// "\S" is neither JavaScript WhiteSpace nor LineTerminator.
+	error("non-space: NEL", "request to a" + cp(0x85) + "b failed, reason:"),
+	error("non-space: astral", "request to " + cp(0x1f600) + " failed, reason:"),
+	error("non-space: ZERO WIDTH SPACE", "request to a" + cp(0x200b) + "b failed, reason:"),
+	error("non-space: JS excludes VT", "request to a" + cp(0x0b) + "b failed, reason:"),
+	error("non-space: JS excludes U+00A0", "request to a" + cp(0xa0) + "b failed, reason:"),
+	error("non-space: JS excludes U+FEFF", "request to a" + cp(0xfeff) + "b failed, reason:"),
+	error("non-space: JS excludes U+3000", "request to a" + cp(0x3000) + "b failed, reason:"),
+	error("non-space: JS excludes U+2028", "request to a" + cp(0x2028) + "b failed, reason:"),
+
+	// The lookarounds around the status codes look at one code unit each side.
+	error("lookaround: U+212A is not a letter", cp(0x212a) + "429"),
+	error("lookaround: U+017F is not a letter", "503" + cp(0x17f)),
+	error("lookaround: astral before", cp(0x1f600) + "504"),
+	error("lookaround: astral after", "504" + cp(0x1f600)),
+	error("lookaround: non-ASCII letters", cp(0xe9) + "520" + cp(0xe9)),
+
 	// "i" folds ASCII letters only.
 	error("fold: U+212A is not k", "soc\u212Aet hang up"),
 	error("fold: U+017F is not s", "\u017Focket hang up"),
@@ -247,8 +316,29 @@ const rows: Row[] = [
 // alternative, a row it alone matches that no limit alternative vetoes; for a
 // limit alternative, a row it alone matches that a retryable alternative would
 // otherwise retry.
+// The alternatives are the source split at its top-level "|" only: since
+// 6e491cfa an alternative holds a group with "|" inside. A backslash skips the
+// character it escapes.
+function topLevelAlternatives(source: string): string[] {
+	const alternatives: string[] = [];
+	let depth = 0;
+	let start = 0;
+	for (let i = 0; i < source.length; i++) {
+		const c = source[i];
+		if (c === String.fromCharCode(0x5c)) i++;
+		else if (c === "(") depth++;
+		else if (c === ")") depth--;
+		else if (c === "|" && depth === 0) {
+			alternatives.push(source.slice(start, i));
+			start = i + 1;
+		}
+	}
+	alternatives.push(source.slice(start));
+	return alternatives;
+}
+
 function checkCoverage(pattern: RegExp, other: RegExp, wantOther: boolean) {
-	const alternatives = pattern.source.split("|");
+	const alternatives = topLevelAlternatives(pattern.source);
 	for (const alternative of alternatives) {
 		const decides = rows.some((row) => {
 			if (row.stopReason !== "error" || !row.errorMessage) return false;

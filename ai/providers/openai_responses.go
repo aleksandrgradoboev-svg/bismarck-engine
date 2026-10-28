@@ -38,12 +38,19 @@ func isChatGPTSignIn(model *ai.Model, apiKey string) bool {
 		apiKey != "" && !strings.HasPrefix(apiKey, "sk-")
 }
 
+// chatGPTWorkspaceLimitHint is pi's CHATGPT_WORKSPACE_LIMIT_HINT (upstream cedefc53).
+const chatGPTWorkspaceLimitHint = "You've reached your ChatGPT workspace's usage limit. Ask your workspace admin to increase it at admin.openai.com → Workspace → Usage limits."
+
 // withChatGPTUsageHint points at the usage page when the subscription's usage
-// limit, which Sign in with ChatGPT shares with other apps, failed the stream.
+// limit, which Sign in with ChatGPT shares with other apps, failed the stream,
+// and at the workspace admin when a ChatGPT Business plan's per-user limit did.
 // pi applies it to every error its stream catches.
 func withChatGPTUsageHint(message string) string {
 	if strings.Contains(message, "subscription_sharing_usage_limit_exceeded") {
 		return message + "\nCheck your ChatGPT usage: " + chatGPTUsageURL
+	}
+	if strings.Contains(message, "subscription_sharing_workplace_individual_usage_limit_exceeded") {
+		return message + "\n" + chatGPTWorkspaceLimitHint
 	}
 	return message
 }

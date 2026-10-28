@@ -3,9 +3,10 @@ package ai
 import "regexp"
 
 // Context-overflow detection, ported from pi packages/ai/src/utils/overflow.ts
-// (snapshot d2e7d8b7). An overflow is a request larger than the model's
-// context window; most providers report it as an error whose text matches one
-// of overflowPatterns, some accept it and report it only through usage.
+// (pi 73f8de80). An overflow is a request larger than the model's context
+// window or the provider's request byte-size limit; most providers report it
+// as an error whose text matches one of overflowPatterns, some accept it and
+// report it only through usage.
 //
 // Provider messages the patterns match, by provider:
 //
@@ -32,6 +33,8 @@ import "regexp"
 //   - LM Studio: "tokens to keep from the initial prompt is greater than the
 //     context length"
 //   - GitHub Copilot: "prompt token count of X exceeds the limit of Y"
+//   - GitHub Copilot: `github-copilot API error (413): {"message":"failed to
+//     parse request","code":""}` (request byte size)
 //   - MiniMax: "invalid params, context window exceeds limit"
 //   - Kimi For Coding: "Your request exceeded model token limit: X (requested:
 //     Y)"
@@ -73,7 +76,18 @@ var overflowPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)context[_ ]length[_ ]exceeded`),                                                             // Generic fallback
 	regexp.MustCompile(`(?i)too many tokens`),                                                                           // Generic fallback
 	regexp.MustCompile(`(?i)token limit exceeded`),                                                                      // Generic fallback
+	// HTTP 413 means request-size overflow regardless of provider or body text.
+	// Match raw SDK errors and formatProviderError's prefix, not a status
+	// mentioned in the body.
+	httpRequestSizeOverflowPattern,
 }
+
+// httpRequestSizeOverflowPattern is pi's /^(?:[\w -]+ API error \(413\):|413(?:\s|:|$))/i.
+// Its "i" folds the letters of "API error" only: RE2's (?i) would also let
+// U+212A and U+017F into \w, which JavaScript's \w without "u" never matches,
+// so the flag is scoped to the literal. \s is JavaScript's (jsSpace): RE2's
+// lacks \v, U+00A0, U+FEFF and the Unicode spaces.
+var httpRequestSizeOverflowPattern = regexp.MustCompile(`^(?:[0-9A-Za-z_ -]+ (?i:api error) \(413\):|413(?:` + jsSpace + `|:|$))`)
 
 var cerebrasBodylessOverflowPattern = regexp.MustCompile(`(?i)^4(?:00|13)\s*(?:status code)?\s*\(no body\)`)
 

@@ -154,3 +154,30 @@ func TestCompactionOverflowFailsWithTheOverflowText(t *testing.T) {
 		})
 	}
 }
+
+// A request-size 413 is an overflow too (pi 73f8de80): Copilot's carries no
+// token counts, and the generation still compacts and retries. pi's case for
+// it is in the coding agent (regressions/copilot-request-size-overflow); this
+// is the harness's path for the same answer.
+func TestCompactionOverflowCompactsAndRetriesOnARequestSize413(t *testing.T) {
+	const copilot413 = `github-copilot API error (413): {"message":"failed to parse request","code":""}`
+	chat := openCompaction(t, compactionOpen{})
+	chat.history(t)
+	chat.setup.setSettings(overflowEnabled)
+	chat.faux.pushSummary(summaryStep("SUMMARY"))
+	chat.faux.pushAgent(fauxStep(fauxError(copilot413)), fauxStep(fauxAnswer("fits")))
+	input, err := chat.root.Submit(bg, inputDraft(sizedText("u4", 100)))
+	must(t, err)
+	if status := submissionWait(t, input).Status; status != durable.SubmissionDone {
+		t.Fatalf("input = %s", status)
+	}
+	compacted := false
+	for _, record := range chatEntries(t, chat.root) {
+		if record.Kind == "pi.compaction" {
+			compacted = string(record.Data) == `{"reason":"overflow"}`
+		}
+	}
+	if !compacted {
+		t.Fatalf("no overflow compaction: kinds = %v", chat.kinds(t))
+	}
+}
