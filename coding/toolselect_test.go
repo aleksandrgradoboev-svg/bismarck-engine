@@ -212,7 +212,7 @@ func TestRestoreSkipsUnnamedMCPTools(t *testing.T) {
 	sess := registrySession(t, SessionOptions{ToolNames: []string{"read", "codemode"}})
 	sess.RegisterTools(mcpTools(ToolExposureDirect, "mcp__docs__search")...)
 	sess.LoadHistory(declaringTranscript("mcp__docs__search"))
-	sess.RestoreToolsFromTranscript()
+	sess.RestoreToolsFromBranch(branchOf(sess.History()...))
 	if got := sess.ActiveToolNames(); len(got) != 0 {
 		t.Fatalf("active %v", got)
 	}
