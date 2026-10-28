@@ -141,9 +141,11 @@ func TestResolveModelFromCatalog(t *testing.T) {
 	if m.Provider != "anthropic" || m.Api != ai.APIAnthropicMessages {
 		t.Fatalf("unexpected model: %#v", m)
 	}
-	// Bare id resolution.
-	if _, err := ResolveModel("claude-haiku-4-5"); err != nil {
-		t.Fatalf("bare id resolution failed: %v", err)
+	// Bare id resolution: several catalog providers have the id, and the
+	// authenticated one decides (pi d7f7e0df).
+	r, err := ResolveCliModel(CliModelOptions{Model: "claude-haiku-4-5", HasAuth: func(p string) bool { return p == "anthropic" }})
+	if err != nil || r.Model.Provider != "anthropic" {
+		t.Fatalf("bare id resolution failed: %v %v", r.Model, err)
 	}
 	if _, err := ResolveModel("does-not-exist"); err == nil {
 		t.Fatal("expected error for unknown model")

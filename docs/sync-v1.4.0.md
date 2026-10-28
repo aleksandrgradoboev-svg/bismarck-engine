@@ -66,10 +66,10 @@ tool-call arguments) last. "Not here" marks hunks of the commit that stay out.
 | `6fcb4867` | no fixed output limits on summary requests | `coding/compaction.go` | ported: summary requests set no `maxTokens`, so the provider sizes the output from the model's limit fitted to the context (`SimpleMaxTokensDefault`); `ReserveTokens` only decides when compaction starts. The requests and resume captures are reshot against the 1.4.0 build, after the 0.87.1 build reproduced them (requests byte for byte, resume but for its fresh ids and timestamps); only `maxTokens` moved |
 | `adfc1446` | `/compact` instructions apply to the split-turn prefix summary | — | n/a: the engine's compaction takes no custom instructions (pi `compact`'s `customInstructions`, the `/compact <text>` argument), so there is nothing to append to either summary |
 | `269afc66` | thinking level for branch summarization | — | n/a: the engine has no branch summarization (`generateBranchSummary`); it reads branch summary entries only |
-| `d7f7e0df` | one provider selection policy for model references | `coding/resolve.go` | to port by hunk (the resolver is partly ported) |
-| `984cf664` | `provider/id` references whose provider id contains a slash | `coding/resolve.go` | to port |
-| `90d863f7`, `95364a54`, `f049787d` | default models: Xiaomi `mimo-v2.6-pro`, NVIDIA Nemotron 3.5 Super VL, OpenAI `gpt-6.1-sol` | `coding/resolve.go` | to port |
-| `e5fe9777` | drop models retired upstream | `coding/resolve.go` | to port the resolver half; catalog at regeneration |
+| `d7f7e0df` | one provider selection policy for model references | `coding/resolve.go` | ported: `resolveModelReference` and `resolveCliModel` as pi has them, the latter public as `ResolveCliModel` (`--provider`, `--thinking`, `--api-key`, and `HasAuth` for pi's `hasConfiguredAuth`). `ResolveModelPattern` counts a provider as authenticated when the environment holds its key (`EnvHasAuth`), as pi's CLI does, so a bare id on several providers resolves to the one with a key and is otherwise an error; `cmd/pi` goes through it. pi's reference table, run in both catalog orders, and its `resolveCliModel` cases. Not here: model scopes (`--models`/`enabledModels`), `findInitialModel`, credential printing |
+| `984cf664` | `provider/id` references whose provider id contains a slash | `coding/resolve.go` | ported, with pi's two cases (in the reference table) |
+| `90d863f7`, `95364a54`, `f049787d` | default models: Xiaomi `mimo-v2.6-pro`, NVIDIA Nemotron 3.5 Super VL, OpenAI `gpt-6.1-sol` | `coding/resolve.go` | ported but NVIDIA's, whose model the embedded catalog lacks: it waits for the catalog regeneration, as does pi's `azure` key (`a37306d4`, the catalog's `azure-openai-responses` renamed). The defaults capture is reshot at `f049787d` (`default-models-f049787d.json`, src mode) after `5806068c2` reproduced the old one byte for byte; the test names both pending entries |
+| `e5fe9777` | drop models retired upstream | `coding/resolve.go` | ported the resolver half (GitHub Copilot `gpt-6.1-sol`); catalog at regeneration |
 | `fecc19e4` | grep context lines aligned with ripgrep for a lone CR | `coding/tooloperations.go` | to port: the engine has no ripgrep but follows its line splitting |
 | `28bea006` | accept Windows Store shell aliases | `internal/proc` | to port |
 | `27cc6bfc` | stop macOS shell groups before killing them | `internal/proc` | to port |
@@ -126,4 +126,6 @@ its own.
   `e3bc05e8` and nine of its bodies differed, and are ported with the Anthropic batch (section 2).
   The rest of that range is not re-checked yet: a triage by path prefix can drop a core commit, so
   the v1.2.0 list wants the same check per core file (`git log <range> -- <file>` against the
-  table).
+  table). A second one surfaced with the resolver batch: `a37306d4` (Azure Foundry Chat
+  Completions) renames the `azure-openai-responses` default to `azure` in `model-resolver.ts`, and
+  neither sync lists it; its default waits for the catalog with the provider rename.
