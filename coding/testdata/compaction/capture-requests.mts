@@ -3,12 +3,18 @@
 // coding/compaction_request_test.go.
 //
 //   node capture-requests.mts <compaction-module> <out.json> <version>
-//   e.g. node capture-requests.mts ~/.cache/pi-npm/0.87.1/node_modules/@earendil-works/pi-coding-agent/dist/core/compaction/index.js requests-0.87.1.json 0.87.1
+//   e.g. node capture-requests.mts <npm-root>/node_modules/@earendil-works/pi-coding-agent/dist/core/compaction/index.js requests-1.4.0.json 1.4.0
 //
 // <compaction-module> exports compact, createFileOps and
 // extractFileOpsFromMessage: the npm build's dist/core/compaction/index.js
 // (0.87.1 is the first build that frames the split-turn prefix as
 // "# Conversation" / "# Instructions", upstream d192bd6dc).
+//
+// Re-captured against the 1.4.0 build on 2026-10-28 (`npm install
+// --ignore-scripts @earendil-works/pi-coding-agent@1.4.0`), after the 0.87.1
+// build, installed the same way, reproduced requests-0.87.1.json byte for
+// byte. Only maxTokens moved: since 6fcb4867 the summary requests set none, so
+// the key is absent from every request.
 //
 // Each scenario is a transcript whose first historyCount messages are the
 // history to summarize and whose next prefixCount messages are the split
