@@ -3,7 +3,10 @@
 Range: pi `06a46693..59ca40cf` (v1.2.0, 2026-10-13 → main, 2026-10-27; v1.4.0 is `4a080252`,
 2026-10-22), 238 non-merge commits. The durable family (`durable`, `chord`, `codemode`,
 `telemetry`) is already ported to `73f8de80` (`sync-v1.2.0.md`, section 4), so for it the range
-starts there.
+starts there. Section 7 extends it to `c3d8ce44` (2026-10-28).
+
+**Released as v0.4.0 (2026-10-28):** the core of sections 2 and 7, through pi `c3d8ce44`. Still
+open: the catalog regeneration (section 4) and the durable catch-up (section 5).
 
 Commits were triaged by the paths they touch and their subjects; each one is decided again from
 its diff when it is ported. A commit that touches several groups is listed under the first group
