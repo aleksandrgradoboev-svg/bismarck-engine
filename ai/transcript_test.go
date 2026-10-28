@@ -2,6 +2,7 @@ package ai
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -318,9 +319,13 @@ func TestToolMapsKeepSlotsLikeJSMap(t *testing.T) {
 	if got, want := jsJSON(t, GetDeclaredTools(messages)), `[{"name":"a","description":"a2","parameters":`+obj+`},{"name":"b","description":"b2","parameters":`+obj+`}]`; got != want {
 		t.Fatalf("GetDeclaredTools\n got %s\nwant %s", got, want)
 	}
-	resolved := ResolveTranscriptTools(messages, true)
-	if resolved.AnchorsAdditions || jsJSON(t, resolved.RequestTools) != jsJSON(t, GetCurrentTools(messages)) {
-		t.Fatalf("non-additive history = %+v, want the current tools and no anchoring", resolved)
+	// The last system message redeclares "b", so additions fold everything.
+	resolved := ResolveTranscriptTools(messages, ToolSupportAdditions)
+	if resolved.FoldedSystemMessages != 3 || jsJSON(t, resolved.RequestTools) != jsJSON(t, GetCurrentTools(messages)) {
+		t.Fatalf("non-additive history = %+v, want the current tools, all folded", resolved)
+	}
+	if changes := ResolveTranscriptTools(messages, ToolSupportChanges); changes.FoldedSystemMessages != 0 || len(changes.RequestTools) != 0 {
+		t.Fatalf("changes = %+v, want nothing folded", changes)
 	}
 }
 
@@ -330,18 +335,40 @@ func TestResolveTranscriptToolsAnchorsOnlyAdditiveHistory(t *testing.T) {
 		NewUserText("u", 2),
 		withSystemText("", 3, func(m *SystemMessage) { m.ToolsAdded = []Tool{replayTool("b")} }),
 	}
-	anchored := ResolveTranscriptTools(additive, true)
-	if !anchored.AnchorsAdditions || len(anchored.RequestTools) != 1 || anchored.RequestTools[0].Name != "a" {
-		t.Fatalf("additive with support = %+v, want the initial [a] anchored", anchored)
+	anchored := ResolveTranscriptTools(additive, ToolSupportAdditions)
+	if anchored.FoldedSystemMessages != 1 || len(anchored.RequestTools) != 1 || anchored.RequestTools[0].Name != "a" {
+		t.Fatalf("additive with support = %+v, want the initial [a], one folded", anchored)
 	}
-	flat := ResolveTranscriptTools(additive, false)
-	if flat.AnchorsAdditions || len(flat.RequestTools) != 2 || flat.RequestTools[1].Name != "b" {
-		t.Fatalf("additive without support = %+v, want the current [a b]", flat)
+	flat := ResolveTranscriptTools(additive, ToolSupportNone)
+	if flat.FoldedSystemMessages != 2 || len(flat.RequestTools) != 2 || flat.RequestTools[1].Name != "b" {
+		t.Fatalf("additive without support = %+v, want the current [a b], all folded", flat)
 	}
-	// Without a leading system message the initial tool list is empty.
-	noLeading := ResolveTranscriptTools(additive[1:], true)
-	if !noLeading.AnchorsAdditions || len(noLeading.RequestTools) != 0 {
-		t.Fatalf("no leading message = %+v, want [] anchored", noLeading)
+	// Without a leading system message nothing is folded.
+	noLeading := ResolveTranscriptTools(additive[1:], ToolSupportAdditions)
+	if noLeading.FoldedSystemMessages != 0 || len(noLeading.RequestTools) != 0 {
+		t.Fatalf("no leading message = %+v, want [], none folded", noLeading)
+	}
+}
+
+// With additions, the top-level list becomes the tool state after the last
+// removal and later additions stay anchored, so the cached prefix moves once per
+// removal (pi caa6967b).
+func TestResolveTranscriptToolsFoldsUpToTheLastRemoval(t *testing.T) {
+	messages := []Message{
+		withSystemText("", 1, func(m *SystemMessage) { m.ToolsAdded = []Tool{replayTool("a"), replayTool("b")} }),
+		withSystemText("", 2, func(m *SystemMessage) { m.ToolsRemoved = []ToolReference{{Name: "a"}} }),
+		NewUserText("u", 3),
+		withSystemText("", 4, func(m *SystemMessage) { m.ToolsAdded = []Tool{replayTool("c")} }),
+	}
+	resolved := ResolveTranscriptTools(messages, ToolSupportAdditions)
+	if resolved.FoldedSystemMessages != 2 || len(resolved.RequestTools) != 1 || resolved.RequestTools[0].Name != "b" {
+		t.Fatalf("resolved = %+v, want [b] with two folded", resolved)
+	}
+	// A removed name declared again counts as a redeclaration (Kimi K3).
+	again := append(slices.Clone(messages),
+		withSystemText("", 5, func(m *SystemMessage) { m.ToolsAdded = []Tool{replayTool("a")} }))
+	if got := ResolveTranscriptTools(again, ToolSupportAdditions).FoldedSystemMessages; got != 4 {
+		t.Fatalf("folded = %d after re-adding a, want 4", got)
 	}
 }
 
