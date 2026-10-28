@@ -205,11 +205,20 @@ func (r *toolRegistry) isActivatable(name string) bool {
 }
 
 // loadout is pi _applyToolLoadout without prepareLoadout hooks: the
-// registered, non-hidden, activatable tools among names, deduplicated in
-// first-occurrence order.
+// registered, non-hidden, activatable tools among names, deduplicated. The
+// active tools are a set (pi b9e3eef6, #11495): those that stay active keep
+// their current order and newly active ones follow in the order names lists
+// them, so reordering the same names does not change the prompt.
 func (r *toolRegistry) loadout(names []string) []string {
+	ordered := make([]string, 0, len(r.active)+len(names))
+	for _, name := range r.active {
+		if slices.Contains(names, name) {
+			ordered = append(ordered, name)
+		}
+	}
+	ordered = append(ordered, names...)
 	out := make([]string, 0, len(names))
-	for _, name := range names {
+	for _, name := range ordered {
 		if _, ok := r.defs[name]; !ok || slices.Contains(out, name) || r.exposureOf(name) == ToolExposureHidden || !r.isActivatable(name) {
 			continue
 		}

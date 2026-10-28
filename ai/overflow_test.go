@@ -37,6 +37,8 @@ func TestIsContextOverflowErrors(t *testing.T) {
 		{"detects z.ai CN endpoint prompt-exceeds-max-length errors", `400 {"code":"1261","message":"Prompt exceeds max length"}`, "zai", 1048576, true},
 		{"detects Together AI context length errors", "400 The input (516368 tokens) is longer than the model's context length (262144 tokens).", "", 262144, true},
 		{"detects LiteLLM-wrapped OpenAI maximum context length errors", "Error: 503 litellm.ServiceUnavailableError: litellm.MidStreamFallbackError: litellm.APIConnectionError: APIConnectionError: OpenAIException - Requested token count exceeds the model's maximum context length of 131072 tokens.", "", 131072, true},
+		// Regression for #11492 (pi d3398f82).
+		{"detects LiteLLM pre-call ContextWindowExceededError", "400: {\"message\":\"litellm.ContextWindowExceededError: litellm.BadRequestError: litellm._pre_call_checks: Context Window exceeded for given call. No models have context window large enough for this call.\nModel=Qwen3.8-Flash-Next, Max Input Tokens=262144, Got=265262\nmodel=Qwen3.8-Flash-Next. context_window_fallbacks=None. fallbacks=[].\"}", "", 262144, true},
 		{"detects OpenAI-compatible parenthesized maximum context length errors", "Error: 400 Input length (265330) exceeds model's maximum context length (262144).", "", 262144, true},
 		{"detects OpenRouter Poolside maximum allowed input length errors", "Provider returned error: Input length 131393 exceeds the maximum allowed input length of 131040 tokens.", "", 131072, true},
 		{"detects DS4 configured context size errors", "400 Prompt has 256468 tokens, but the configured context size is 256000 tokens", "", 256000, true},

@@ -15,6 +15,8 @@ import "regexp"
 //   - OpenAI: "Your input exceeds the context window of this model"
 //   - OpenAI/LiteLLM: "Requested token count exceeds the model's maximum
 //     context length of 131072 tokens"
+//   - LiteLLM pre-call check: "litellm.ContextWindowExceededError: ...
+//     Context Window exceeded for given call."
 //   - OpenAI-compatible: "Input length (265330) exceeds model's maximum context
 //     length (262144)."
 //   - Google: "The input token count (1196265) exceeds the maximum number of
@@ -57,6 +59,7 @@ var overflowPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)input is too long for requested model`),                                                     // Amazon Bedrock
 	regexp.MustCompile(`(?i)exceeds the context window`),                                                                // OpenAI (Completions & Responses API)
 	regexp.MustCompile(`(?i)exceeds (?:the )?(?:model'?s )?maximum context length(?: of [\d,]+ tokens?|\s*\([\d,]+\))`), // OpenAI-compatible proxies (LiteLLM)
+	regexp.MustCompile(`(?i)context window exceeded`),                                                                   // LiteLLM pre-call check (ContextWindowExceededError)
 	regexp.MustCompile(`(?i)input token count.*exceeds the maximum`),                                                    // Google (Gemini)
 	regexp.MustCompile(`(?i)maximum prompt length is \d+`),                                                              // xAI (Grok)
 	regexp.MustCompile(`(?i)reduce the length of the messages`),                                                         // Groq

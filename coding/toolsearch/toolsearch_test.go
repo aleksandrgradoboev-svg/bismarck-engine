@@ -194,7 +194,9 @@ func TestToolSearchLoads(t *testing.T) {
 	if got := result.Details.(Details).Loaded; !slices.Equal(got, []string{"mcp__docs__index", "mcp__docs__search"}) {
 		t.Fatalf("loaded %v", got)
 	}
-	if got := sess.ActiveToolNames(); !slices.Equal(got, []string{ToolName, "docs_direct", "mcp__docs__index", "mcp__docs__search"}) {
+	// docs_direct, active since it registered, keeps its place ahead of
+	// tool_search (pi b9e3eef6); the loaded tools follow.
+	if got := sess.ActiveToolNames(); !slices.Equal(got, []string{"docs_direct", ToolName, "mcp__docs__index", "mcp__docs__search"}) {
 		t.Fatalf("active %v", got)
 	}
 
