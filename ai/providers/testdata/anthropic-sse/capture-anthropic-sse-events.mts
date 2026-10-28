@@ -23,6 +23,12 @@
 // cost carries totalFromProvider (7c22a93d), and the deletedIndex row's tool
 // call, whose arguments text is "undefined", carries argumentsError (87f9a364).
 //
+// Re-captured at f715a15c on 2026-10-28 under the same node_modules and build,
+// calibrated first: e3bc05e8 reproduced the old capture byte for byte (node
+// v24.18.0). At f715a15c only the block-state rows change: the deletedIndex
+// row, renamed stoppedBlockTakesNoMoreEvents, ends after the first stop; and
+// the six rows that follow it are new.
+//
 // Every row streams through the upstream suite's fake client
 // (anthropic-sse-parsing.test.ts createFakeAnthropicClient), so neither side
 // needs a key or the network — except an oauth row, which needs pi to create
@@ -319,12 +325,13 @@ const cases: Case[] = [
 			ev("content_block_delta", "null"),
 		),
 	},
-	// content_block_stop deletes the block's index, so a later event with no
-	// index (undefined === undefined) finds that block: its partialJson, also
-	// deleted, is appended to as "undefined", which parses to no arguments and,
-	// since 87f9a364, an argumentsError.
+	// Since f715a15c a block's stream state lives in openBlocks, keyed by the
+	// event's index, and leaves it on content_block_stop: a later event with no
+	// index finds no block. (Before, the stop deleted the block's index, so an
+	// event with none found that block, and its deleted partialJson took
+	// "undefined", which parsed to no arguments and an argumentsError.)
 	{
-		name: "deletedIndexMatchesAnEventWithoutOne",
+		name: "stoppedBlockTakesNoMoreEvents",
 		sse: frames(
 			messageStart,
 			ev("content_block_start", '{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t1","name":"read"}}'),
@@ -334,6 +341,86 @@ const cases: Case[] = [
 			ev("content_block_stop", '{"type":"content_block_stop"}'),
 			messageDelta,
 			messageStop,
+		),
+	},
+	// The stop removes the entry, so a later delta or stop at the same index
+	// finds nothing either.
+	{
+		name: "stoppedIndexTakesNoMoreEvents",
+		sse: frames(
+			messageStart,
+			ev("content_block_start", '{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t1","name":"read"}}'),
+			ev("content_block_delta", '{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"a\\":1}"}}'),
+			ev("content_block_stop", '{"type":"content_block_stop","index":0}'),
+			ev("content_block_delta", '{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"x"}}'),
+			ev("content_block_stop", '{"type":"content_block_stop","index":0}'),
+			messageDelta,
+			messageStop,
+		),
+	},
+	// openBlocks is a Map: an event with no index finds a block started with
+	// none (undefined is a key like any other).
+	{
+		name: "blockWithoutIndexTakesEventsWithoutOne",
+		sse: frames(
+			messageStart,
+			ev("content_block_start", '{"type":"content_block_start","content_block":{"type":"tool_use","id":"t1","name":"read"}}'),
+			ev("content_block_delta", '{"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"{\\"a\\":"}}'),
+			ev("content_block_delta", '{"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"1}"}}'),
+			ev("content_block_stop", '{"type":"content_block_stop"}'),
+			messageDelta,
+			messageStop,
+		),
+	},
+	// A block started again at an open index takes its Map entry over: the
+	// deltas and the stop go to the new block, and the first one never ends.
+	{
+		name: "restartedIndexTakesTheOpenEntryOver",
+		sse: frames(
+			messageStart,
+			ev("content_block_start", '{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t1","name":"read"}}'),
+			ev("content_block_delta", '{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"a\\":1}"}}'),
+			ev("content_block_start", '{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t2","name":"write"}}'),
+			ev("content_block_delta", '{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"b\\":2}"}}'),
+			ev("content_block_stop", '{"type":"content_block_stop","index":0}'),
+			messageDelta,
+			messageStop,
+		),
+	},
+	// ToolCallArgumentsStream.append(partial_json): the text takes String() of
+	// a piece that is not a string, but the parser reads its length, which a
+	// number does not have, so only the text grows...
+	{
+		name: "numericArgumentPieceExtendsOnlyTheText",
+		sse: frames(
+			messageStart,
+			ev("content_block_start", '{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t1","name":"read"}}'),
+			ev("content_block_delta", '{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"a\\":"}}'),
+			ev("content_block_delta", '{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":1}}'),
+			ev("content_block_delta", '{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"}"}}'),
+			ev("content_block_stop", '{"type":"content_block_stop","index":0}'),
+			messageDelta,
+			messageStop,
+		),
+	},
+	// ...and an absent or null one throws V8's TypeError reading it.
+	{
+		name: "missingArgumentPieceFails",
+		sse: frames(
+			messageStart,
+			ev("content_block_start", '{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t1","name":"read"}}'),
+			ev("content_block_delta", '{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"a\\":1"}}'),
+			ev("content_block_delta", '{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta"}}'),
+			blockStop,
+		),
+	},
+	{
+		name: "nullArgumentPieceFails",
+		sse: frames(
+			messageStart,
+			ev("content_block_start", '{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t1","name":"read"}}'),
+			ev("content_block_delta", '{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":null}}'),
+			blockStop,
 		),
 	},
 	// message_start reads no reasoning breakdown; message_delta's does.

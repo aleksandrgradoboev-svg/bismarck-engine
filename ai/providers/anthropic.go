@@ -793,16 +793,11 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 		}
 
 		// blocks is pi's `output.content` as its handler holds it: each block's
-		// builder with the two fields pi deletes on content_block_stop — the
-		// event's raw `index` a block is found by (nil once deleted: undefined)
-		// and whether its partialJson is gone — and the raw seeds of its
-		// text, thinking and signature, which pi converts only when a delta is
-		// appended to them (see anthropicSeed).
+		// builder with the raw seeds of its text, thinking and signature, which
+		// pi converts only when a delta is appended to them (see anthropicSeed).
 		type anthropicBlock struct {
 			*blockBuilder
-			index          json.RawMessage
-			partialDeleted bool
-			seeds          anthropicSeeds
+			seeds anthropicSeeds
 		}
 		var blocks []*anthropicBlock
 		materialize := func() {
@@ -812,17 +807,33 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 			}
 			output.Content = content
 		}
-		// findBlock is pi's `blocks.findIndex((b) => b.index === event.index)`:
-		// the first block whose index is strictly equal, so a string "0" finds
-		// no block started at 0, and an event with no index finds the first
-		// block whose index is gone.
-		findBlock := func(index json.RawMessage) int {
-			for i, b := range blocks {
-				if rawStrictEqual(b.index, index) {
+		// openBlocks is pi's openBlocks Map (f715a15c): the stream state of each
+		// block that has started and not stopped, keyed by the event's raw
+		// `index` and kept off the content blocks. Map keys compare as
+		// SameValueZero, which for JSON values is rawStrictEqual: a string "0"
+		// finds no block started at 0, an event with no index finds a block
+		// started with none, and a block that stopped takes no more events. A
+		// block started again at an open index takes its entry over.
+		type openAnthropicBlock struct {
+			index     json.RawMessage
+			block     int
+			arguments *ToolCallArgumentsStream // tool_use blocks only
+		}
+		var openBlocks []openAnthropicBlock
+		findOpen := func(index json.RawMessage) int {
+			for i := range openBlocks {
+				if rawStrictEqual(openBlocks[i].index, index) {
 					return i
 				}
 			}
 			return -1
+		}
+		setOpen := func(open openAnthropicBlock) {
+			if i := findOpen(open.index); i >= 0 {
+				openBlocks[i] = open
+			} else {
+				openBlocks = append(openBlocks, open)
+			}
 		}
 
 		// The model to cost against, recomputed on every message_start and read by
@@ -952,7 +963,12 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 				default:
 					return nil
 				}
-				blocks = append(blocks, &anthropicBlock{blockBuilder: b, index: ev["index"], seeds: seeds})
+				blocks = append(blocks, &anthropicBlock{blockBuilder: b, seeds: seeds})
+				open := openAnthropicBlock{index: ev["index"], block: len(blocks) - 1}
+				if b.kind == "toolCall" {
+					open.arguments = NewToolCallArgumentsStream()
+				}
+				setOpen(open)
 				materialize()
 				stream.Push(ai.AssistantMessageEvent{Type: evType, ContentIndex: len(blocks) - 1, Partial: output.Clone()})
 			case "content_block_delta":
@@ -976,10 +992,14 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 				default:
 					return nil
 				}
-				idx := findBlock(ev["index"])
-				if idx < 0 || blocks[idx].kind != kind {
+				// pi: `open?.block.type === <kind>`; a block that stopped, or
+				// never started at this index, takes no delta.
+				oi := findOpen(ev["index"])
+				if oi < 0 || blocks[openBlocks[oi].block].kind != kind {
 					return nil
 				}
+				open := openBlocks[oi]
+				idx := open.block
 				b := blocks[idx]
 				// pi's `+=` onto a string appends String() of the member
 				// ("undefined" when it is absent); the pushed event carries the
@@ -1005,14 +1025,16 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 					materialize()
 					stream.Push(ai.AssistantMessageEvent{Type: ai.EventThinkingDelta, ContentIndex: idx, Delta: pushed, Partial: output.Clone()})
 				case "input_json_delta":
-					if b.partialDeleted {
-						// A block's stop deleted partialJson: `undefined += piece`.
-						b.partialJSON.Reset()
-						b.partialJSON.WriteString("undefined")
-						b.partialDeleted = false
+					// pi f715a15c: `open.arguments.append(partial_json)`.
+					switch raw := delta[member]; {
+					case isString:
+						b.args, b.argsOrder = open.arguments.Append(piece)
+					case raw == nil || jsonValueKind(raw) == 'n':
+						// The parser reads `delta.length` of undefined or null.
+						return fmt.Errorf("Cannot read properties of %s (reading 'length')", piece)
+					default:
+						b.args, b.argsOrder = open.arguments.appendNonString(piece)
 					}
-					b.partialJSON.WriteString(piece)
-					b.args, b.argsOrder = parseStreamingJSON(b.partialJSON.String())
 					materialize()
 					stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: idx, Delta: pushed, Partial: output.Clone()})
 				case "signature_delta":
@@ -1029,12 +1051,15 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 					}
 				}
 			case "content_block_stop":
-				idx := findBlock(ev["index"])
-				if idx < 0 {
+				// pi: `openBlock(event.index)`, then `openBlocks.delete(...)`.
+				oi := findOpen(ev["index"])
+				if oi < 0 {
 					return nil
 				}
+				open := openBlocks[oi]
+				openBlocks = append(openBlocks[:oi], openBlocks[oi+1:]...)
+				idx := open.block
 				b := blocks[idx]
-				b.index = nil // pi: delete block.index
 				materialize()
 				switch b.kind {
 				case "text":
@@ -1042,13 +1067,8 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 				case "thinking":
 					stream.Push(ai.AssistantMessageEvent{Type: ai.EventThinkingEnd, ContentIndex: idx, Content: b.thinking.String(), Partial: output.Clone()})
 				case "toolCall":
-					partial := b.partialJSON.String()
-					if b.partialDeleted {
-						partial = "" // parseToolCallArguments(undefined) is {}
-					}
 					// The finished call is parsed strictly (pi 87f9a364).
-					b.args, b.argsOrder, b.argsError = parseToolCallArguments(partial)
-					b.partialDeleted = true // pi: delete block.partialJson
+					b.args, b.argsOrder, b.argsError = open.arguments.Finish()
 					materialize()
 					tc := b.toContent().(ai.ToolCall)
 					stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallEnd, ContentIndex: idx, ToolCall: &tc, Partial: output.Clone()})
@@ -1144,21 +1164,28 @@ type blockBuilder struct {
 	// toolNamespace is the OpenAI Responses namespace of a namespaced or
 	// dynamically loaded tool call; empty for every other provider.
 	toolNamespace string
-	partialJSON   strings.Builder
 	args          map[string]any
 	// argsOrder is args in the order pi's JS object lists their keys
 	// (ai.ToolCall.ArgumentsOrder).
 	argsOrder ai.OrderedObject
 	// argsError is the finished call's ArgumentsError (parseToolCallArguments).
 	argsError string
+	// arguments is the stream state of an OpenAI tool call's JSON arguments
+	// (pi keeps it in its stream state, off the content block; the builder is
+	// that state here, as toContent never carries it). Anthropic keeps its own
+	// in openBlocks.
+	arguments *ToolCallArgumentsStream
 	// grammar is set on custom (grammar-constrained) tool calls, whose raw input
-	// is re-synthesized into JSON deltas instead of being parsed from partialJSON.
+	// is re-synthesized into JSON deltas instead of being parsed as arguments.
 	grammar *grammarInputBuffer
+	// grammarUnsent is the JSON text of an OpenAI Responses custom call's
+	// initial input, sent with its first delta (pi CustomInput.unsent).
+	grammarUnsent string
 	// unfinished marks an OpenAI Responses tool call whose output_item.done has
-	// not arrived — pi's partialJson / customInput scratch buffers, which it
-	// deletes when the call finishes (upstream 1b2aa0ca0). The slot map cannot
-	// stand in for it: an event without output_index lands every item on one
-	// key, so a later item replaces an earlier, still open one.
+	// not arrived (pi's unfinishedToolCalls, upstream f715a15c; 1b2aa0ca0 kept
+	// it as the presence of the scratch buffers). The slot map cannot stand in
+	// for it: an event without output_index lands every item on one key, so a
+	// later item replaces an earlier, still open one.
 	unfinished bool
 }
 
