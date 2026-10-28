@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -159,6 +160,25 @@ func (r *retention) chain(t *testing.T, o opened, create func(tx *durable.Tx) du
 	return tr
 }
 
+// retarget replaces the input of a task the commit created, for a spawner
+// pointed at a conversation created after it. pi rewrites the input in a
+// commit of its own, which in Go would race the scheduler: a run step taken
+// before it hands the phase the first input.
+func retarget(tx *durable.Tx, id durable.TaskID, input spawnerInput) error {
+	for _, record := range tx.StagedTasks() {
+		if record.ID != id {
+			continue
+		}
+		encoded, err := json.Marshal(input)
+		if err != nil {
+			return err
+		}
+		record.Input = encoded
+		return tx.SetTask(record)
+	}
+	return fmt.Errorf("Task %d is not staged", id)
+}
+
 func TestRetentionForgetsEndedSubagentChainsOnceTheirWorkEnds(t *testing.T) {
 	r := newRetention(t)
 	o := r.openHarness(t, nil)
@@ -204,15 +224,22 @@ func TestRetentionHoldsAnOwnerForWorkItsOwnTerminalCommitCreatesBelowAForgottenC
 	o := r.openHarness(t, nil)
 	// Live P (a spawner) -> ended B -> ended A -> conversation C, empty:
 	// forgotten. P's terminal commit creates D in C.
-	tr := r.chain(t, o, func(tx *durable.Tx) durable.TaskID {
-		id, err := CreateTask(tx, r.spawner, spawnerInput{Name: "p"}, conversationOwned(false))
-		must(t, err)
-		return id
-	})
-	// Point the spawner at C, now that its ID is known.
-	rewrite(t, o.h, tr.p, func(record *durable.TaskRecord) {
-		record.Input = []byte(fmt.Sprintf(`{"name":"p","into":%d}`, tr.c))
-	})
+	var tr chain
+	must(t, o.root.Commit(bg, func(tx *durable.Tx) error {
+		var err error
+		if tr.p, err = CreateTask(tx, r.spawner, spawnerInput{Name: "p"}, conversationOwned(false)); err != nil {
+			return err
+		}
+		tr.b = r.holdIn(t, tx, "b", taskOwned(tr.p))
+		tr.a = r.holdIn(t, tx, "a", taskOwned(tr.b))
+		conversation, err := tx.CreateConversation(ownedBy(tr.a))
+		tr.c = conversation.ID
+		if err != nil {
+			return err
+		}
+		// Point the spawner at C, now that its ID is known.
+		return retarget(tx, tr.p, spawnerInput{Name: "p", Into: tr.c})
+	}))
 	r.done("a")
 	r.done("b")
 	waitDone(t, o.h, tr.b)
@@ -379,11 +406,11 @@ func TestRetentionDropsWhatARejectedCommitsChainLoadReadWithoutALaterPublication
 		b = r.holdIn(t, tx, "b", taskOwned(p))
 		conversation, err := tx.CreateConversation(ownedBy(b))
 		c = conversation.ID
-		return err
+		if err != nil {
+			return err
+		}
+		return retarget(tx, p, spawnerInput{Into: c})
 	}))
-	rewrite(t, o.h, p, func(record *durable.TaskRecord) {
-		record.Input = []byte(fmt.Sprintf(`{"name":"","into":%d}`, c))
-	})
 	r.done("b")
 	waitDone(t, o.h, b)
 	baseline := quietSizes(t, o.h)
