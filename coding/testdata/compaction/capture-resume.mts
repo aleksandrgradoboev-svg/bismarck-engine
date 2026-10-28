@@ -3,10 +3,17 @@
 // coding/compaction_resume_test.go.
 //
 //   node capture-resume.mts <npm-root> <out.json> <version>
-//   e.g. node capture-resume.mts ~/.cache/pi-npm/0.87.1 resume-0.87.1.json 0.87.1
+//   e.g. node capture-resume.mts <npm-root> resume-1.4.0.json 1.4.0
 //
 // <npm-root> holds node_modules/@earendil-works/{pi-ai,pi-coding-agent} at
-// <version>.
+// <version>. npm nests 0.87.1's pi-ai under pi-coding-agent; a junction at the
+// top serves.
+//
+// Re-captured against the 1.4.0 build on 2026-10-28. The 0.87.1 build first
+// reproduced resume-0.87.1.json but for what a run makes afresh — the session
+// files' ids and timestamps, the cwd, and the timestamp of the system message
+// a compaction stores (Date.now()). At 1.4.0 only maxTokens moved besides
+// those: since 6fcb4867 the summary requests set none.
 //
 // Each scenario builds a session with pi's own SessionManager: messages, one
 // compaction entry (summary, firstKeptEntryId, details, fromHook, and the
