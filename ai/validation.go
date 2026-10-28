@@ -10,6 +10,11 @@ import (
 // tool's schema, returning the validated arguments or an error formatted like
 // pi's validateToolArguments.
 func ValidateToolArguments(tool Tool, toolCall ToolCall) (map[string]any, error) {
+	// Malformed arguments text fails before anything reads the arguments
+	// (pi 87f9a364).
+	if toolCall.ArgumentsError != "" {
+		return nil, fmt.Errorf("Invalid arguments for tool %q: %s", toolCall.Name, toolCall.ArgumentsError)
+	}
 	if tool.Parameters == nil {
 		return toolCall.Arguments, nil
 	}

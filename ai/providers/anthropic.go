@@ -1044,9 +1044,10 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 				case "toolCall":
 					partial := b.partialJSON.String()
 					if b.partialDeleted {
-						partial = "" // parseStreamingJson(undefined) is {}
+						partial = "" // parseToolCallArguments(undefined) is {}
 					}
-					b.args, b.argsOrder = parseStreamingJSON(partial)
+					// The finished call is parsed strictly (pi 87f9a364).
+					b.args, b.argsOrder, b.argsError = parseToolCallArguments(partial)
 					b.partialDeleted = true // pi: delete block.partialJson
 					materialize()
 					tc := b.toContent().(ai.ToolCall)
@@ -1079,6 +1080,13 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 				}
 				output.Usage.TotalTokens = output.Usage.Input + output.Usage.Output + output.Usage.CacheRead + output.Usage.CacheWrite
 				ai.CalculateCost(usageModel, &output.Usage)
+				// OpenRouter adds billing fields to the streamed message_delta
+				// usage (pi cae8d69e).
+				if isOpenRouterModel(model) && rawTruthy(ev["usage"]) {
+					if reported, err := ai.DecodeOrderedValue(ev["usage"]); err == nil {
+						applyOpenRouterReportedCost(&output.Usage, reported)
+					}
+				}
 			case "message_stop":
 				sawStop = true
 			}
@@ -1141,6 +1149,8 @@ type blockBuilder struct {
 	// argsOrder is args in the order pi's JS object lists their keys
 	// (ai.ToolCall.ArgumentsOrder).
 	argsOrder ai.OrderedObject
+	// argsError is the finished call's ArgumentsError (parseToolCallArguments).
+	argsError string
 	// grammar is set on custom (grammar-constrained) tool calls, whose raw input
 	// is re-synthesized into JSON deltas instead of being parsed from partialJSON.
 	grammar *grammarInputBuffer
@@ -1163,7 +1173,7 @@ func (b *blockBuilder) toContent() ai.Content {
 		if args == nil {
 			args = map[string]any{}
 		}
-		return ai.ToolCall{ID: b.toolID, Name: b.toolName, Arguments: args, ArgumentsOrder: b.argsOrder, Namespace: b.toolNamespace}
+		return ai.ToolCall{ID: b.toolID, Name: b.toolName, Arguments: args, ArgumentsOrder: b.argsOrder, Namespace: b.toolNamespace, ArgumentsError: b.argsError}
 	}
 	return ai.TextContent{}
 }

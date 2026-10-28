@@ -934,13 +934,15 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 					stream.Push(ai.AssistantMessageEvent{Type: ai.EventTextEnd, ContentIndex: slot.contentIndex, Content: slot.block.text.String(), Partial: output.Clone()})
 					delete(outputSlots, ev.slotKey())
 				case ev.Item.Type == "function_call" && slot != nil && slot.block.kind == "toolCall" && slot.block.grammar == nil:
-					// pi 8c9dbffa: parseStreamingJson(item.arguments || partialJson || "{}")
-					// — the done event's item.arguments wins over the scratch buffer.
+					// pi: parseToolCallArguments(item.arguments || partialJson) —
+					// the done event's item.arguments wins over the scratch buffer
+					// (8c9dbffa), and the finished call is parsed strictly
+					// (87f9a364).
 					argsJSON := ev.Item.Arguments
 					if argsJSON == "" {
 						argsJSON = slot.block.partialJSON.String()
 					}
-					slot.block.args, slot.block.argsOrder = parseStreamingJSON(orEmptyJSON(argsJSON))
+					slot.block.args, slot.block.argsOrder, slot.block.argsError = parseToolCallArguments(argsJSON)
 					// Guarded so an absent namespace on the done item cannot clobber
 					// the one captured at output_item.added.
 					if ev.Item.Namespace != "" {
@@ -1764,13 +1766,6 @@ func joinPartsText(parts []responsesContentPart, sep string) string {
 		}
 	}
 	return strings.Join(texts, sep)
-}
-
-func orEmptyJSON(s string) string {
-	if s == "" {
-		return "{}"
-	}
-	return s
 }
 
 // errorEventMessage is the error pi throws for an `error` event:

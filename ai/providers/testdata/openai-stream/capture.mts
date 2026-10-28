@@ -2,7 +2,7 @@
 // read an SSE body — the oracle behind openai_stream_test.go in this package.
 //
 //   node --experimental-strip-types capture.mts <extraction> <out.json> <sha>
-//   e.g. ... capture.mts <dir> openai-stream-2b0a123de.json 2b0a123de
+//   e.g. ... capture.mts <dir> openai-stream-e3bc05e8.json e3bc05e8
 //
 // <extraction> holds `git archive <sha> packages/ai package-lock.json` from the
 // upstream clone (prefix kept) and a node_modules resolving pi-ai's
@@ -73,7 +73,8 @@ function sdkSource(name: string): { dir: string; version: string; integrity: str
 	let root = dir;
 	while (path.basename(root) !== "node_modules") root = path.dirname(root);
 	const installed = JSON.parse(fs.readFileSync(path.join(root, ".package-lock.json"), "utf8")).packages[`node_modules/${name}`];
-	const resolvedKey = path.relative(extraction, dir);
+	// Lockfile keys use "/", which path.relative does not on Windows.
+	const resolvedKey = path.relative(extraction, dir).split(path.sep).join("/");
 	const key = resolvedKey.startsWith("..") || path.isAbsolute(resolvedKey) ? `node_modules/${name}` : resolvedKey;
 	const nestedKey = `packages/ai/node_modules/${name}`;
 	const locked = lock.packages[key];
@@ -279,7 +280,7 @@ type Outcome = {
 	// provider sent a string (`completion_tokens || 0`) or computes one (`+`).
 	usage: Record<string, string>;
 	// toolCalls are the message's tool calls, JSON.stringify'd, with id and
-	// name as String() of pi's values.
+	// name as String() of pi's values, and argumentsError when set.
 	toolCalls: string[];
 	// thinking are the message's thinking blocks, JSON.stringify'd, with the
 	// signature as String() of pi's value.
@@ -342,8 +343,14 @@ async function piRun(api: any, baseModel: Record<string, unknown>, baseUrl: stri
 		),
 		toolCalls: final.content
 			.filter((b: { type: string }) => b.type === "toolCall")
-			.map((b: { id: unknown; name: unknown; arguments: unknown }) =>
-				J({ id: jsString(b.id), name: jsString(b.name), arguments: b.arguments }),
+			.map((b: { id: unknown; name: unknown; arguments: unknown; argumentsError?: string }) =>
+				J({
+					id: jsString(b.id),
+					name: jsString(b.name),
+					arguments: b.arguments,
+					// Since 87f9a364, malformed finished arguments carry the error.
+					...(b.argumentsError === undefined ? {} : { argumentsError: b.argumentsError }),
+				}),
 			),
 		thinking: final.content
 			.filter((b: { type: string }) => b.type === "thinking")

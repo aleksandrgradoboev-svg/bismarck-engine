@@ -1,5 +1,5 @@
 {
-	"sha": "d86654abb",
+	"sha": "e3bc05e8",
 	"model": {
 		"id": "claude-opus-5",
 		"name": "Claude Opus 5",
@@ -63,7 +63,6 @@
 			"api": "anthropic-messages",
 			"provider": "anthropic",
 			"model": "claude-opus-5",
-			"providerThinkingLevel": "high",
 			"usage": {
 				"input": 100,
 				"output": 20,
@@ -75,11 +74,13 @@
 					"output": 0.0005,
 					"cacheRead": 0,
 					"cacheWrite": 0,
-					"total": 0.001
+					"total": 0.001,
+					"totalFromProvider": false
 				},
 				"cacheWrite1h": 0
 			},
 			"stopReason": "stop",
+			"providerThinkingLevel": "high",
 			"responseId": "msg_response_model",
 			"responseModel": "kimi-for-coding",
 			"rawStopReason": "end_turn"
@@ -102,7 +103,6 @@
 				"api": "anthropic-messages",
 				"provider": "anthropic",
 				"model": "claude-opus-5",
-				"providerThinkingLevel": "high",
 				"usage": {
 					"input": 100,
 					"output": 20,
@@ -114,11 +114,13 @@
 						"output": 0.0005,
 						"cacheRead": 0,
 						"cacheWrite": 0,
-						"total": 0.001
+						"total": 0.001,
+						"totalFromProvider": false
 					},
 					"cacheWrite1h": 0
 				},
 				"stopReason": "stop",
+				"providerThinkingLevel": "high",
 				"responseId": "msg_response_model",
 				"responseModel": "kimi-for-coding",
 				"rawStopReason": "end_turn"
@@ -132,16 +134,10 @@
 			},
 			{
 				"role": "assistant",
-				"content": [
-					{
-						"type": "text",
-						"text": "reasoning"
-					}
-				],
+				"content": [],
 				"api": "anthropic-messages",
 				"provider": "anthropic",
 				"model": "claude-opus-5",
-				"providerThinkingLevel": "high",
 				"usage": {
 					"input": 100,
 					"output": 20,
@@ -153,11 +149,13 @@
 						"output": 0.0005,
 						"cacheRead": 0,
 						"cacheWrite": 0,
-						"total": 0.001
+						"total": 0.001,
+						"totalFromProvider": false
 					},
 					"cacheWrite1h": 0
 				},
 				"stopReason": "stop",
+				"providerThinkingLevel": "high",
 				"responseId": "msg_response_model",
 				"responseModel": "kimi-for-coding",
 				"rawStopReason": "end_turn"
@@ -186,7 +184,8 @@
 				"output": 0.0001,
 				"cacheRead": 0,
 				"cacheWrite": 0,
-				"total": 0.0004
+				"total": 0.0004,
+				"totalFromProvider": false
 			},
 			"cacheWrite1h": 0
 		},
@@ -217,7 +216,8 @@
 				"output": 0.0005,
 				"cacheRead": 0,
 				"cacheWrite": 0,
-				"total": 0.001
+				"total": 0.001,
+				"totalFromProvider": false
 			},
 			"cacheWrite1h": 0
 		},
@@ -247,7 +247,8 @@
 				"output": 0.0005,
 				"cacheRead": 0,
 				"cacheWrite": 0,
-				"total": 0.001
+				"total": 0.001,
+				"totalFromProvider": false
 			},
 			"cacheWrite1h": 0
 		},
@@ -277,7 +278,8 @@
 				"output": 0.0005,
 				"cacheRead": 0,
 				"cacheWrite": 0,
-				"total": 0.001
+				"total": 0.001,
+				"totalFromProvider": false
 			},
 			"cacheWrite1h": 0
 		},
@@ -308,7 +310,8 @@
 				"output": 0.0001,
 				"cacheRead": 0,
 				"cacheWrite": 0,
-				"total": 0.0004
+				"total": 0.0004,
+				"totalFromProvider": false
 			},
 			"cacheWrite1h": 0
 		},
@@ -339,7 +342,8 @@
 				"output": 0.0005,
 				"cacheRead": 0,
 				"cacheWrite": 0,
-				"total": 0.001
+				"total": 0.001,
+				"totalFromProvider": false
 			},
 			"cacheWrite1h": 0
 		},
@@ -386,7 +390,6 @@
 			"api": "anthropic-messages",
 			"provider": "anthropic",
 			"model": "claude-opus-5",
-			"providerThinkingLevel": "high",
 			"usage": {
 				"input": 100,
 				"output": 20,
@@ -398,11 +401,13 @@
 					"output": 0.0005,
 					"cacheRead": 0,
 					"cacheWrite": 0,
-					"total": 0.001
+					"total": 0.001,
+					"totalFromProvider": false
 				},
 				"cacheWrite1h": 0
 			},
 			"stopReason": "stop",
+			"providerThinkingLevel": "high",
 			"responseId": "msg_response_model",
 			"responseModel": "kimi-for-coding",
 			"rawStopReason": "end_turn"
@@ -437,7 +442,6 @@
 			"api": "anthropic-messages",
 			"provider": "anthropic",
 			"model": "claude-opus-5",
-			"providerThinkingLevel": "high",
 			"usage": {
 				"input": 100,
 				"output": 0,
@@ -449,11 +453,13 @@
 					"output": 0,
 					"cacheRead": 0,
 					"cacheWrite": 0,
-					"total": 0.0005
+					"total": 0.0005,
+					"totalFromProvider": false
 				},
 				"cacheWrite1h": 0
 			},
 			"stopReason": "error",
+			"providerThinkingLevel": "high",
 			"responseId": "msg_response_model",
 			"responseModel": "kimi-for-coding",
 			"errorMessage": "Anthropic performed an unsupported mid-output model fallback"
@@ -493,7 +499,6 @@
 			"api": "anthropic-messages",
 			"provider": "anthropic",
 			"model": "claude-opus-5",
-			"providerThinkingLevel": "high",
 			"usage": {
 				"input": 100,
 				"output": 20,
@@ -505,11 +510,13 @@
 					"output": 0.0005,
 					"cacheRead": 0,
 					"cacheWrite": 0,
-					"total": 0.001
+					"total": 0.001,
+					"totalFromProvider": false
 				},
 				"cacheWrite1h": 0
 			},
 			"stopReason": "error",
+			"providerThinkingLevel": "high",
 			"responseId": "msg_response_model",
 			"responseModel": "kimi-for-coding",
 			"rawStopReason": "refusal",

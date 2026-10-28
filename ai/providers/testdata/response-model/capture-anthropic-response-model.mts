@@ -35,7 +35,17 @@
 // packages/ai/test/anthropic-sse-parsing.test.ts, with the suite's model,
 // client and SSE fixture; every other entry is an edge case of this port's,
 // commented with the rule it pins. Streamed assistant timestamps are Date.now()
-// and are dropped.
+// and are dropped, as is durationMs, which pi measures.
+//
+// Re-captured at e3bc05e8 against the 1.4.0 build on 2026-10-28, after
+// calibrating at d86654abb with the same node_modules and catalog: every
+// behavioural entry came back byte-identical, only `model` moved (the catalog
+// dropped claude-opus-5's "off": null). At e3bc05e8 the usage cost carries
+// totalFromProvider (7c22a93d), another model's thinking is dropped rather than
+// replayed as text (91130942), and providerThinkingLevel follows the usage.
+// The extraction's providers/data is the 1.4.0 build's, with claude-opus-5's
+// thinkingLevelMap given back its "off": null: the catalog is not regenerated
+// in this sync, and the Go test pins `model` to the catalog the port embeds.
 import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -105,7 +115,7 @@ function createResponseModelSseResponse(
 
 function withoutTimestamp(message: any) {
 	if (message.role !== "assistant") return JSON.parse(JSON.stringify(message));
-	const { timestamp: _timestamp, ...rest } = message;
+	const { timestamp: _timestamp, durationMs: _durationMs, ...rest } = message;
 	return JSON.parse(JSON.stringify(rest));
 }
 

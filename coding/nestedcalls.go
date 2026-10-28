@@ -101,10 +101,13 @@ func (r *nestedCallRecorder) finish(record *ai.NestedToolCallRecord, isError boo
 func (r *nestedCallRecorder) addUsage(u ai.Usage) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// pi: this.usage = this.usage ? combineUsage(this.usage, usage) : usage —
+	// the first usage as it is, then sums with its flag and token splits.
 	if r.usage == nil {
-		r.usage = &ai.Usage{}
+		r.usage = &u
+		return
 	}
-	addUsage(r.usage, u)
+	*r.usage = combineUsage(*r.usage, u)
 }
 
 // snapshot copies the record so far; nil when no nested call was made.

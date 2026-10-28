@@ -609,14 +609,16 @@ func (r *FauxProviderRegistration) withUsageEstimate(message *ai.AssistantMessag
 		if prev, ok := r.promptCache[sessionID]; ok {
 			cachedChars := commonPromptPrefixLength(prev, prompt)
 			cacheRead = estimateCodeUnitTokens(cachedChars)
-			cacheWrite = estimateCodeUnitTokens(promptLength - cachedChars)
-			input = promptTokens - cacheRead
-			if input < 0 {
-				input = 0
+			cacheWrite = promptTokens - cacheRead
+			if cacheWrite < 0 {
+				cacheWrite = 0
 			}
 		} else {
 			cacheWrite = promptTokens
 		}
+		// Every prompt token is either read from or written to the simulated
+		// cache (pi f3fa8bd9).
+		input = 0
 		r.promptCache[sessionID] = prompt
 		r.mu.Unlock()
 	}

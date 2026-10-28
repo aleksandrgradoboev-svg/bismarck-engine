@@ -27,7 +27,7 @@ import (
 // from pi's source at 2b0a123de and the openai SDK its lockfile pins for pi-ai
 // (7.19.0, nested under packages/ai since ab30693d6): how the
 // SDK's stream iterator and pi's two openai adapters read the same SSE bodies.
-const openaiStreamCaptureFile = "testdata/openai-stream/openai-stream-2b0a123de.json"
+const openaiStreamCaptureFile = "testdata/openai-stream/openai-stream-e3bc05e8.json"
 
 type openaiStreamOutcome struct {
 	Observed        []string `json:"observed"`
@@ -289,7 +289,11 @@ func runOpenAIStreamAdapter(t *testing.T, adapter string, status int, body strin
 			outcome.Thinking = append(outcome.Thinking, text)
 		}
 		if tc, ok := c.(ai.ToolCall); ok {
-			text, err := jstext.Stringify(ai.OrderedObject{{Key: "id", Value: tc.ID}, {Key: "name", Value: tc.Name}, {Key: "arguments", Value: tc.OrderedArguments()}})
+			call := ai.OrderedObject{{Key: "id", Value: tc.ID}, {Key: "name", Value: tc.Name}, {Key: "arguments", Value: tc.OrderedArguments()}}
+			if tc.ArgumentsError != "" {
+				call = append(call, ai.OrderedField{Key: "argumentsError", Value: tc.ArgumentsError})
+			}
+			text, err := jstext.Stringify(call)
 			if err != nil {
 				t.Fatalf("tool call %#v has no JSON form: %v", tc, err)
 			}
