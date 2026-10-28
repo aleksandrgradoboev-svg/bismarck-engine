@@ -79,7 +79,7 @@ func serveAbortBeforeResponse(t *testing.T, retry bool, body string) (string, *a
 // Error("Request aborted"), and the google adapter's buildParams throws that
 // same message before onPayload when the signal is already aborted.
 func TestAbortBeforeResponseMatchesPi(t *testing.T) {
-	raw, err := os.ReadFile("testdata/abort-before-response/abort-before-response-2b0a123de.json")
+	raw, err := os.ReadFile("testdata/abort-before-response/abort-before-response-e3bc05e8.json")
 	if err != nil {
 		t.Fatal(err)
 	}

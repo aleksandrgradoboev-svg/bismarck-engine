@@ -306,6 +306,35 @@ func inferGrammarInputProperty(tool ai.Tool) (string, error) {
 	return inputProperty, nil
 }
 
+// prefersJSONSchemaStrictSampling reports whether a tool asks for strict
+// JSON-schema sampling only when possible (`strict: "prefer"`). pi d4d53612
+// inlines it, 842c7317 names it here.
+func prefersJSONSchemaStrictSampling(tool ai.Tool) bool {
+	config := tool.ConstrainedSampling
+	return config != nil && config.Type == ai.ConstrainedSamplingJSONSchema && config.Strict == ai.ConstrainedSamplingPrefer
+}
+
+// strictToolLimitErrorMessages are the messages Claude rejects a request with
+// when its strict tools exceed the provider's limits. Observed limits: 20
+// strict tools, and 16 optional or union-typed parameters across all strict
+// tools (pi d4d53612, shared since 842c7317).
+var strictToolLimitErrorMessages = []string{
+	"The compiled grammar is too large",
+	"Too many strict tools (",
+	"Schemas contains too many parameters with union types (",
+}
+
+// isStrictToolLimitErrorMessage reports whether a provider error message says
+// the request's strict tools exceed the provider's limits.
+func isStrictToolLimitErrorMessage(message string) bool {
+	for _, limit := range strictToolLimitErrorMessages {
+		if strings.Contains(message, limit) {
+			return true
+		}
+	}
+	return false
+}
+
 // resolveJSONSchemaStrictSampling reports whether a tool should be sent with
 // JSON-schema constrained sampling enabled (port of resolveJsonSchemaStrictSampling).
 // pi returns true or undefined, never false, so a plain bool suffices.

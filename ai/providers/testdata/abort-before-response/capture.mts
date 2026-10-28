@@ -55,7 +55,8 @@ for (const name of ["@anthropic-ai/sdk", "openai", "@google/genai"]) {
 	// (packages/ai/node_modules/<name>, as openai is since ab30693d6) or the
 	// root one (node_modules/<name>). Where the lockfile nests a copy for
 	// pi-ai, pi-ai must resolve that one.
-	const resolvedKey = path.relative(extraction, dir);
+	// Lockfile keys use "/", which path.relative does not on Windows.
+	const resolvedKey = path.relative(extraction, dir).split(path.sep).join("/");
 	const key = resolvedKey.startsWith("..") || path.isAbsolute(resolvedKey) ? `node_modules/${name}` : resolvedKey;
 	const nestedKey = `packages/ai/node_modules/${name}`;
 	const locked = lock.packages[key];
