@@ -192,8 +192,10 @@ func TestToolRoundGivesToolsAndHooksTheHarnessModels(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(seen) != 2 || seen[0] != setup.models || seen[1] != setup.models {
-		t.Fatalf("models seen = %v, want the Harness's twice", seen)
+	// One view of the host's Models that adds the Harness identity, shared
+	// by tools and hooks (pi adc5fa9f).
+	if len(seen) != 2 || seen[0] != seen[1] || !reflect.DeepEqual(seen[0].GetProviders(), setup.models.GetProviders()) {
+		t.Fatalf("models seen = %v, want one view of the Harness's twice", seen)
 	}
 }
 
@@ -1488,8 +1490,17 @@ func TestHostInputsGenerationUsesTheCurrentReturnValueOfAModelsFunctionAtEachReq
 	}
 }
 
-// otherModels is the same model access under another identity.
+// otherModels is the same model access under another identity, marked by a
+// provider only it reports: tools see views of the host's Models that add the
+// Harness identity, so the mark is what tells them apart (pi adc5fa9f).
 type otherModels struct{ ai.Models }
+
+func (m *otherModels) GetProvider(id string) ai.Provider {
+	if id == "second-only" {
+		return m.Models.GetProvider(m.GetProviders()[0].ID())
+	}
+	return m.Models.GetProvider(id)
+}
 
 func TestHostInputsToolsReadTheCurrentModelsAtEachAccessOfAPIModels(t *testing.T) {
 	setup := newChatSetup(t)
@@ -1511,7 +1522,7 @@ func TestHostInputsToolsReadTheCurrentModelsAtEachAccessOfAPIModels(t *testing.T
 	if got := textOf(lastEntry(t, root)); got != "done" {
 		t.Fatalf("answer = %q", got)
 	}
-	if len(seen) != 2 || seen[0] != first || seen[1] != ai.Models(second) {
+	if len(seen) != 2 || seen[0].GetProvider("second-only") != nil || seen[1].GetProvider("second-only") == nil {
 		t.Fatalf("models seen = %v, want first then second", seen)
 	}
 }

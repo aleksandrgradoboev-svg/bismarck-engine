@@ -132,6 +132,11 @@ type SessionOptions struct {
 	// StreamFn overrides the stream function (for tests). Default: ai.StreamSimple.
 	// Either way the session asserts a chat model first (see sessionStreamFn).
 	StreamFn agent.StreamFn
+	// Identity is how the session's requests identify the app to providers.
+	// Nil is ClientIdentity(), read at each request. Not in pi, whose coding
+	// agent always identifies as itself: a host embedding the session names
+	// itself here.
+	Identity *ai.ClientIdentity
 }
 
 // sessionStreamFn is the stream function a session's agent uses for every
@@ -143,7 +148,12 @@ type SessionOptions struct {
 // session streams through ai.StreamSimple, the compat global, which asserts
 // nothing (pi's compat streamSimple does not either), so the session asserts
 // here and then delegates to next, or to ai.StreamSimple when next is nil.
-func sessionStreamFn(next agent.StreamFn) agent.StreamFn {
+//
+// Every request also carries the session's identity in place of the agent
+// loop's (pi buildRequestOptions, upstream adc5fa9f): identity, or
+// ClientIdentity() read per request, so a change to PI_TELEMETRY applies at
+// once, as pi's telemetry setting does.
+func sessionStreamFn(next agent.StreamFn, identity *ai.ClientIdentity) agent.StreamFn {
 	if next == nil {
 		next = func(ctx context.Context, model *ai.Model, req ai.TranscriptContext, opts *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 			return ai.StreamSimple(ctx, model, ai.Context{Messages: req.Messages}, opts)
@@ -153,7 +163,15 @@ func sessionStreamFn(next agent.StreamFn) agent.StreamFn {
 		if err := ai.AssertChatModel(model); err != nil {
 			return ai.ErrorStream(model, err)
 		}
-		return next(ctx, model, req, opts)
+		requestOptions := ai.SimpleStreamOptions{}
+		if opts != nil {
+			requestOptions = *opts
+		}
+		requestOptions.Identity = identity
+		if requestOptions.Identity == nil {
+			requestOptions.Identity = ClientIdentity()
+		}
+		return next(ctx, model, req, &requestOptions)
 	}
 }
 
@@ -699,7 +717,7 @@ func NewSession(opts SessionOptions) *Session {
 			Model:         opts.Model,
 			ThinkingLevel: thinking,
 		},
-		StreamFn:        sessionStreamFn(opts.StreamFn),
+		StreamFn:        sessionStreamFn(opts.StreamFn, opts.Identity),
 		SessionID:       opts.SessionID,
 		GetApiKey:       func(provider string) string { return opts.APIKey },
 		Temperature:     opts.Temperature,

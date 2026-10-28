@@ -40,6 +40,12 @@ type Options struct {
 	// a host can swap catalogs, credentials, or transforms while the Harness
 	// runs. It must not block.
 	ModelsFunc func() ai.Models
+	// Identity is how model requests identify the app to providers, merged
+	// field by field over DefaultHarnessIdentity (pi HarnessOptions.identity,
+	// upstream adc5fa9f). It applies to every request through the Harness's
+	// models, hooks and tools included, and overrides the identity the
+	// Models was created with; a request's own Identity overrides it.
+	Identity *ai.ClientIdentity
 	// Registry is required; it may keep changing while the Harness runs.
 	Registry RegistryReader
 	// Settings returns the Harness-wide run policy; it is read at every
@@ -630,12 +636,33 @@ func safeNow(now func() time.Time, report func(error, durable.ReportInfo)) func(
 	}
 }
 
+// DefaultHarnessIdentity is the request identity of a Harness's model
+// requests, which Options.Identity overrides field by field (pi
+// DEFAULT_HARNESS_IDENTITY, upstream adc5fa9f, 04a93bad).
+//
+// DIVERGENCE (bismarck-engine): pi's default attributes requests to pi
+// (`{ attribution: PI_ATTRIBUTION }`); here it is pi-ai's defaults, with no
+// attribution, as agent.DefaultAgentIdentity is: a host attributes its
+// requests through Options.Identity.
+var DefaultHarnessIdentity = ai.ClientIdentity{}
+
 // currentModels is Options.ModelsFunc, or Options.Models returned at every
-// call.
+// call, with the Harness identity applied (pi currentModels): a plain Models
+// is wrapped once, a function's result at each call.
 func currentModels(options Options) func() ai.Models {
+	identity := *ai.MergeClientIdentity(&DefaultHarnessIdentity, options.Identity)
 	if options.ModelsFunc != nil {
-		return options.ModelsFunc
+		models := options.ModelsFunc
+		return func() ai.Models { return withIdentity(models(), identity) }
 	}
-	models := options.Models
+	models := withIdentity(options.Models, identity)
 	return func() ai.Models { return models }
+}
+
+// withIdentity is ai.WithClientIdentity, leaving no Models as none.
+func withIdentity(models ai.Models, identity ai.ClientIdentity) ai.Models {
+	if models == nil {
+		return nil
+	}
+	return ai.WithClientIdentity(models, identity)
 }

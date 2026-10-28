@@ -248,10 +248,13 @@ func TestJoinedHeaderValueIsTrimmedLikeFetch(t *testing.T) {
 		want    string
 		edges   bool
 	}{
-		{"LF in the joined value", "pi-messages", ai.ProviderHeaders{"Authorization": strPtr("x\n")}, "authorization", "Bearer test-key, x", false},
-		{"empty joined value", "pi-messages", ai.ProviderHeaders{"Authorization": strPtr("")}, "authorization", "Bearer test-key,", true},
-		{"whitespace-only joined value", "pi-messages", ai.ProviderHeaders{"Authorization": strPtr("  ")}, "authorization", "Bearer test-key,", true},
-		{"spaces round the joined value", "pi-messages", ai.ProviderHeaders{"Content-Type": strPtr(" text/plain ")}, "content-type", "application/json, text/plain", true},
+		// pi-messages folds its fixed headers into the record since adc5fa9f,
+		// so a differently spelled entry replaces the fixed value instead of
+		// joining it; the value is still normalized.
+		{"LF in the replacing value", "pi-messages", ai.ProviderHeaders{"Authorization": strPtr("x\n")}, "authorization", "x", false},
+		{"empty replacing value", "pi-messages", ai.ProviderHeaders{"Authorization": strPtr("")}, "authorization", "", true},
+		{"whitespace-only replacing value", "pi-messages", ai.ProviderHeaders{"Authorization": strPtr("  ")}, "authorization", "", true},
+		{"spaces round the replacing value", "pi-messages", ai.ProviderHeaders{"Content-Type": strPtr(" text/plain ")}, "content-type", "text/plain", true},
 		{"LF in the joined value", "google-generative-ai", ai.ProviderHeaders{"content-type": strPtr(" text/plain\n")}, "content-type", "application/json, text/plain", false},
 	} {
 		adapter := adapters[tc.adapter]
@@ -431,10 +434,9 @@ func TestHeaderConversionFailsInPisOrder(t *testing.T) {
 // Headers still holds it. The openai and anthropic SDKs build their auth header
 // from their own options and append it before `defaultHeaders`, so a key they
 // cannot convert fails the request whatever the headers say (sdkHeaders.auth).
-// pi-messages' key is a literal of the object its record is spread over: an
-// override spelled exactly like it replaces it unconverted, and a marker, which
-// is not part of the record, leaves it standing. genai appends its key only
-// when the record carries none.
+// pi-messages' key is part of its record since adc5fa9f: an override replaces
+// it unconverted, and a marker deletes it, so the request goes out without
+// one. genai appends its key only when the record carries none.
 func TestAPIKeyOverrideDecidesWhetherTheKeyIsConverted(t *testing.T) {
 	key := "k" + string(rune(cjk))
 	override := ai.ProviderHeaders{"authorization": strPtr("ok"), "x-api-key": strPtr("ok"), "x-goog-api-key": strPtr("ok")}
@@ -458,6 +460,15 @@ func TestAPIKeyOverrideDecidesWhetherTheKeyIsConverted(t *testing.T) {
 			h, final := runWire(t, adapter, ai.StreamOptions{ProviderRequestOptions: ai.ProviderRequestOptions{
 				APIKey: key, Headers: marker,
 			}})
+			if adapter.name == "pi-messages" {
+				if final.StopReason == ai.StopError || h == nil {
+					t.Fatalf("request not sent: %s", final.ErrorMessage)
+				}
+				if values, ok := h[http.CanonicalHeaderKey(adapter.auth)]; ok {
+					t.Fatalf("%s = %q, want the marker to delete it", adapter.auth, values)
+				}
+				return
+			}
 			wantNotSent(t, h, final, keyErr)
 		})
 	}
@@ -477,7 +488,8 @@ func TestJoinedHeaderValueIsAByteStringLikeFetch(t *testing.T) {
 		header        string
 		wire, err     string
 	}{
-		{"latin-1", "pi-messages", ai.ProviderHeaders{"Authorization": strPtr(string(rune(0xe9)))}, "authorization", "Bearer test-key, \xe9", ""},
+		// pi-messages: the entry replaces the fixed header (adc5fa9f).
+		{"latin-1", "pi-messages", ai.ProviderHeaders{"Authorization": strPtr(string(rune(0xe9)))}, "authorization", "\xe9", ""},
 		{"above U+00FF", "pi-messages", ai.ProviderHeaders{"Authorization": strPtr(" " + string(rune(cjk)))}, "authorization", "", byteStringError(1, cjk)},
 		{"latin-1", "google-generative-ai", ai.ProviderHeaders{"content-type": strPtr(string(rune(0xe9)))}, "content-type", "application/json, \xe9", ""},
 		{"above U+00FF", "google-generative-ai", ai.ProviderHeaders{"content-type": strPtr(string(rune(cjk)))}, "content-type", "", byteStringError(0, cjk)},

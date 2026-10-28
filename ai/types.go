@@ -1367,7 +1367,12 @@ type ProviderRequestOptions struct {
 	// pi.ai.poll span under it (telemetry.go); provider-direct calls carry it
 	// through untouched. Nil is pi's absent value: no span is started.
 	Telemetry telemetry.Span
-	APIKey    string
+	// Identity is how the request identifies the calling app: User-Agent and
+	// provider attribution headers (pi `identity`, upstream adc5fa9f). Nil,
+	// and absent fields, use pi-ai's defaults: a detailed User-Agent and no
+	// attribution.
+	Identity *ClientIdentity
+	APIKey   string
 	// OnPayload inspects or replaces a provider payload before it is sent.
 	// Returning a nil payload keeps it unchanged.
 	OnPayload func(payload any, model *Model) (any, error)

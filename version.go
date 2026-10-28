@@ -5,6 +5,7 @@ package engine
 import (
 	"runtime/debug"
 	"strings"
+	"sync"
 )
 
 // modulePath is this module's path, as go.mod declares it.
@@ -15,13 +16,16 @@ const modulePath = "github.com/aleksandrgradoboev-svg/bismarck-engine"
 // built, the dependency's version when another module builds it in. Without
 // one — a build outside version control, a test binary — it is "0.0.0", the
 // fallback pi uses for VERSION (config.ts).
-func Version() string {
+//
+// It is read once per process: every provider request names it in its
+// User-Agent, and the build information cannot change.
+var Version = sync.OnceValue(func() string {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "0.0.0"
 	}
 	return versionFrom(info)
-}
+})
 
 // versionFrom picks the module's version out of info.
 func versionFrom(info *debug.BuildInfo) string {

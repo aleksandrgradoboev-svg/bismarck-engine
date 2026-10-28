@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"errors"
+	"reflect"
 	"slices"
 	"sync"
 	"testing"
@@ -390,4 +391,36 @@ func TestGenerationCommitsNoPartialForAResponseThatTurnsDeferredAfterAnEmptyStar
 	must(t, err)
 	expectSettled(t, waitFor(t, submission), durable.SubmissionUnanswered, "aborted")
 	expectKinds(t, root, "pi.user")
+}
+
+// pi "attributes model requests to pi by default and merges the Harness
+// identity over it" (upstream adc5fa9f, 04a93bad). DIVERGENCE: the default
+// has no attribution here (DefaultHarnessIdentity), so the first request
+// carries an empty identity where pi's carries PI_ATTRIBUTION.
+func TestGenerationMergesTheHarnessIdentityOverTheDefault(t *testing.T) {
+	var (
+		mu   sync.Mutex
+		seen []*ai.ClientIdentity
+	)
+	capture := func(_ context.Context, _ ai.TranscriptContext, opts *ai.SimpleStreamOptions, _ *providers.FauxState, _ *ai.Model) *ai.AssistantMessage {
+		mu.Lock()
+		seen = append(seen, opts.Identity)
+		mu.Unlock()
+		return providers.FauxAssistantMessage(ai.ContentList{providers.FauxText("ok")}, ai.StopStop)
+	}
+	short := ai.UserAgentShort
+	acme := ai.ClientAttribution{Name: "acme", URL: "https://acme.example"}
+	for _, identity := range []*ai.ClientIdentity{nil, {UserAgent: &short, Attribution: &acme}} {
+		setup := newChatSetup(t)
+		setup.identity = identity
+		setup.faux.SetResponses([]providers.FauxResponseStep{capture})
+		h, root := openChat(t, memory.New(), setup)
+		h.Resume()
+		waitFor(t, submit(t, root, inputDraft("hi")))
+		must(t, h.Close(bg))
+	}
+	want := []*ai.ClientIdentity{{}, {UserAgent: &short, Attribution: &acme}}
+	if !reflect.DeepEqual(seen, want) {
+		t.Fatalf("identities = %+v, want %+v", seen, want)
+	}
 }

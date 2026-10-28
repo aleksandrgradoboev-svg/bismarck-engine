@@ -2228,3 +2228,47 @@ func TestAgentForwardsPrepareRequest(t *testing.T) {
 		t.Fatalf("request model = %q, want the replacement %q", sentModel, replacementModel.ID)
 	}
 }
+
+// TestAgentMergesAConfiguredIdentityOverTheDefault mirrors pi agent.test.ts
+// "attributes requests to pi by default and merges a configured identity over
+// it" (upstream adc5fa9f, 04a93bad). DIVERGENCE: the default identity has no
+// attribution here (DefaultAgentIdentity), so the first and last requests
+// carry none where pi's carry PI_ATTRIBUTION.
+func TestAgentMergesAConfiguredIdentityOverTheDefault(t *testing.T) {
+	var received []*ai.ClientIdentity
+	a := NewAgent(AgentOptions{
+		InitialState: &AgentState{Model: testModel},
+		StreamFn: func(ctx context.Context, model *ai.Model, req ai.TranscriptContext, opts *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+			received = append(received, opts.Identity)
+			s := ai.NewAssistantMessageEventStream()
+			go func() {
+				msg := &ai.AssistantMessage{Content: ai.ContentList{ai.TextContent{Text: "ok"}}, StopReason: ai.StopStop}
+				s.Push(ai.AssistantMessageEvent{Type: ai.EventDone, Message: msg})
+				s.End()
+			}()
+			return s
+		},
+	})
+	ctx := context.Background()
+	if err := a.Prompt(ctx, "hello"); err != nil {
+		t.Fatal(err)
+	}
+	short := ai.UserAgentShort
+	acme := ai.ClientAttribution{Name: "acme", URL: "https://acme.example"}
+	a.Identity = &ai.ClientIdentity{UserAgent: &short, Attribution: &acme}
+	if err := a.Prompt(ctx, "hello again"); err != nil {
+		t.Fatal(err)
+	}
+	a.Identity = &ai.ClientIdentity{UserAgent: &short}
+	if err := a.Prompt(ctx, "and again"); err != nil {
+		t.Fatal(err)
+	}
+	want := []*ai.ClientIdentity{
+		{},
+		{Attribution: &acme, UserAgent: &short},
+		{UserAgent: &short},
+	}
+	if !reflect.DeepEqual(received, want) {
+		t.Fatalf("identities = %+v, want %+v", received, want)
+	}
+}
