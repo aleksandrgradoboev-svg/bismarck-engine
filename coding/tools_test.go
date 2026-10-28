@@ -177,6 +177,34 @@ func TestGrepTool(t *testing.T) {
 	}
 }
 
+// pi's "should keep context line numbers aligned with ripgrep when a file
+// contains a lone CR" (fecc19e4, #11398): lines end at LF only, so the lone CR
+// stays in line 1, whose display drops it.
+func TestGrepContextLinesAlignedAcrossALoneCR(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "lone-cr.txt")
+	os.WriteFile(path, []byte("before\rprogress\nneedle\nafter"), 0o644)
+	r, _ := run(t, grepTool(dir), map[string]any{"pattern": "needle", "path": path, "context": 1})
+	text := resultText(r)
+	for _, want := range []string{"lone-cr.txt-1- beforeprogress", "lone-cr.txt:2: needle", "lone-cr.txt-3- after"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q in %q", want, text)
+		}
+	}
+}
+
+// Beyond pi's suite: ripgrep matches the line as it reads it, with its lone
+// CR, so a pattern spanning the CR still matches, on line 1.
+func TestGrepMatchesAcrossALoneCR(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "lone-cr.txt")
+	os.WriteFile(path, []byte("before\rprogress\nneedle\n"), 0o644)
+	r, _ := run(t, grepTool(dir), map[string]any{"pattern": "before.progress", "path": path})
+	if text := resultText(r); !strings.Contains(text, "lone-cr.txt:1: beforeprogress") {
+		t.Fatalf("got %q", text)
+	}
+}
+
 // Note: this previously pinned grep applying .gitignore outside a git repo;
 // that pinned a bug — rg only respects .gitignore inside a repository
 // (verified empirically; tracker H4). The repo case lives here, the non-repo

@@ -96,6 +96,38 @@ func SchemaText(schema *ai.Schema, parts []string) []string {
 // Ranker is Okapi BM25 (pi Bm25Ranker). The zero value has k1 1.2 and b 0.75.
 type Ranker struct {
 	K1, B float64
+	// NamesFirst ranks a matching tool first when the query names it: its
+	// full name, or the part after a "__" separator, so thread_read and
+	// app__thread_read both name mcp__app__thread_read; case and characters
+	// that are not identifier characters do not count (pi ae823bc0, #11331).
+	// Length normalization could otherwise rank a short description sharing
+	// the name's words above it. pi's coding agent ranks so (tool_search,
+	// codemode searchTools), its durable search does not.
+	NamesFirst bool
+}
+
+// normalizeToolName is pi's normalizeName: trimmed, lowercased, and every
+// UTF-16 code unit outside [a-z0-9_$] replaced by "_", so dev-radius matches
+// dev_radius.
+func normalizeToolName(name string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(jstext.Trim(name)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '$':
+			b.WriteRune(r)
+		case r > 0xFFFF:
+			b.WriteString("__")
+		default:
+			b.WriteByte('_')
+		}
+	}
+	return b.String()
+}
+
+// isNameQuery is pi's: whether the normalized query names the tool.
+func isNameQuery(query, name string) bool {
+	normalized := normalizeToolName(name)
+	return normalized == query || strings.HasSuffix(normalized, "__"+query)
 }
 
 // Rank returns the documents matching query, best first, at most limit. Ties
@@ -145,7 +177,12 @@ func (r Ranker) Rank(query string, documents []Document, limit int) []Match {
 		}
 		idf[term] = math.Log(1 + (float64(len(documents)-frequency)+0.5)/(float64(frequency)+0.5))
 	}
-	matches := []Match{}
+	type ranked struct {
+		Match
+		named bool
+	}
+	matches := []ranked{}
+	nameQuery := normalizeToolName(query)
 	for i, document := range documents {
 		score := 0.0
 		for _, term := range queryTerms {
@@ -157,12 +194,24 @@ func (r Ranker) Rank(query string, documents []Document, limit int) []Match {
 			score += idf[term] * ((count * (k1 + 1)) / (count + norm))
 		}
 		if score > 0 {
-			matches = append(matches, Match{Name: document.Name, Score: score})
+			matches = append(matches, ranked{Match{Name: document.Name, Score: score}, r.NamesFirst && isNameQuery(nameQuery, document.Name)})
 		}
 	}
-	slices.SortStableFunc(matches, func(x, y Match) int { return cmp.Compare(y.Score, x.Score) })
+	slices.SortStableFunc(matches, func(x, y ranked) int {
+		if x.named != y.named {
+			if x.named {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Compare(y.Score, x.Score)
+	})
 	if len(matches) > limit {
 		matches = matches[:limit]
 	}
-	return matches
+	out := make([]Match, len(matches))
+	for i, m := range matches {
+		out[i] = m.Match
+	}
+	return out
 }

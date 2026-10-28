@@ -61,6 +61,29 @@ var documents = func() []Document {
 	return out
 }()
 
+// pi's "ranks a tool first when the query is its name" (ae823bc0, #11331),
+// with the ranker tool_search and codemode use.
+func TestRankerRanksAToolFirstWhenTheQueryIsItsName(t *testing.T) {
+	named := []Document{
+		NewDocument(tool("mcp__app__queue_read", "Read a queued message of this thread.", ""), nil),
+		NewDocument(tool("mcp__dev-app__thread_read", "Read durable state and a paginated timeline from any thread. The default view returns user messages, assistant messages and plans. Continue with afterPosition until hasMore is false.", ""), nil),
+	}
+	ranker := Ranker{NamesFirst: true}
+	for _, query := range []string{"thread_read", "dev_app__thread_read", "mcp__dev-app__thread_read", "Thread_Read", "thread read"} {
+		if got := ranker.Rank(query, named, 1); len(got) != 1 || got[0].Name != "mcp__dev-app__thread_read" {
+			t.Fatalf("%q: %v", query, got)
+		}
+	}
+	// Partial names still rank by BM25.
+	if got := ranker.Rank("read", named, 1); len(got) != 1 || got[0].Name != "mcp__app__queue_read" {
+		t.Fatalf("read: %v", got)
+	}
+	// Without NamesFirst, as pi's durable search ranks, BM25 decides.
+	if got := (Ranker{}).Rank("thread_read", named, 1); len(got) != 1 || got[0].Name != "mcp__app__queue_read" {
+		t.Fatalf("plain BM25: %v", got)
+	}
+}
+
 // TestRankerRanks is pi's "ranks by term relevance and respects the limit".
 func TestRankerRanks(t *testing.T) {
 	r := Ranker{}
@@ -185,6 +208,25 @@ func TestToolSearchLoads(t *testing.T) {
 	}
 	if b, _ := json.Marshal(result.Details); string(b) != `{"loaded":[]}` {
 		t.Fatalf("details %s", b)
+	}
+}
+
+// The tool ranks names first (pi ae823bc0, #11331): with a limit of 1 the
+// query thread_read loads the tool of that name, which plain BM25 ranks below
+// the shorter description sharing its words.
+func TestToolSearchLoadsTheToolTheQueryNames(t *testing.T) {
+	sess := session(t)
+	def := Definition(sess)
+	sess.RegisterTools(def,
+		coding.ToolDefinition{Tool: tool("mcp__app__queue_read", "Read a queued message of this thread.", ""), Exposure: coding.ToolExposureDeferred},
+		coding.ToolDefinition{Tool: tool("mcp__dev-app__thread_read", "Read durable state and a paginated timeline from any thread. The default view returns user messages, assistant messages and plans. Continue with afterPosition until hasMore is false.", ""), Exposure: coding.ToolExposureDeferred},
+	)
+	result, err := run(t, def, map[string]any{"query": "thread_read", "limit": float64(1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := result.Details.(Details).Loaded; !slices.Equal(got, []string{"mcp__dev-app__thread_read"}) {
+		t.Fatalf("loaded %v", got)
 	}
 }
 

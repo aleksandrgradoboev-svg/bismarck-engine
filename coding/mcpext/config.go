@@ -393,6 +393,9 @@ func readConfigFile(path, scope string, s *configState) {
 		s.errors = append(s.errors, fmt.Sprintf("%s: %v", path, err))
 		return
 	}
+	// A leading UTF-8 BOM, which some editors write, is not JSON (pi
+	// bdd9f039, #11191: stripBom before JSON.parse).
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
 	var top map[string]json.RawMessage
 	if err := json.Unmarshal(data, &top); err != nil {
 		var syntaxErr *json.SyntaxError
