@@ -3,6 +3,7 @@ package providers
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
@@ -338,59 +339,92 @@ func TestGrammarToolInput(t *testing.T) {
 	assertErrString(t, err, `Grammar tool call "gram" requires argument "query" to be a string.`)
 }
 
-// Sequences and expectations captured from pi's appendGrammarToolInputJsonDelta.
+// Sequences and expectations of pi's appendGrammarToolInputJsonDelta and
+// closeGrammarToolInputJson (f715a15c, which split the old append-or-close
+// call in two: a delta appends, a close takes the complete input or none).
 func TestGrammarInputBuffer(t *testing.T) {
 	type step struct {
-		next  string
-		final bool
+		// delta is appended, unless close: then final closes, when hasFinal.
+		delta    string
+		close    bool
+		final    string
+		hasFinal bool
 		// want is the emitted delta; wantNone means pi returned undefined.
 		want     string
 		wantNone bool
 		wantErr  string
 	}
+	closeWith := func(final string) step { return step{close: true, final: final, hasFinal: true} }
+	closeBare := step{close: true}
+	with := func(s step, want string) step { s.want = want; return s }
+	none := func(s step) step { s.wantNone = true; return s }
+	fails := func(s step, err string) step { s.wantErr = err; return s }
 	for _, tc := range []struct {
 		name     string
 		property string
 		steps    []step
 	}{
 		{"streamed in three chunks", "query", []step{
-			{next: "SEL", want: `{"query":"SEL`},
-			{next: "SELECT ", want: "ECT "},
-			{next: "SELECT 1", final: true, want: `1"}`},
+			{delta: "SEL", want: `{"query":"SEL`},
+			{delta: "ECT ", want: "ECT "},
+			with(closeWith("SELECT 1"), `1"}`),
 		}},
 		{"escapes the delta and the property name", "in put", []step{
-			{next: `a"b`, want: `{"in put":"a\"b`},
-			{next: `a"b\c`, want: `\\c`},
-			{next: `a"b\c`, final: true, want: `"}`},
+			{delta: `a"b`, want: `{"in put":"a\"b`},
+			{delta: `\c`, want: `\\c`},
+			with(closeWith(`a"b\c`), `"}`),
 		}},
 		{"empty input closes immediately", "q", []step{
-			{next: "", final: true, want: `{"q":""}`},
+			with(closeWith(""), `{"q":""}`),
 		}},
-		{"empty non-final delta emits nothing; re-close is a no-op", "q", []step{
-			{next: "x", want: `{"q":"x`},
-			{next: "x", wantNone: true},
-			{next: "x", final: true, want: `"}`},
-			{next: "x", final: true, wantNone: true},
+		{"a close without a final input keeps the input so far", "q", []step{
+			{delta: "x", want: `{"q":"x`},
+			with(closeBare, `"}`),
+			none(closeBare),
+			none(closeWith("x")),
 		}},
-		{"non-monotonic input", "q", []step{
-			{next: "ab", want: `{"q":"ab`},
-			{next: "a", wantErr: `grammar tool input for property "q" changed non-monotonically`},
+		{"empty delta emits nothing; re-close is a no-op", "q", []step{
+			{delta: "x", want: `{"q":"x`},
+			{delta: "", wantNone: true},
+			with(closeWith("x"), `"}`),
+			none(closeWith("x")),
 		}},
-		{"change after close", "q", []step{
-			{next: "a", final: true, want: `{"q":"a"}`},
-			// Only a repeated CLOSE with the same input is tolerated.
-			{next: "a", wantErr: `grammar tool input for property "q" changed after it was closed`},
-			{next: "a", final: true, wantNone: true},
-			{next: "b", final: true, wantErr: `grammar tool input for property "q" changed after it was closed`},
+		// pi: "rejects a final grammar input that does not continue the
+		// streamed input".
+		{"non-monotonic final input", "payload", []step{
+			{delta: "abc", want: `{"payload":"abc`},
+			fails(closeWith("abd"), `grammar tool input for property "payload" changed non-monotonically`),
+		}},
+		// pi: "keeps grammar input JSON deltas append-only".
+		{"change after close", "payload", []step{
+			{delta: `a"`, want: `{"payload":"a\"`},
+			with(closeWith("a\"\nb"), `\nb"}`),
+			// Only a repeated close with the same input, or none, is tolerated.
+			none(closeWith("a\"\nb")),
+			fails(closeWith("changed"), `grammar tool input for property "payload" changed after it was closed`),
+			{delta: "x", wantErr: `grammar tool input for property "payload" changed after it was closed`},
+			// An empty delta fails too: pi checks closed first.
+			{delta: "", wantErr: `grammar tool input for property "payload" changed after it was closed`},
 		}},
 		{"HTML-significant characters are not escaped", "<p>&", []step{
-			{next: "<x>& ", final: true, want: `{"<p>&":"<x>& "}`},
+			with(closeWith("<x>& "), `{"<p>&":"<x>& "}`),
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			buf := newGrammarInputBuffer(tc.property)
+			var sent strings.Builder
 			for i, s := range tc.steps {
-				delta, ok, err := buf.append(s.next, s.final)
+				var delta string
+				var ok bool
+				var err error
+				if s.close {
+					delta, ok, err = buf.close(s.final, s.hasFinal)
+				} else {
+					delta, ok, err = buf.appendDelta(s.delta)
+				}
+				if ok {
+					sent.WriteString(delta)
+				}
 				assertErrString(t, err, s.wantErr)
 				if err != nil {
 					continue
@@ -403,6 +437,13 @@ func TestGrammarInputBuffer(t *testing.T) {
 				}
 				if !ok || delta != s.want {
 					t.Fatalf("step %d: delta = %q (ok=%v), want %q", i, delta, ok, s.want)
+				}
+			}
+			// What was sent parses to the input, once the buffer closed.
+			if buf.closed {
+				var got map[string]any
+				if err := json.Unmarshal([]byte(sent.String()), &got); err != nil || got[tc.property] != buf.Input() {
+					t.Fatalf("sent %q parses to %v (%v), want %s: %q", sent.String(), got, err, tc.property, buf.Input())
 				}
 			}
 		})

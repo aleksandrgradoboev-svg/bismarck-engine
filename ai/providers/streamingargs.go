@@ -45,6 +45,19 @@ func (s *ToolCallArgumentsStream) Append(delta string) (map[string]any, ai.Order
 	return s.partial()
 }
 
+// appendNonString is pi's append(delta) for a delta the provider sent as a
+// number, a boolean or an object, whose String() form is text: `#text +=
+// delta` takes the text, and the parser, reading `delta.length` (undefined),
+// reads nothing. The partial arguments stay as they were. (For undefined and
+// null that read throws V8's TypeError, which the caller reports.) Go
+// difference: pi's parser does read an array, or an object with a length
+// member, element by element as if they were characters; here those too add
+// only to the text.
+func (s *ToolCallArgumentsStream) appendNonString(text string) (map[string]any, ai.OrderedObject) {
+	s.text.WriteString(text)
+	return s.partial()
+}
+
 // Replace takes the provider's complete argument text. When it continues the
 // text so far, it returns the missing piece as delta, with continued true;
 // otherwise it starts over with text. Either way it returns the partial

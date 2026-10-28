@@ -33,6 +33,11 @@
 // (which the Go replay's status line carries too; a server's own phrase is
 // capture-pi-messages-status.mts's) and an application/json content type,
 // from the suite model's baseUrl, which the details' url shows.
+//
+// The tool-delta rows (numericToolDeltaExtendsOnlyTheText and the two that
+// follow it, f715a15c's ToolCallArgumentsStream) were added on 2026-10-28 and
+// the capture re-taken at the same 89c921d8, under the same node_modules:
+// every earlier row came out byte for byte as before.
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -244,6 +249,37 @@ const cases: Case[] = [
 			frame('{"type":"toolcall_delta","contentIndex":"0","delta":"{\\"a\\":1"}') +
 			frame('{"type":"toolcall_delta","contentIndex":0,"delta":"{\\"b\\":2"}') +
 			frame('{"type":"toolcall_delta","contentIndex":-0,"delta":",\\"c\\":3}"}') +
+			framed(done),
+	},
+	// A tool call's arguments stream through ToolCallArgumentsStream (f715a15c):
+	// a delta that is not a string adds its String() to the text but not to
+	// the partial arguments (the parser reads its length, which a number lacks),
+	// and the final text, here {"a":1}, is the toolcall_end's to replace...
+	{
+		name: "numericToolDeltaExtendsOnlyTheText",
+		sse:
+			framed(start) +
+			frame('{"type":"toolcall_start","contentIndex":0,"id":"t1","toolName":"read"}') +
+			frame('{"type":"toolcall_delta","contentIndex":0,"delta":"{\\"a\\":"}') +
+			frame('{"type":"toolcall_delta","contentIndex":0,"delta":1}') +
+			frame('{"type":"toolcall_delta","contentIndex":0,"delta":"}"}') +
+			framed(done),
+	},
+	// ...while an absent or null delta throws V8's TypeError reading it.
+	{
+		name: "nullToolDeltaFails",
+		sse:
+			framed(start) +
+			frame('{"type":"toolcall_start","contentIndex":0,"id":"t1","toolName":"read"}') +
+			frame('{"type":"toolcall_delta","contentIndex":0,"delta":null}') +
+			framed(done),
+	},
+	{
+		name: "missingToolDeltaFails",
+		sse:
+			framed(start) +
+			frame('{"type":"toolcall_start","contentIndex":0,"id":"t1","toolName":"read"}') +
+			frame('{"type":"toolcall_delta","contentIndex":0}') +
 			framed(done),
 	},
 	// toolcall_end is Object.assign: the end event's toolCall members replace
