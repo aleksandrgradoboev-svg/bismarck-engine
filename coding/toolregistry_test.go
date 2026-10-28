@@ -71,9 +71,10 @@ func TestRegistryExposures(t *testing.T) {
 		t.Fatalf("prompt tools %v", opts.SelectedTools)
 	}
 
-	// Naming a tool activates it, unless it is hidden or unknown.
+	// Naming a tool activates it, unless it is hidden or unknown. read stays
+	// active and keeps its place; lazy, newly active, follows (pi b9e3eef6).
 	sess.SetActiveTools([]string{"lazy", "secret", "nope", "read", "lazy"})
-	if got, want := sess.ActiveToolNames(), []string{"lazy", "read"}; !slices.Equal(got, want) {
+	if got, want := sess.ActiveToolNames(), []string{"read", "lazy"}; !slices.Equal(got, want) {
 		t.Fatalf("active %v, want %v", got, want)
 	}
 	if got, want := agentToolNameList(sess.CallableTools()), []string{"read", "lazy", "script", "later"}; !slices.Equal(got, want) {

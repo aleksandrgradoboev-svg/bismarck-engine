@@ -3,15 +3,41 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/coding"
 )
+
+// pi deleted-cwd.test.ts (88ffcdc7, #11509): a working directory that no
+// longer exists is reported, any other failure is not swallowed. As pi's mocks
+// process.cwd, the test hands workingDirectoryOf the errors os.Getwd returns.
+func TestWorkingDirectoryReportsADeletedOne(t *testing.T) {
+	gone := func() (string, error) {
+		return "", &os.SyscallError{Syscall: "getwd", Err: syscall.ENOENT}
+	}
+	if cwd, isGone, err := workingDirectoryOf(gone); !isGone || err != nil || cwd != "" {
+		t.Fatalf("deleted cwd: %q, gone %v, %v", cwd, isGone, err)
+	}
+	if !strings.Contains(msgCwdGone, "The current working directory no longer exists") {
+		t.Fatalf("message %q", msgCwdGone)
+	}
+	denied := func() (string, error) {
+		return "", &os.SyscallError{Syscall: "getwd", Err: syscall.EACCES}
+	}
+	if _, isGone, err := workingDirectoryOf(denied); isGone || !errors.Is(err, syscall.EACCES) {
+		t.Fatalf("unrelated failure: gone %v, %v", isGone, err)
+	}
+	if cwd, isGone, err := workingDirectoryOf(os.Getwd); isGone || err != nil || cwd == "" {
+		t.Fatalf("live cwd: %q, gone %v, %v", cwd, isGone, err)
+	}
+}
 
 // Resuming a session file resumes its compaction: the next compaction extends
 // the file's with the update prompt, its summary as <previous-summary>, as pi's

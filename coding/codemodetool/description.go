@@ -289,7 +289,8 @@ func Description(tools []agent.AgentTool, opts DescriptionOptions) string {
 
 // describeFields is the field names of an object schema, `{ output,
 // exit_code, full_output_path? }`, with the fields of object-typed fields depth
-// levels deep, in the schema's property order. ok is false for other schemas.
+// levels deep, in the schema's property order, and the value of const fields:
+// `{ action: "start", id }` (pi f6ee9ce9). ok is false for other schemas.
 func describeFields(schema *ai.Schema, depth int) (string, bool) {
 	if schema == nil || schema.Type != "object" || schema.Nullable || schema.Properties == nil {
 		return "", false
@@ -300,8 +301,13 @@ func describeFields(schema *ai.Schema, depth int) (string, bool) {
 		if !slices.Contains(schema.Required, name) {
 			field += "?"
 		}
-		if depth > 0 {
-			if nested, ok := describeFields(schema.Properties[name], depth-1); ok {
+		property := schema.Properties[name]
+		if property != nil && property.HasConst {
+			if value, err := jstext.Stringify(property.Const); err == nil {
+				field += ": " + value
+			}
+		} else if depth > 0 {
+			if nested, ok := describeFields(property, depth-1); ok {
 				field += ": " + nested
 			}
 		}
@@ -310,36 +316,53 @@ func describeFields(schema *ai.Schema, depth int) (string, bool) {
 	return "{ " + strings.Join(fields, ", ") + " }", true
 }
 
+// describeUnionFields is the field names of each variant of an anyOf (or,
+// without one, oneOf) whose variants are all objects, joined by " | ".
+func describeUnionFields(schema *ai.Schema) (string, bool) {
+	if schema == nil {
+		return "", false
+	}
+	variants := schema.AnyOf
+	if variants == nil {
+		variants = schema.OneOf
+	}
+	if len(variants) == 0 {
+		return "", false
+	}
+	described := make([]string, len(variants))
+	for i, variant := range variants {
+		fields, ok := describeFields(variant, 0)
+		if !ok {
+			return "", false
+		}
+		described[i] = fields
+	}
+	return strings.Join(described, " | "), true
+}
+
 // describeOutput is what a script call resolves to, in one line: "a string",
-// the field names of an object, or the rendered type for anything else.
+// the field names of an object, or of each object in a union, the rendered
+// type when it fits on one line, or a pointer to describeTool() for anything
+// longer, whose full type would otherwise go with every request (pi
+// f6ee9ce9, #11501).
 func describeOutput(tool agent.AgentTool) string {
 	declaration := Declaration(tool, nil)
 	t := codemode.RenderToolOutputType(declaration.OutputSchema)
 	if t == "string" {
 		return "a string"
 	}
-	if fields, ok := describeFields(tool.OutputSchema, 1); ok {
+	fields, ok := describeFields(tool.OutputSchema, 1)
+	if !ok {
+		fields, ok = describeUnionFields(tool.OutputSchema)
+	}
+	if ok {
 		return "`" + fields + "`"
 	}
-	return "`" + jsWhitespace(t) + "`"
-}
-
-// jsWhitespace collapses runs of JavaScript whitespace (\s) to one space.
-func jsWhitespace(s string) string {
-	var b strings.Builder
-	inSpace := false
-	for _, r := range s {
-		if jstext.IsWhitespace(r) || r == '\n' || r == '\r' {
-			if !inSpace {
-				b.WriteByte(' ')
-			}
-			inSpace = true
-			continue
-		}
-		inSpace = false
-		b.WriteRune(r)
+	if !strings.Contains(t, "\n") {
+		return "`" + t + "`"
 	}
-	return b.String()
+	name, _ := jstext.Stringify(tool.Name)
+	return "a value; `await describeTool(" + name + ")` shows its type"
 }
 
 // describeScriptCall is a declared tool's description followed by how scripts

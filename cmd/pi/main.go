@@ -19,7 +19,9 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/signal"
 	"strings"
@@ -101,7 +103,7 @@ func main() {
 	}
 
 	if cwd == "" {
-		cwd, _ = os.Getwd()
+		cwd = workingDirectory()
 	}
 
 	// Load the resumed session (if any) before resolving the model so the
@@ -347,7 +349,7 @@ func listModels(args []string) {
 }
 
 func listSessions() {
-	cwd, _ := os.Getwd()
+	cwd := workingDirectory()
 	infos := coding.ListSessions(cwd, "")
 	if len(infos) == 0 {
 		fmt.Println("No sessions for this directory.")
@@ -383,6 +385,35 @@ Flags:
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "pi: %v\n", err)
 	os.Exit(1)
+}
+
+// msgCwdGone is pi's report of a working directory that no longer exists
+// (88ffcdc7, #11511).
+const msgCwdGone = "Error: The current working directory no longer exists. Change to an existing directory and try again."
+
+// workingDirectory is the process's working directory. A deleted one is
+// reported in pi's words instead of running with an empty directory; any
+// other failure is fatal (pi rethrows it).
+func workingDirectory() string {
+	cwd, gone, err := workingDirectoryOf(os.Getwd)
+	switch {
+	case gone:
+		fmt.Fprintf(os.Stderr, "\033[31m%s\033[0m\n", msgCwdGone)
+		os.Exit(1)
+	case err != nil:
+		fatal(err)
+	}
+	return cwd
+}
+
+// workingDirectoryOf reads the working directory through getwd; gone is set
+// when it no longer exists, and err holds any other failure.
+func workingDirectoryOf(getwd func() (string, error)) (cwd string, gone bool, err error) {
+	cwd, err = getwd()
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", true, nil
+	}
+	return cwd, false, err
 }
 
 func sortedProviders() []string {

@@ -392,6 +392,38 @@ func TestNestedCallsThroughHooks(t *testing.T) {
 	}
 }
 
+// pi agent-session-codemode.test.ts "summarizes union and multi-line output
+// types instead of inlining them" (f6ee9ce9, #11501); the schemas are the
+// JSON TypeBox writes for the test's.
+func TestDescriptionSummarizesUnionAndMultiLineOutputTypes(t *testing.T) {
+	outputTool := func(name, outputSchema string) coding.ToolDefinition {
+		var schema ai.Schema
+		if err := json.Unmarshal([]byte(outputSchema), &schema); err != nil {
+			t.Fatal(err)
+		}
+		return coding.ToolDefinition{Tool: agent.AgentTool{Name: name, Label: name, Description: name + " tool", Parameters: ai.Object(), OutputSchema: &schema,
+			Execute: func(context.Context, string, map[string]any, agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
+				return agent.AgentToolResult{}, nil
+			}}}
+	}
+	process := outputTool("process", `{"anyOf":[`+
+		`{"type":"object","properties":{"action":{"const":"start","type":"string"},"process":{"type":"object","properties":{"id":{"description":"Process id","type":"string"},"pid":{"type":"integer"}},"required":["id","pid"]}},"required":["action","process"]},`+
+		`{"type":"object","properties":{"action":{"const":"list","type":"string"},"processes":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}},"truncated":{"type":"boolean"}},"required":["action","processes"]}]}`)
+	entries := outputTool("entries", `{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"size":{"type":"integer"}},"required":["id","size"]}}`)
+	count := outputTool("count", `{"type":"number"}`)
+	h := setup(t, coding.SessionOptions{}, process, entries, count)
+	h.sess.SetActiveTools([]string{"process", "entries", "count", ToolName})
+	for name, want := range map[string]string{
+		"process": "process tool\n\nCodemode: `tools.process(args)` resolves to `{ action: \"start\", process } | { action: \"list\", processes, truncated? }`.",
+		"entries": "entries tool\n\nCodemode: `tools.entries(args)` resolves to a value; `await describeTool(\"entries\")` shows its type.",
+		"count":   "count tool\n\nCodemode: `tools.count(args)` resolves to `number`.",
+	} {
+		if got := toolDescription(h.sess, name); got != want {
+			t.Errorf("%s:\n got %q\nwant %q", name, got, want)
+		}
+	}
+}
+
 func TestNestedUsageOnResult(t *testing.T) {
 	billed := agent.AgentTool{Name: "billed", Label: "Billed", Description: "Run a model", Parameters: ai.Object(),
 		Execute: func(context.Context, string, map[string]any, agent.ToolUpdateFunc) (agent.AgentToolResult, error) {

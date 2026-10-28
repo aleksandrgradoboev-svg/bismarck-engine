@@ -119,7 +119,7 @@ its own.
 
 - The groups come from sorting `git log --name-only` by path prefix, then checked by hand against
   the engine's packages; the script is not in the repository yet (task `bismarck-engine-sync`).
-- The next sync starts from `59ca40cf`.
+- Section 7 extends the range to `c3d8ce44` (2026-10-28); the next sync starts there.
 - **Missed in v1.2.0.** The v1.2.0 range (`5806068c2..06a46693`) has two commits to
   `anthropic-messages.ts`, `b271b0a5` and `d4d53612`, and its triage lists neither; nothing in the
   engine or `UPSTREAM.md` had them. They surfaced when the Anthropic capture was reshot at
@@ -129,3 +129,22 @@ its own.
   table). A second one surfaced with the resolver batch: `a37306d4` (Azure Foundry Chat
   Completions) renames the `azure-openai-responses` default to `azure` in `model-resolver.ts`, and
   neither sync lists it; its default waits for the catalog with the provider rename.
+
+## 7. After `59ca40cf`
+
+pi `59ca40cf..c3d8ce44` (2026-10-27 → 2026-10-28), 36 non-merge commits, triaged as above:
+
+| Group | Commits | Decision |
+|---|---|---|
+| Core | `d3398f82`, `b9e3eef6`, `f6ee9ce9`, `88ffcdc7` | ported (table below) |
+| Catalog | `2e0f175b` (the catalog built from per-provider definitions and models.dev v2; outputs unchanged), `44f6851b` (OpenRouter `~anthropic` aliases on Anthropic Messages), `068e972c` (a generator test) | with the catalog (section 4) |
+| `durable`, `chord` | `5f312dac`, `b3a29f11`, `f3255de7`, `bb65e3e4`, `a9228305`, `93029a0f` (Chord v2, unexported), `87eff524`, `1c6928b3`, `fb524dd2`, `f6a9db1d` | with the durable catch-up (section 5) |
+| Chord design documents | `bdb68f75`, `7dff3eff`, `cc12dad2`, `a9181321`, `4ba35622`, `66330961`, `cf4920c8`, `97622a8f`, `47dba56f`, `e4c58271`, `bb6ae4b8`, `c3d8ce44` | no |
+| Host, TUI, package manager, evals, documentation | `b4b72a35` (extensions changelog: package manager and interactive mode), `9628c848`, `fa168515`, `7391dbb0`, `e509d7ed`, `85c2ee3e`, `72363383` | no |
+
+| pi commit | Change | Engine home | Status |
+|---|---|---|---|
+| `d3398f82` | LiteLLM's pre-call `ContextWindowExceededError` ("Context Window exceeded") is context overflow | `ai/overflow.go` | ported, with pi's case |
+| `b9e3eef6` | the active tools are a set: tools that stay active keep their order, newly active ones follow | `coding/toolregistry.go` (`loadout`) | ported, with pi's prompt case (reordering the same tools adds no system message); the engine's registry case that named `lazy` before an active `read` now expects `[read lazy]`, and its tool-search case keeps `docs_direct` ahead of `tool_search` |
+| `f6ee9ce9` | codemode tool descriptions: const fields show their value, a union of objects lists each variant's fields, a multi-line type points to `describeTool()` | `coding/codemodetool/description.go` | ported, with pi's case (its TypeBox schemas as JSON). The engine reads the fields from the tool's `ai.Schema`, as before |
+| `88ffcdc7` | a deleted working directory is reported instead of crashing on startup | `cmd/pi/main.go` | ported (`workingDirectory`): pi's message and exit 1; any other `Getwd` failure is fatal, where the engine went on with an empty directory. pi reads the directory before `--version`, the engine after its flags, so `--version` still answers there. pi's two cases, through an injected `getwd` |
