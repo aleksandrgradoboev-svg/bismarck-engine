@@ -833,12 +833,96 @@ func (s *Schema) coerceObject(value map[string]any) {
 }
 
 func (s *Schema) coerceArray(value []any) {
+	// Tuple items coerce by position. pi coerces by neither prefixItems nor
+	// additionalItems, and a single-schema items applies to every position,
+	// the prefix's included (applySchemaArrayCoercion).
+	if tuple, ok := s.tupleItems(); ok {
+		for i := range value {
+			if i < len(tuple) && tuple[i] != nil {
+				value[i] = tuple[i].Coerce(value[i])
+			}
+		}
+		return
+	}
 	if s.Items == nil {
 		return
 	}
 	for i := range value {
 		value[i] = s.Items.Coerce(value[i])
 	}
+}
+
+// tupleItems returns the per-position schemas of the tuple form of "items"
+// (an array of schemas, kept in Extra) as pi's own walkers read it
+// (applySchemaArrayCoercion, normalizeOptionalNulls): any array counts, and a
+// position that is not a schema object is nil, its element left alone.
+func (s *Schema) tupleItems() ([]*Schema, bool) {
+	list, ok := s.Extra["items"].([]any)
+	if !ok {
+		return nil, false
+	}
+	tuple := make([]*Schema, len(list))
+	for i, element := range list {
+		if obj, ok := element.(map[string]any); ok {
+			tuple[i] = extraSchema(obj)
+		}
+	}
+	return tuple, true
+}
+
+// extraSchema decodes a schema object held in Extra.
+func extraSchema(obj map[string]any) *Schema {
+	raw, _ := json.Marshal(obj)
+	var s Schema
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return &Schema{}
+	}
+	return &s
+}
+
+// subschema is a schema as TypeBox's IsSchema accepts one: an object, or a
+// boolean schema (true accepts every value, false none), which *Schema cannot
+// hold. The positional array keywords — tuple "items", "prefixItems",
+// "additionalItems" — travel in Extra and are read into these to validate.
+type subschema struct {
+	schema *Schema // nil for a boolean schema
+	accept bool    // a boolean schema's value
+}
+
+func extraSubschema(value any) (subschema, bool) {
+	switch v := value.(type) {
+	case bool:
+		return subschema{accept: v}, true
+	case map[string]any:
+		return subschema{schema: extraSchema(v)}, true
+	}
+	return subschema{}, false
+}
+
+// extraSubschemas reads an array of schemas; TypeBox ignores the keyword
+// unless every element is one.
+func extraSubschemas(value any) ([]subschema, bool) {
+	list, ok := value.([]any)
+	if !ok {
+		return nil, false
+	}
+	subs := make([]subschema, len(list))
+	for i, element := range list {
+		if subs[i], ok = extraSubschema(element); !ok {
+			return nil, false
+		}
+	}
+	return subs, true
+}
+
+func (sub subschema) validate(value any, path string) []ValidationError {
+	if sub.schema != nil {
+		return sub.schema.validate(value, path)
+	}
+	if sub.accept {
+		return nil
+	}
+	return []ValidationError{{Path: pathOr(path), Message: "schema is false"}}
 }
 
 func coerceWithUnion(value any, schemas []*Schema) any {
@@ -1006,17 +1090,7 @@ func (s *Schema) validate(value any, path string) []ValidationError {
 			}
 		}
 	case []any:
-		if s.Items != nil {
-			for i, item := range v {
-				errs = append(errs, s.Items.validate(item, joinPath(path, strconv.Itoa(i)))...)
-			}
-		}
-		if s.MinItems != nil && len(v) < *s.MinItems {
-			errs = append(errs, ValidationError{Path: pathOr(path), Message: fmt.Sprintf("must not have fewer than %d items", *s.MinItems)})
-		}
-		if s.MaxItems != nil && len(v) > *s.MaxItems {
-			errs = append(errs, ValidationError{Path: pathOr(path), Message: fmt.Sprintf("must not have more than %d items", *s.MaxItems)})
-		}
+		errs = append(errs, s.validateArray(v, path)...)
 	case string:
 		if s.MinLength != nil && len([]rune(v)) < *s.MinLength {
 			errs = append(errs, ValidationError{Path: pathOr(path), Message: fmt.Sprintf("must not have fewer than %d characters", *s.MinLength)})
@@ -1052,6 +1126,62 @@ func (s *Schema) validate(value any, path string) []ValidationError {
 		}
 	}
 
+	return errs
+}
+
+// validateArray checks the array keywords in the order TypeBox's ErrorSchema
+// runs them: additionalItems, items, maxItems, minItems, prefixItems.
+func (s *Schema) validateArray(v []any, path string) []ValidationError {
+	var errs []ValidationError
+	at := func(sub subschema, i int) []ValidationError {
+		return sub.validate(v[i], joinPath(path, strconv.Itoa(i)))
+	}
+	tuple, sized := extraSubschemas(s.Extra["items"])
+	prefix, hasPrefix := extraSubschemas(s.Extra["prefixItems"])
+
+	// additionalItems applies only past tuple items, and TypeBox stops at the
+	// first additional element that fails.
+	if additional, ok := extraSubschema(s.Extra["additionalItems"]); ok && sized {
+		for i := len(tuple); i < len(v); i++ {
+			if e := at(additional, i); len(e) > 0 {
+				errs = append(errs, e...)
+				break
+			}
+		}
+	}
+	if sized {
+		for i, sub := range tuple {
+			if i >= len(v) {
+				break
+			}
+			errs = append(errs, at(sub, i)...)
+		}
+	} else {
+		items, ok := subschema{schema: s.Items}, s.Items != nil
+		if !ok {
+			items, ok = extraSubschema(s.Extra["items"]) // items: true / false
+		}
+		if ok {
+			// A single-schema items covers the positions after prefixItems.
+			for i := len(prefix); i < len(v); i++ {
+				errs = append(errs, at(items, i)...)
+			}
+		}
+	}
+	if s.MaxItems != nil && len(v) > *s.MaxItems {
+		errs = append(errs, ValidationError{Path: pathOr(path), Message: fmt.Sprintf("must not have more than %d items", *s.MaxItems)})
+	}
+	if s.MinItems != nil && len(v) < *s.MinItems {
+		errs = append(errs, ValidationError{Path: pathOr(path), Message: fmt.Sprintf("must not have fewer than %d items", *s.MinItems)})
+	}
+	if hasPrefix {
+		for i, sub := range prefix {
+			if i >= len(v) {
+				break
+			}
+			errs = append(errs, at(sub, i)...)
+		}
+	}
 	return errs
 }
 

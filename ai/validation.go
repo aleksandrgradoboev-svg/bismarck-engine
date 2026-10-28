@@ -46,9 +46,13 @@ func ValidateToolArguments(tool Tool, toolCall ToolCall) (map[string]any, error)
 // normalizeOptionalNulls, utils/validation.ts).
 func normalizeOptionalNulls(value any, schema *Schema) {
 	if arr, ok := value.([]any); ok {
-		// pi also walks per-index tuple items here; ai.Schema cannot represent
-		// tuple items, so only the single-schema branch exists.
-		if schema.Items != nil {
+		if tuple, ok := schema.tupleItems(); ok {
+			for i, item := range arr {
+				if i < len(tuple) && tuple[i] != nil {
+					normalizeOptionalNulls(item, tuple[i])
+				}
+			}
+		} else if schema.Items != nil {
 			for _, item := range arr {
 				normalizeOptionalNulls(item, schema.Items)
 			}
