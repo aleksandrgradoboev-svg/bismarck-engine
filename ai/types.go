@@ -1361,14 +1361,13 @@ type HTTPDoer interface {
 // <TModel>) so image requests can hand back an ImageModel. One Model struct
 // serves every model type here, so the callbacks name *Model directly.
 type ProviderRequestOptions struct {
-	// TelemetryContext is the explicit parent context for telemetry produced
-	// by this logical request (pi telemetryContext, upstream 04d6447f7).
-	// Latent for now, like Env once was: no ported code starts spans yet, so
-	// the field rides the options through dispatch untouched until a caller
-	// wires in a consumer. Nil is pi's absent value — callers that trace fall
-	// back to telemetry.NoopContext themselves.
-	TelemetryContext telemetry.Context
-	APIKey           string
+	// Telemetry is the explicit parent span for telemetry produced by this
+	// logical request (pi `telemetry`, renamed from telemetryContext by
+	// upstream 2ec55d80). Models requests start their pi.ai.request or
+	// pi.ai.poll span under it (telemetry.go); provider-direct calls carry it
+	// through untouched. Nil is pi's absent value: no span is started.
+	Telemetry telemetry.Span
+	APIKey    string
 	// OnPayload inspects or replaces a provider payload before it is sent.
 	// Returning a nil payload keeps it unchanged.
 	OnPayload func(payload any, model *Model) (any, error)

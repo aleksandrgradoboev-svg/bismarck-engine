@@ -946,7 +946,11 @@ func TestTelemetryRecordsOneDurationPerPhaseWithoutIDs(t *testing.T) {
 	if len(phases) == 0 || len(durations) != len(phases) {
 		t.Fatalf("durations = %d, phases = %d", len(durations), len(phases))
 	}
+	// Durable's own metrics, as pi filters them: pi-ai's carry "provider".
 	for _, m := range recorder.Measurements() {
+		if !strings.HasPrefix(m.Name, "pi.durable.") {
+			continue
+		}
 		for key := range m.Attributes {
 			if strings.Contains(key, "id") {
 				t.Fatalf("metric %s carries %s", m.Name, key)
@@ -972,4 +976,32 @@ func TestTelemetrySchemaDeclaresDurablesVocabulary(t *testing.T) {
 	if _, err := telemetry.NewTypedMetrics(telemetry.NoopMetrics, TelemetrySchema); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestTelemetryTracesTheProviderRequestUnderItsRequestPhase takes the
+// pi.ai.request half of pi's content-free case (whose tool half waits for
+// slice 2): each provider request is a child of the request phase that made
+// it, now that pi-ai's request telemetry is ported (upstream 2ec55d80).
+func TestTelemetryTracesTheProviderRequestUnderItsRequestPhase(t *testing.T) {
+	setup, recorder := trackedSetup(t)
+	setup.faux.SetResponses([]providers.FauxResponseStep{fauxText("private-answer")})
+	h, root := openChat(t, memory.New(), setup)
+	waitFor(t, submit(t, root, inputDraft("private-input")))
+	must(t, h.WaitForIdle(bg))
+	allSettled(t, recorder)
+	requests := spansNamed(recorder, ai.TelemetrySpanRequest)
+	if len(requests) != 1 {
+		t.Fatalf("requests = %+v, want 1", requests)
+	}
+	phases := map[int]telemetry.RecordedSpan{}
+	for _, phase := range spansNamed(recorder, SpanPhase) {
+		phases[phase.ID] = phase
+	}
+	if phase, ok := phases[requests[0].ParentID]; !ok || phase.Attributes["phase"] != "request" {
+		t.Fatalf("request parent = %+v, want the request phase", phase)
+	}
+	if requests[0].Attributes["provider"] != "faux" || requests[0].Attributes["stop"] != "stop" {
+		t.Fatalf("request attributes = %v", requests[0].Attributes)
+	}
+	mustNotContain(t, "spans", recorder.Spans(), "private-input", "private-answer")
 }
