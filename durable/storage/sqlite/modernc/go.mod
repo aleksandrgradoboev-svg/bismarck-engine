@@ -3,7 +3,7 @@ module github.com/aleksandrgradoboev-svg/bismarck-engine/durable/storage/sqlite/
 go 1.26.0
 
 require (
-	github.com/aleksandrgradoboev-svg/bismarck-engine v0.3.0
+	github.com/aleksandrgradoboev-svg/bismarck-engine v0.4.0
 	modernc.org/sqlite v1.60.1
 )
 
