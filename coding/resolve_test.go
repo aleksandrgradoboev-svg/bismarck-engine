@@ -12,6 +12,31 @@ import (
 
 // I12: model resolution ports pi's resolveCliModel (model-resolver.ts).
 
+// resolveSpec is ResolveModelPattern with no provider authenticated, so the
+// result does not depend on the API keys in the test's environment.
+func resolveSpec(spec string) (ResolvedModel, error) {
+	return ResolveCliModel(CliModelOptions{Model: spec})
+}
+
+// ResolveModelPattern counts a provider as authenticated when the environment
+// holds its key, as pi's CLI does (hasConfiguredAuth), so a bare id on several
+// providers resolves to the one with a key and is ambiguous without one.
+func TestResolveModelPatternCountsEnvironmentKeys(t *testing.T) {
+	for _, provider := range []string{"anthropic", "opencode", "radius"} {
+		for _, name := range ai.FindEnvKeys(provider, nil) {
+			t.Setenv(name, "")
+		}
+	}
+	if _, err := ResolveModelPattern("claude-haiku-4-5"); err == nil || !strings.Contains(err.Error(), "is ambiguous across providers") {
+		t.Fatalf("without keys: %v, want ambiguous", err)
+	}
+	t.Setenv("ANTHROPIC_API_KEY", "sk-test")
+	r, err := ResolveModelPattern("claude-haiku-4-5")
+	if err != nil || r.Model.Provider != "anthropic" {
+		t.Fatalf("with an anthropic key: %v %v", r.Model, err)
+	}
+}
+
 // A slash prefix that is NOT a known provider is part of the model id:
 // OpenRouter-style ids resolve across providers.
 func TestResolveModelOpenRouterSlashedID(t *testing.T) {
@@ -22,7 +47,7 @@ func TestResolveModelOpenRouterSlashedID(t *testing.T) {
 	// when compared byte-for-byte. This one is openrouter's alone and has survived
 	// every build the port has pinned (0.83.0, 0.84.1, 0.84.2, 0.84.3);
 	// "meta-llama" is not a pi provider id, which is what the case is about.
-	r, err := ResolveModelPattern("meta-llama/llama-4-scout")
+	r, err := resolveSpec("meta-llama/llama-4-scout")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +83,7 @@ func TestResolveModelProviderPrefixFallsBackToFullID(t *testing.T) {
 		t.Fatalf("fixture %q is hosted by %v, want exactly one provider; re-point it", id, hosts)
 	}
 
-	r, err := ResolveModelPattern(id)
+	r, err := resolveSpec(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +93,7 @@ func TestResolveModelProviderPrefixFallsBackToFullID(t *testing.T) {
 }
 
 func TestResolveModelCaseInsensitive(t *testing.T) {
-	r, err := ResolveModelPattern("ANTHROPIC/CLAUDE-SONNET-4-5")
+	r, err := resolveSpec("ANTHROPIC/CLAUDE-SONNET-4-5")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,25 +105,26 @@ func TestResolveModelCaseInsensitive(t *testing.T) {
 // A ":<level>" suffix parses off and surfaces alongside the model
 // (parseModelPattern). Levels: off|minimal|low|medium|high|xhigh.
 func TestResolveModelThinkingLevelSuffix(t *testing.T) {
-	r, err := ResolveModelPattern("anthropic/claude-sonnet-4-5:high")
+	r, err := resolveSpec("anthropic/claude-sonnet-4-5:high")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r.Model.ID != "claude-sonnet-4-5" || r.ThinkingLevel != "high" {
 		t.Fatalf("suffix parse wrong: id=%s level=%q", r.Model.ID, r.ThinkingLevel)
 	}
-	// Bare-id pattern with suffix. ("claude-sonnet-4-5" is ambiguous across
-	// providers in the catalog, so like pi the fuzzy matcher picks an alias —
-	// only the model presence and parsed level are asserted here.)
-	r, err = ResolveModelPattern("claude-sonnet-4-5:xhigh")
+	// Bare-id pattern with suffix. "claude-sonnet-4-5" is on several catalog
+	// providers, so the authenticated one decides, and the suffix does not
+	// change which (pi d7f7e0df).
+	anthropicOnly := func(provider string) bool { return provider == "anthropic" }
+	r, err = ResolveCliModel(CliModelOptions{Model: "claude-sonnet-4-5:xhigh", HasAuth: anthropicOnly})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Model == nil || r.ThinkingLevel != "xhigh" {
+	if r.Model == nil || r.Model.Provider != "anthropic" || r.ThinkingLevel != "xhigh" {
 		t.Fatalf("bare-id suffix parse wrong: model=%v level=%q", r.Model, r.ThinkingLevel)
 	}
 	// No suffix → empty level.
-	r, err = ResolveModelPattern("anthropic/claude-sonnet-4-5")
+	r, err = resolveSpec("anthropic/claude-sonnet-4-5")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +135,7 @@ func TestResolveModelThinkingLevelSuffix(t *testing.T) {
 
 // pi's exact error text (resolveCliModel).
 func TestResolveModelUnknownErrorText(t *testing.T) {
-	_, err := ResolveModelPattern("definitely-not-a-model-xyz")
+	_, err := resolveSpec("definitely-not-a-model-xyz")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -122,7 +148,7 @@ func TestResolveModelUnknownErrorText(t *testing.T) {
 // An unknown id under a KNOWN provider falls back to a synthetic custom-id
 // model with a warning (pi buildFallbackModel).
 func TestResolveModelCustomIDFallback(t *testing.T) {
-	r, err := ResolveModelPattern("anthropic/my-custom-model-id")
+	r, err := resolveSpec("anthropic/my-custom-model-id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +167,7 @@ func TestResolveModelCustomIDFallback(t *testing.T) {
 // fallback path — it must NOT leak into the model id sent to the API — and is
 // surfaced as the thinking level. The warning quotes the STRIPPED id.
 func TestResolveModelCustomIDFallbackThinkingSuffix(t *testing.T) {
-	r, err := ResolveModelPattern("anthropic/my-custom-model-id:high")
+	r, err := resolveSpec("anthropic/my-custom-model-id:high")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +187,7 @@ func TestResolveModelCustomIDFallbackThinkingSuffix(t *testing.T) {
 // so the level is honored. mistral's fallback template is non-reasoning, so the
 // flip is observable here.
 func TestResolveModelCustomIDFallbackThinkingSuffixSetsReasoning(t *testing.T) {
-	r, err := ResolveModelPattern("mistral/my-custom-model-id:high")
+	r, err := resolveSpec("mistral/my-custom-model-id:high")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +202,7 @@ func TestResolveModelCustomIDFallbackThinkingSuffixSetsReasoning(t *testing.T) {
 // The :off level is not a request to think: reasoning must stay false on a
 // non-reasoning fallback template (pi gates on requestedThinking !== "off").
 func TestResolveModelCustomIDFallbackThinkingOffKeepsReasoningFalse(t *testing.T) {
-	r, err := ResolveModelPattern("mistral/my-custom-model-id:off")
+	r, err := resolveSpec("mistral/my-custom-model-id:off")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +219,7 @@ func TestResolveModelCustomIDFallbackThinkingOffKeepsReasoningFalse(t *testing.T
 // included (cli/args.ts, and model-resolver.test.ts loops the same seven).
 func TestResolveModelCustomIDFallbackAllLevels(t *testing.T) {
 	for _, level := range []string{"off", "minimal", "low", "medium", "high", "xhigh", "max"} {
-		r, err := ResolveModelPattern("anthropic/my-custom-model-id:" + level)
+		r, err := resolveSpec("anthropic/my-custom-model-id:" + level)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -217,7 +243,7 @@ func TestResolveModelRealModelMaxThinkingLevel(t *testing.T) {
 	if ai.GetModel("anthropic", id) == nil {
 		t.Skipf("catalog has no anthropic/%s; re-point this fixture", id)
 	}
-	r, err := ResolveModelPattern("anthropic/" + id + ":max")
+	r, err := resolveSpec("anthropic/" + id + ":max")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +260,7 @@ func TestResolveModelRealModelMaxThinkingLevel(t *testing.T) {
 
 // An invalid suffix is not a thinking level: it stays part of the custom id.
 func TestResolveModelCustomIDFallbackInvalidSuffix(t *testing.T) {
-	r, err := ResolveModelPattern("anthropic/my-custom-model-id:banana")
+	r, err := resolveSpec("anthropic/my-custom-model-id:banana")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,8 +283,19 @@ func TestResolveModelCustomIDFallbackInvalidSuffix(t *testing.T) {
 // whose other hunks are host-only, and a missed re-point to an id the catalog
 // still has passes TestDefaultModelsExistInCatalog. Re-capture at every
 // re-pin, and point file at the capture for the new pin.
+//
+// catalogPending are pi's entries the port cannot take until the catalog is
+// regenerated, each with the port's entry until then: nvidia's new default is
+// not in the embedded catalog (95364a54), and pi's azure provider is the
+// catalog's azure-openai-responses renamed (a37306d4). The test requires both
+// halves to still differ, so the regeneration has to clear the list.
 func TestDefaultModelPerProviderMatchesPi(t *testing.T) {
-	const file = "testdata/defaultmodels/default-models-5806068c2.json"
+	const file = "testdata/defaultmodels/default-models-f049787d.json"
+	catalogPending := map[string]struct{ pi, port string }{
+		"nvidia":                 {pi: "nvidia/nemotron-3.5-super-vl-120b-a12b", port: "nvidia/nemotron-3-super-120b-a12b"},
+		"azure":                  {pi: "gpt-5.4"},
+		"azure-openai-responses": {port: "gpt-5.4"},
+	}
 	data, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatalf("read %s: %v (regenerate it with testdata/defaultmodels/capture.mjs)", file, err)
@@ -272,12 +309,26 @@ func TestDefaultModelPerProviderMatchesPi(t *testing.T) {
 	if len(capture.Defaults) == 0 {
 		t.Fatalf("%s holds no defaults", file)
 	}
+	for provider, pending := range catalogPending {
+		if got := capture.Defaults[provider]; got != pending.pi {
+			t.Errorf("pi's default for %q is %q now, the pending entry says %q: update the list", provider, got, pending.pi)
+		}
+		if got := defaultModelPerProvider[provider]; got != pending.port {
+			t.Errorf("the port's default for %q is %q, the pending entry says %q: update the list", provider, got, pending.port)
+		}
+	}
 	for provider, want := range capture.Defaults {
+		if _, pending := catalogPending[provider]; pending {
+			continue
+		}
 		if got, ok := defaultModelPerProvider[provider]; !ok || got != want {
 			t.Errorf("default model for %q = %q, pi %q", provider, got, want)
 		}
 	}
 	for provider, got := range defaultModelPerProvider {
+		if _, pending := catalogPending[provider]; pending {
+			continue
+		}
 		if _, ok := capture.Defaults[provider]; !ok {
 			t.Errorf("default model for %q = %q, but pi has no entry for it", provider, got)
 		}
@@ -335,7 +386,7 @@ func TestDefaultModelsExistInCatalog(t *testing.T) {
 // Pin it through the custom-id fallback: the synthetic model must be templated
 // from grok-4.7.
 func TestResolveModelXaiFallbackDefault(t *testing.T) {
-	r, err := ResolveModelPattern("xai/my-custom-grok")
+	r, err := resolveSpec("xai/my-custom-grok")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +410,7 @@ func TestResolveModelXaiFallbackDefault(t *testing.T) {
 		{ID: "grok-4.6", Provider: "xai", ContextWindow: 460_000, MaxTokens: 46_000},
 		{ID: "grok-4.7", Provider: "xai", ContextWindow: 470_000, MaxTokens: 47_000},
 	}
-	got := buildFallbackModel("xai", "my-custom-grok", models)
+	got := buildFallbackModel(models, "my-custom-grok")
 	if got == nil || got.ID != "my-custom-grok" || got.ContextWindow != 470_000 || got.MaxTokens != 47_000 {
 		t.Fatalf("fallback must be templated from grok-4.7 (cw=470000 mt=47000), got %+v", got)
 	}

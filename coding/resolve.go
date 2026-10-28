@@ -3,8 +3,12 @@ package coding
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
+
+	"golang.org/x/text/collate"
+	"golang.org/x/text/language"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
@@ -18,12 +22,15 @@ const DefaultModelSpec = "anthropic/claude-sonnet-4-5"
 
 // defaultModelPerProvider ports pi's defaultModelPerProvider
 // (model-resolver.ts): the per-provider default model id used by
-// buildFallbackModel when synthesizing a custom-id model.
+// buildFallbackModel when synthesizing a custom-id model. Two of pi's entries
+// wait for the catalog regeneration, since the catalog the port embeds lacks
+// their targets: nvidia's nemotron-3.5-super-vl (95364a54) and the azure
+// provider pi renamed from azure-openai-responses (a37306d4).
 var defaultModelPerProvider = map[string]string{
 	"amazon-bedrock":             "us.anthropic.claude-opus-4-6-v1",
 	"ant-ling":                   "Ring-2.6-1T",
 	"anthropic":                  "claude-opus-4-8",
-	"openai":                     "gpt-5.5",
+	"openai":                     "gpt-6.1-sol",
 	"azure-openai-responses":     "gpt-5.4",
 	"openai-codex":               "gpt-6.1-sol",
 	"radius":                     "balanced",
@@ -31,7 +38,7 @@ var defaultModelPerProvider = map[string]string{
 	"deepseek":                   "deepseek-v4-pro",
 	"google":                     "gemini-3.1-pro-preview",
 	"google-vertex":              "gemini-3.1-pro-preview",
-	"github-copilot":             "gpt-5.4",
+	"github-copilot":             "gpt-6.1-sol",
 	"openrouter":                 "moonshotai/kimi-k2.6",
 	"vercel-ai-gateway":          "zai/glm-5.1",
 	"xai":                        "grok-4.7",
@@ -57,10 +64,10 @@ var defaultModelPerProvider = map[string]string{
 	"qwen-token-plan":            "qwen3.7-max",
 	"qwen-token-plan-cn":         "qwen3.7-max",
 	"qwen-token-plan-individual": "qwen3.8-max",
-	"xiaomi":                     "mimo-v2.5-pro",
-	"xiaomi-token-plan-cn":       "mimo-v2.5-pro",
-	"xiaomi-token-plan-ams":      "mimo-v2.5-pro",
-	"xiaomi-token-plan-sgp":      "mimo-v2.5-pro",
+	"xiaomi":                     "mimo-v2.6-pro",
+	"xiaomi-token-plan-cn":       "mimo-v2.6-pro",
+	"xiaomi-token-plan-ams":      "mimo-v2.6-pro",
+	"xiaomi-token-plan-sgp":      "mimo-v2.6-pro",
 }
 
 // validThinkingLevels mirrors pi's VALID_THINKING_LEVELS (cli/args.ts). "max"
@@ -90,123 +97,134 @@ func ResolveModel(spec string) (*ai.Model, error) {
 	return r.Model, err
 }
 
-// ResolveModelPattern ports pi's resolveCliModel (model-resolver.ts): a
-// slash-prefix is treated as a provider ONLY when it matches a known provider;
-// otherwise the whole string is matched as a model id across providers
-// (OpenRouter-style ids contain slashes). Matching is case-insensitive and a
-// ":<thinkingLevel>" suffix (off|minimal|low|medium|high|xhigh) is parsed off
-// and returned alongside. An unknown model under a known provider falls back
-// to a synthetic custom-id model with a warning (pi buildFallbackModel); a
-// thinking-level suffix is stripped from the custom id first (pi 9fd75b8a —
-// upstream gates that parse on --thinking being unset, and ResolveModelPattern
-// takes no thinking argument, so it always behaves as that path).
+// ResolveModelPattern is ResolveCliModel with the spec as --model, no
+// --provider or --thinking, and a provider counted as authenticated when the
+// environment holds its API key (EnvHasAuth), as pi's CLI counts an
+// environment key in hasConfiguredAuth. A reference that matches several
+// providers equally is an error rather than a pick by catalog order (pi
+// d7f7e0df, #10160); a host that keeps keys elsewhere calls ResolveCliModel
+// with its own HasAuth. An empty spec resolves to DefaultModelSpec.
 func ResolveModelPattern(spec string) (ResolvedModel, error) {
 	if spec == "" {
 		spec = DefaultModelSpec
 	}
-	availableModels := allCatalogModels()
-	if len(availableModels) == 0 {
+	return ResolveCliModel(CliModelOptions{Model: spec, HasAuth: EnvHasAuth})
+}
+
+// EnvHasAuth reports whether the process environment holds an API key for
+// the provider (ai.GetEnvApiKey).
+func EnvHasAuth(provider string) bool { return ai.GetEnvApiKey(provider, nil) != "" }
+
+// CliModelOptions are pi resolveCliModel's inputs.
+type CliModelOptions struct {
+	// Provider is --provider: only its models are considered. Empty means any.
+	Provider string
+	// Model is --model: a bare id or provider/id, optionally followed by
+	// ":<thinking>".
+	Model string
+	// Thinking is --thinking. When set, a ":<suffix>" on a custom model id
+	// stays part of the id.
+	Thinking string
+	// InlineAPIKey is whether --api-key was given for the selected provider;
+	// stored credentials then do not choose among providers.
+	InlineAPIKey bool
+	// HasAuth reports whether credentials are configured for a provider (pi
+	// modelRuntime.hasConfiguredAuth). It only breaks ties between providers;
+	// nil counts none.
+	HasAuth func(provider string) bool
+}
+
+// ResolveCliModel ports pi's resolveCliModel (model-resolver.ts, d7f7e0df):
+// every candidate is collected before a provider is chosen, so catalog order
+// never decides the provider, a ":<thinking>" suffix cannot change it, and an
+// ambiguous exact match is an error instead of falling through to a fuzzy
+// match. A provider/id reference prefers the named provider; a gateway that
+// exposes provider/id as a raw model id serves it when the named provider has
+// no match, or lacks credentials while the gateway has them. An unknown model
+// under a known provider becomes a custom model id cloned from the provider's
+// default (pi buildFallbackModel), with a warning. An empty Model resolves
+// nothing.
+func ResolveCliModel(opts CliModelOptions) (ResolvedModel, error) {
+	// All models, not only those with credentials, so --api-key can set up a
+	// provider for the first time.
+	return resolveCliModel(opts, allCatalogModels())
+}
+
+// resolveCliModel is ResolveCliModel over models.
+func resolveCliModel(opts CliModelOptions, models []*ai.Model) (ResolvedModel, error) {
+	if opts.Model == "" {
+		return ResolvedModel{}, nil
+	}
+	if len(models) == 0 {
 		return ResolvedModel{}, fmt.Errorf("No models available. Check your installation or add models to models.json.")
 	}
-
-	// Canonical provider lookup (case-insensitive).
-	providerByLower := map[string]string{}
-	for _, m := range availableModels {
-		providerByLower[strings.ToLower(string(m.Provider))] = string(m.Provider)
-	}
-
-	pattern := spec
 	provider := ""
-	inferredProvider := false
-
-	// Interpret "provider/model" only when the prefix before the FIRST slash is
-	// a known provider; otherwise the slash belongs to the model id.
-	if slash := strings.Index(spec, "/"); slash != -1 {
-		if canonical, ok := providerByLower[strings.ToLower(spec[:slash])]; ok {
-			provider = canonical
-			pattern = spec[slash+1:]
-			inferredProvider = true
-		}
-	}
-
-	// No provider inferred: try exact matches on the raw input first (handles
-	// model ids that naturally contain slashes).
-	if provider == "" {
-		if m := exactModelMatch(spec, availableModels); m != nil {
-			return ResolvedModel{Model: m}, nil
-		}
-	}
-
-	candidates := availableModels
-	if provider != "" {
-		candidates = nil
-		for _, m := range availableModels {
-			if string(m.Provider) == provider {
-				candidates = append(candidates, m)
+	if opts.Provider != "" {
+		for _, m := range models {
+			if strings.EqualFold(string(m.Provider), opts.Provider) {
+				provider = string(m.Provider)
+				break
 			}
 		}
-	}
-	model, level, warning := parseModelPattern(pattern, candidates, false)
-	if model != nil {
-		return ResolvedModel{Model: model, ThinkingLevel: level, Warning: warning}, nil
-	}
-
-	// Provider inferred from the slash but nothing matched within it: fall back
-	// to matching the full input as a raw model id across all models
-	// (e.g. "openai/gpt-4o:extended" is an openrouter model id).
-	if inferredProvider {
-		if m := exactModelMatch(spec, availableModels); m != nil {
-			return ResolvedModel{Model: m}, nil
-		}
-		if m, lvl, warn := parseModelPattern(spec, availableModels, false); m != nil {
-			return ResolvedModel{Model: m, ThinkingLevel: lvl, Warning: warn}, nil
+		if provider == "" {
+			return ResolvedModel{}, fmt.Errorf("Unknown provider %q. Use --list-models to see available providers/models.", opts.Provider)
 		}
 	}
-
-	if provider != "" {
-		// pi 9fd75b8a (#5560): parse a thinking-level suffix from the pattern
-		// before building the fallback model, so the suffix neither leaks into
-		// the custom model id nor into the warning.
-		// e.g. "zai-org/GLM-5.1-FP8:high" → id "zai-org/GLM-5.1-FP8", level "high".
-		// Upstream only parses when --thinking was not explicitly provided;
-		// ResolveModelPattern has no thinking argument, so this is always the
-		// cliThinking-unset path and the suffix is always parsed.
-		fallbackPattern := pattern
-		fallbackThinking := ""
-		if lastColon := strings.LastIndex(pattern, ":"); lastColon != -1 {
-			if suffix := pattern[lastColon+1:]; validThinkingLevels[suffix] {
-				fallbackPattern = pattern[:lastColon]
-				fallbackThinking = suffix
-			}
-		}
-		if fb := buildFallbackModel(provider, fallbackPattern, availableModels); fb != nil {
-			// pi 1fc80f4f (#5552): when a thinking level was requested but the
-			// provider's template model doesn't advertise reasoning, mark the
-			// fallback as reasoning-capable so the requested level is preserved.
-			// fb is freshly cloned by buildFallbackModel, so this never mutates a
-			// shared catalog entry. requestedThinking == fallbackThinking here
-			// (ResolveModelPattern has no separate --thinking input).
-			if fallbackThinking != "" && fallbackThinking != "off" {
-				fb.Reasoning = true
-			}
-			fbWarning := fmt.Sprintf("Model %q not found for provider %q. Using custom model id.", fallbackPattern, provider)
-			if warning != "" {
-				fbWarning = warning + " " + fbWarning
-			}
-			return ResolvedModel{Model: fb, ThinkingLevel: fallbackThinking, Warning: fbWarning}, nil
-		}
+	// An inline key goes to whichever provider is selected, so stored
+	// credentials must not choose it.
+	usable := func(string) bool { return false }
+	if !opts.InlineAPIKey && opts.HasAuth != nil {
+		usable = opts.HasAuth
 	}
-
-	display := spec
-	if provider != "" {
-		display = provider + "/" + pattern
+	result := resolveModelReference(modelReferenceRequest{text: opts.Model, provider: provider, thinkingSuffix: thinkingSuffixStrict, fuzzy: true}, models, usable)
+	switch result.status {
+	case referenceResolved:
+		return ResolvedModel{Model: result.model, ThinkingLevel: result.thinkingLevel, Warning: result.warning}, nil
+	case referenceAmbiguous:
+		matches := make([]string, 0, len(result.candidates))
+		for _, m := range result.candidates {
+			matches = append(matches, string(m.Provider)+"/"+m.ID)
+		}
+		slices.SortFunc(matches, newLocaleCompare())
+		authHint := "More than one matching provider is authenticated."
+		switch {
+		case opts.InlineAPIKey:
+			authHint = "--api-key does not choose a provider."
+		case result.usableCount == 0:
+			authHint = "No matching provider is authenticated."
+		}
+		return ResolvedModel{}, fmt.Errorf("Model %q is ambiguous across providers: %s. %s Use --provider or provider/model.", opts.Model, strings.Join(matches, ", "), authHint)
 	}
-	return ResolvedModel{Warning: warning},
-		fmt.Errorf("Model \"%s\" not found. Use --list-models to see available models.", display)
+	target := result.target
+	if target == nil {
+		return ResolvedModel{}, fmt.Errorf("Model %q not found. Use --list-models to see available models.", opts.Model)
+	}
+	// The thinking suffix applies only when --thinking is not given;
+	// otherwise it stays part of the custom model id. e.g.
+	// "zai-org/GLM-5.1-FP8:high" → id "zai-org/GLM-5.1-FP8", level "high".
+	modelID, fallbackThinking := target.modelID, target.thinkingLevel
+	if opts.Thinking != "" {
+		modelID, fallbackThinking = target.modelText, ""
+	}
+	fallback := buildFallbackModel(target.providerModels, modelID)
+	requested := opts.Thinking
+	if requested == "" {
+		requested = fallbackThinking
+	}
+	// pi 1fc80f4f (#5552): a requested level keeps a template without
+	// reasoning from dropping it. The clone is fresh, so no catalog entry
+	// changes.
+	if requested != "" && requested != "off" {
+		fallback.Reasoning = true
+	}
+	return ResolvedModel{Model: fallback, ThinkingLevel: fallbackThinking,
+		Warning: fmt.Sprintf("Model %q not found for provider %q. Using custom model id.", modelID, target.provider)}, nil
 }
 
 // allCatalogModels lists every registered model in deterministic order
-// (providers and ids sorted; pi's registry order is models.json order).
+// (providers and ids sorted; pi's registry order is models.json order). The
+// resolution does not depend on it, except which of a provider's models a
+// custom id is cloned from when the provider has no default.
 func allCatalogModels() []*ai.Model {
 	providers := ai.GetProviders()
 	sort.Strings(providers)
@@ -219,145 +237,379 @@ func allCatalogModels() []*ai.Model {
 	return out
 }
 
-// exactModelMatch finds a model whose id or "provider/id" equals the reference
-// case-insensitively (resolveCliModel's pre-provider exact check).
-func exactModelMatch(reference string, models []*ai.Model) *ai.Model {
-	lower := strings.ToLower(reference)
+// thinkingSuffix is pi ModelReferenceRequest.thinkingSuffix: how a trailing
+// ":<suffix>" is read when the full text matches no model, since ids such as
+// OpenRouter's qwen/qwen3-coder:exacto contain colons.
+type thinkingSuffix int
+
+const (
+	// thinkingSuffixNone keeps the suffix part of the id.
+	thinkingSuffixNone thinkingSuffix = iota
+	// thinkingSuffixStrict parses a valid thinking level; any other suffix
+	// stays part of the id.
+	thinkingSuffixStrict
+	// thinkingSuffixLenient is strict, but drops an invalid suffix with a
+	// warning.
+	thinkingSuffixLenient
+)
+
+// modelReferenceRequest is pi's ModelReferenceRequest.
+type modelReferenceRequest struct {
+	// text is a bare model id or provider/id, optionally followed by
+	// ":<thinking>".
+	text string
+	// provider, when set, limits the candidates to its models.
+	provider       string
+	thinkingSuffix thinkingSuffix
+	// fuzzy matches id and name substrings when no exact match exists.
+	fuzzy bool
+}
+
+type referenceStatus int
+
+const (
+	referenceNotFound referenceStatus = iota
+	referenceResolved
+	referenceAmbiguous
+)
+
+// modelReferenceResult is pi's ModelReferenceResult.
+type modelReferenceResult struct {
+	status        referenceStatus
+	model         *ai.Model   // resolved
+	candidates    []*ai.Model // ambiguous
+	usableCount   int         // ambiguous
+	thinkingLevel string      // resolved, ambiguous
+	warning       string      // resolved, ambiguous
+	// target is set on not-found when a provider is explicit or named by a
+	// provider/ prefix, for building a custom model id.
+	target *modelReferenceTarget
+}
+
+// modelReferenceTarget is pi's ModelReferenceTarget.
+type modelReferenceTarget struct {
+	provider string
+	// providerModels are the provider's models, the anchor first.
+	providerModels []*ai.Model
+	// modelText is the text after the provider prefix as typed, including any
+	// ":<suffix>".
+	modelText string
+	// modelID is modelText without a valid thinking suffix (unless the
+	// request's thinkingSuffix is none).
+	modelID       string
+	thinkingLevel string
+}
+
+// splitThinkingSuffix is pi's: text up to its last colon and the valid
+// thinking level after it.
+func splitThinkingSuffix(text string) (base, level string, ok bool) {
+	colon := strings.LastIndex(text, ":")
+	if colon == -1 || !validThinkingLevels[text[colon+1:]] {
+		return "", "", false
+	}
+	return text[:colon], text[colon+1:], true
+}
+
+// splitProviderPrefix is pi's (984cf664): the catalog provider whose id,
+// followed by "/", starts the text, the longest one winning, since provider
+// ids may contain "/" themselves (URL-derived ids such as
+// llama=http://host:10800).
+func splitProviderPrefix(text string, models []*ai.Model) (provider, modelText string, ok bool) {
+	// pi lowercases the text and finds the first "/" at or after the provider
+	// id's length; the offsets here are the original text's, so a rune whose
+	// lowercase has another UTF-8 length cannot shift the split.
 	for _, m := range models {
-		if strings.ToLower(m.ID) == lower || strings.ToLower(string(m.Provider)+"/"+m.ID) == lower {
-			return m
+		prefix := jstext.Trim(string(m.Provider))
+		if prefix == "" || (ok && len(provider) >= len(m.Provider)) || len(prefix) > len(text) {
+			continue
 		}
+		slash := strings.Index(text[len(prefix):], "/")
+		if slash == -1 {
+			continue
+		}
+		slash += len(prefix)
+		if !strings.EqualFold(jstext.Trim(text[:slash]), prefix) {
+			continue
+		}
+		if rest := jstext.Trim(text[slash+1:]); rest != "" {
+			provider, modelText, ok = string(m.Provider), rest, true
+		}
+	}
+	return provider, modelText, ok
+}
+
+// resolveModelReference is pi's: usable only breaks ties between providers,
+// so a unique match resolves even without credentials (--api-key first-time
+// setup).
+func resolveModelReference(request modelReferenceRequest, models []*ai.Model, usable func(string) bool) modelReferenceResult {
+	text := jstext.Trim(request.text)
+	if text == "" {
+		return modelReferenceResult{}
+	}
+	pool := models
+	if request.provider != "" {
+		pool = nil
+		for _, m := range models {
+			if strings.EqualFold(string(m.Provider), request.provider) {
+				pool = append(pool, m)
+			}
+		}
+	}
+	result := resolveText(text, request, pool, usable)
+	if result.status != referenceNotFound {
+		return result
+	}
+	splitProvider, splitText, split := splitProviderPrefix(text, pool)
+	var anchor *ai.Model
+	if request.provider != "" {
+		if len(pool) > 0 {
+			anchor = pool[0]
+		}
+	} else if split {
+		for _, m := range pool {
+			if string(m.Provider) == splitProvider {
+				anchor = m
+				break
+			}
+		}
+	}
+	if anchor == nil {
+		return result
+	}
+	modelText := text
+	if split {
+		modelText = splitText
+	}
+	target := &modelReferenceTarget{provider: string(anchor.Provider), providerModels: []*ai.Model{anchor}, modelText: modelText, modelID: modelText}
+	for _, m := range pool {
+		if m.Provider == anchor.Provider && m != anchor {
+			target.providerModels = append(target.providerModels, m)
+		}
+	}
+	if request.thinkingSuffix != thinkingSuffixNone {
+		if base, level, ok := splitThinkingSuffix(modelText); ok {
+			target.modelID, target.thinkingLevel = base, level
+		}
+	}
+	return modelReferenceResult{target: target}
+}
+
+// findExactModelReferenceMatch is pi's: an exact provider/id or bare id
+// lookup, without thinking suffixes or fuzzy matching.
+func findExactModelReferenceMatch(reference string, models []*ai.Model) *ai.Model {
+	result := resolveModelReference(modelReferenceRequest{text: reference, thinkingSuffix: thinkingSuffixNone}, models, func(string) bool { return true })
+	if result.status == referenceResolved {
+		return result.model
 	}
 	return nil
 }
 
-// parseModelPattern ports pi's parseModelPattern: try the full pattern as a
-// model; otherwise split on the LAST colon — a valid thinking-level suffix
-// recurses on the prefix and surfaces the level; an invalid suffix either
-// recurses with a warning (scope mode) or fails (strict mode, used for CLI
-// --model parsing, allowInvalidLevelFallback=false).
-func parseModelPattern(pattern string, models []*ai.Model, allowInvalidLevelFallback bool) (*ai.Model, string, string) {
-	if m := tryMatchModel(pattern, models); m != nil {
-		return m, "", ""
+func resolveText(text string, request modelReferenceRequest, pool []*ai.Model, usable func(string) bool) modelReferenceResult {
+	if reference, ok := selectReference(text, pool, request.fuzzy, usable); ok {
+		return reference
 	}
-	lastColon := strings.LastIndex(pattern, ":")
-	if lastColon == -1 {
-		return nil, "", ""
-	}
-	prefix := pattern[:lastColon]
-	suffix := pattern[lastColon+1:]
-	if validThinkingLevels[suffix] {
-		m, _, warning := parseModelPattern(prefix, models, allowInvalidLevelFallback)
-		if m != nil {
-			level := suffix
-			if warning != "" {
-				level = "" // pi: only use the level if the inner recursion was clean
-			}
-			return m, level, warning
+	if request.fuzzy {
+		if fuzzy, ok := selectFuzzy(fuzzyMatches(text, pool), usable); ok {
+			return fuzzy
 		}
-		return m, "", warning
 	}
-	if !allowInvalidLevelFallback {
-		// Strict mode: treat the suffix as part of the model id and fail rather
-		// than accidentally resolving to a different model.
-		return nil, "", ""
+	if request.thinkingSuffix == thinkingSuffixNone {
+		return modelReferenceResult{}
 	}
-	m, _, _ := parseModelPattern(prefix, models, allowInvalidLevelFallback)
-	if m != nil {
-		return m, "", fmt.Sprintf("Invalid thinking level %q in pattern %q. Using default instead.", suffix, pattern)
+	if base, level, ok := splitThinkingSuffix(text); ok {
+		inner := resolveText(base, request, pool, usable)
+		if inner.status == referenceNotFound {
+			return inner
+		}
+		// Only use this thinking level if no warning from inner recursion.
+		inner.thinkingLevel = level
+		if inner.warning != "" {
+			inner.thinkingLevel = ""
+		}
+		return inner
 	}
-	return nil, "", ""
+	// Keep an invalid suffix as part of the id and fail, rather than resolve a
+	// different model.
+	if request.thinkingSuffix == thinkingSuffixStrict {
+		return modelReferenceResult{}
+	}
+	colon := strings.LastIndex(text, ":")
+	if colon == -1 {
+		return modelReferenceResult{}
+	}
+	inner := resolveText(text[:colon], request, pool, usable)
+	if inner.status == referenceNotFound {
+		return inner
+	}
+	inner.thinkingLevel = ""
+	inner.warning = fmt.Sprintf("Invalid thinking level %q in pattern %q. Using default instead.", text[colon+1:], text)
+	return inner
 }
 
-// tryMatchModel ports pi's tryMatchModel: exact reference match first, then
-// case-insensitive substring matching on id/name, preferring aliases (un-dated
-// ids) and otherwise the latest dated version.
-func tryMatchModel(pattern string, models []*ai.Model) *ai.Model {
-	if m := findExactModelReferenceMatch(pattern, models); m != nil {
-		return m
-	}
-	lower := strings.ToLower(pattern)
-	var matches []*ai.Model
-	for _, m := range models {
-		if strings.Contains(strings.ToLower(m.ID), lower) || strings.Contains(strings.ToLower(m.Name), lower) {
-			matches = append(matches, m)
+// selectReference is pi's: provider/rest is only a hint, since the whole text
+// may also be a model id on another provider, such as gateway id zai/glm-5.
+// The named provider wins when usable, since that is what the syntax usually
+// means; otherwise a sole usable raw match wins, since the named provider
+// could not serve the request. An unusable named match is still preferred
+// over unusable raw matches, so --api-key can set up the named provider.
+func selectReference(text string, pool []*ai.Model, fuzzy bool, usable func(string) bool) (modelReferenceResult, bool) {
+	lowerText := strings.ToLower(text)
+	var raw []*ai.Model
+	for _, m := range pool {
+		if strings.ToLower(m.ID) == lowerText {
+			raw = append(raw, m)
 		}
 	}
-	if len(matches) == 0 {
-		return nil
+	var named *ai.Model
+	if splitProvider, splitText, ok := splitProviderPrefix(text, pool); ok {
+		var providerModels []*ai.Model
+		for _, m := range pool {
+			if string(m.Provider) == splitProvider {
+				providerModels = append(providerModels, m)
+			}
+		}
+		lowerModelText := strings.ToLower(splitText)
+		// The provider's own literal id (OpenRouter's openrouter/free) beats
+		// its fuzzy matches.
+		for _, m := range providerModels {
+			if strings.ToLower(m.ID) == lowerModelText {
+				named = m
+				break
+			}
+		}
+		if named == nil {
+			for _, m := range raw {
+				if string(m.Provider) == splitProvider {
+					named = m
+					break
+				}
+			}
+		}
+		if named == nil && fuzzy {
+			named = bestFuzzyMatch(fuzzyMatches(splitText, providerModels))
+		}
 	}
-	var aliases, dated []*ai.Model
+	var others []*ai.Model
+	for _, m := range raw {
+		if m != named {
+			others = append(others, m)
+		}
+	}
+	candidates := others
+	if named != nil {
+		candidates = append([]*ai.Model{named}, others...)
+	}
+	if len(candidates) == 0 {
+		return modelReferenceResult{}, false
+	}
+	if providerCount(candidates) == 1 {
+		return modelReferenceResult{status: referenceResolved, model: candidates[0]}, true
+	}
+	if named != nil && usable(string(named.Provider)) {
+		return modelReferenceResult{status: referenceResolved, model: named}, true
+	}
+	var usableOthers []*ai.Model
+	for _, m := range others {
+		if usable(string(m.Provider)) {
+			usableOthers = append(usableOthers, m)
+		}
+	}
+	if len(usableOthers) == 1 {
+		return modelReferenceResult{status: referenceResolved, model: usableOthers[0]}, true
+	}
+	if len(usableOthers) == 0 && named != nil {
+		return modelReferenceResult{status: referenceResolved, model: named}, true
+	}
+	return modelReferenceResult{status: referenceAmbiguous, candidates: candidates, usableCount: len(usableOthers)}, true
+}
+
+func providerCount(models []*ai.Model) int {
+	providers := map[ai.ProviderId]bool{}
+	for _, m := range models {
+		providers[m.Provider] = true
+	}
+	return len(providers)
+}
+
+// fuzzyMatches are the models whose id or name contains text,
+// case-insensitively.
+func fuzzyMatches(text string, models []*ai.Model) []*ai.Model {
+	lowerText := strings.ToLower(text)
+	var out []*ai.Model
+	for _, m := range models {
+		if strings.Contains(strings.ToLower(m.ID), lowerText) || strings.Contains(strings.ToLower(m.Name), lowerText) {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// selectFuzzy is pi's: across several providers the usable ones are
+// preferred, and the same id on several providers is ambiguous rather than
+// decided by catalog order.
+func selectFuzzy(matches []*ai.Model, usable func(string) bool) (modelReferenceResult, bool) {
+	if len(matches) == 0 {
+		return modelReferenceResult{}, false
+	}
+	var usableMatches []*ai.Model
+	if providerCount(matches) > 1 {
+		for _, m := range matches {
+			if usable(string(m.Provider)) {
+				usableMatches = append(usableMatches, m)
+			}
+		}
+	}
+	pool := matches
+	if len(usableMatches) > 0 {
+		pool = usableMatches
+	}
+	best := bestFuzzyMatch(pool)
+	if best == nil {
+		return modelReferenceResult{}, false
+	}
+	var tied []*ai.Model
+	for _, m := range pool {
+		if m.ID == best.ID {
+			tied = append(tied, m)
+		}
+	}
+	if providerCount(tied) == 1 {
+		return modelReferenceResult{status: referenceResolved, model: best}, true
+	}
+	usableCount := 0
+	if len(usableMatches) > 0 {
+		usableCount = len(tied)
+	}
+	return modelReferenceResult{status: referenceAmbiguous, candidates: tied, usableCount: usableCount}, true
+}
+
+// bestFuzzyMatch is pi's: aliases (claude-sonnet-4-5) over dated versions
+// (claude-sonnet-4-5-20250929), then the latest — the first by
+// b.id.localeCompare(a.id).
+func bestFuzzyMatch(matches []*ai.Model) *ai.Model {
+	var aliases []*ai.Model
 	for _, m := range matches {
 		if isModelAlias(m.ID) {
 			aliases = append(aliases, m)
-		} else {
-			dated = append(dated, m)
 		}
 	}
-	pick := func(ms []*ai.Model) *ai.Model {
-		// pi sorts descending by id (b.localeCompare(a)) and takes the first.
-		sort.Slice(ms, func(i, j int) bool { return ms[i].ID > ms[j].ID })
-		return ms[0]
-	}
+	pool := matches
 	if len(aliases) > 0 {
-		return pick(aliases)
+		pool = aliases
 	}
-	return pick(dated)
-}
-
-// findExactModelReferenceMatch ports pi's findExactModelReferenceMatch:
-// a canonical "provider/id" match, then a provider+id split match, then a bare
-// id match — each only when unambiguous (a unique match).
-func findExactModelReferenceMatch(reference string, models []*ai.Model) *ai.Model {
-	trimmed := jstext.Trim(reference)
-	if trimmed == "" {
+	if len(pool) == 0 {
 		return nil
 	}
-	lower := strings.ToLower(trimmed)
-
-	var canonical []*ai.Model
-	for _, m := range models {
-		if strings.ToLower(string(m.Provider)+"/"+m.ID) == lower {
-			canonical = append(canonical, m)
-		}
-	}
-	if len(canonical) == 1 {
-		return canonical[0]
-	}
-	if len(canonical) > 1 {
-		return nil
-	}
-
-	if slash := strings.Index(trimmed, "/"); slash != -1 {
-		provider := jstext.Trim(trimmed[:slash])
-		modelID := jstext.Trim(trimmed[slash+1:])
-		if provider != "" && modelID != "" {
-			var byProvider []*ai.Model
-			for _, m := range models {
-				if strings.EqualFold(string(m.Provider), provider) && strings.EqualFold(m.ID, modelID) {
-					byProvider = append(byProvider, m)
-				}
-			}
-			if len(byProvider) == 1 {
-				return byProvider[0]
-			}
-			if len(byProvider) > 1 {
-				return nil
-			}
-		}
-	}
-
-	var byID []*ai.Model
-	for _, m := range models {
-		if strings.ToLower(m.ID) == lower {
-			byID = append(byID, m)
-		}
-	}
-	if len(byID) == 1 {
-		return byID[0]
-	}
-	return nil
+	compare := newLocaleCompare()
+	sorted := slices.Clone(pool)
+	slices.SortStableFunc(sorted, func(a, b *ai.Model) int { return compare(b.ID, a.ID) })
+	return sorted[0]
 }
+
+// newLocaleCompare approximates JavaScript's localeCompare (ICU root
+// collation), as the codemode tool's description does. A Collator is not safe
+// for concurrent use, so each sort makes its own.
+func newLocaleCompare() func(a, b string) int { return collate.New(language.Und).CompareString }
 
 var modelDatePattern = regexp.MustCompile(`-\d{8}$`)
 
@@ -371,19 +623,11 @@ func isModelAlias(id string) bool {
 }
 
 // buildFallbackModel ports pi's buildFallbackModel: clone the provider's
-// default (or first) model with the requested custom id.
-func buildFallbackModel(provider, modelID string, models []*ai.Model) *ai.Model {
-	var providerModels []*ai.Model
-	for _, m := range models {
-		if string(m.Provider) == provider {
-			providerModels = append(providerModels, m)
-		}
-	}
-	if len(providerModels) == 0 {
-		return nil
-	}
+// default model, or its first, with the requested custom id. providerModels
+// are one provider's models, never empty.
+func buildFallbackModel(providerModels []*ai.Model, modelID string) *ai.Model {
 	base := providerModels[0]
-	if defaultID, ok := defaultModelPerProvider[provider]; ok {
+	if defaultID, ok := defaultModelPerProvider[string(base.Provider)]; ok {
 		for _, m := range providerModels {
 			if m.ID == defaultID {
 				base = m
