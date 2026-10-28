@@ -28,6 +28,10 @@ func KillProcessTree(cmd *exec.Cmd) error {
 	return nil
 }
 
+// KillShellProcessTree is KillProcessTree: only macOS stops the group first
+// (see proc_unix.go).
+func KillShellProcessTree(cmd *exec.Cmd) error { return KillProcessTree(cmd) }
+
 // ExitSignalNumber always reports "no signal" on Windows: a process there
 // ends with an exit code and syscall.WaitStatus carries no signal to read.
 // This is the asymmetry that makes upstream skip its signal regression test

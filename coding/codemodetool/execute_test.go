@@ -34,6 +34,23 @@ func schema(t *testing.T, text string) *ai.Schema {
 	return &s
 }
 
+// searchTools ranks a tool first when the query names it, as tool_search does
+// (pi ae823bc0, #11331).
+func TestSearchToolsRanksTheToolTheQueryNamesFirst(t *testing.T) {
+	describe := func(name, description string) coding.ToolDefinition {
+		return coding.ToolDefinition{Tool: agent.AgentTool{Name: name, Description: description, Parameters: ai.Object()}, Exposure: coding.ToolExposureCodemode}
+	}
+	h := setup(t, coding.SessionOptions{},
+		describe("mcp__app__queue_read", "Read a queued message of this thread."),
+		describe("mcp__dev-app__thread_read", "Read durable state and a paginated timeline from any thread. The default view returns user messages, assistant messages and plans. Continue with afterPosition until hasMore is false."),
+	)
+	// Scripts see tools by identifier: dev-app becomes dev_app.
+	text := resultText(t, h.run(`text((await searchTools("thread_read", {limit: 1})).map(t => t.name).join(","))`))
+	if !strings.Contains(text, "mcp__dev_app__thread_read") || strings.Contains(text, "mcp__app__queue_read") {
+		t.Fatalf("searchTools:\n%s", text)
+	}
+}
+
 func testTools(t *testing.T) []coding.ToolDefinition {
 	echo := agent.AgentTool{Name: "echo", Label: "Echo", Description: "Echo text back.\n\nSecond paragraph.",
 		Parameters: ai.Object(ai.Prop("text", ai.String("Text to echo"))),

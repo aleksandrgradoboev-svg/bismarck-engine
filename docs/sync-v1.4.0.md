@@ -70,13 +70,13 @@ tool-call arguments) last. "Not here" marks hunks of the commit that stay out.
 | `984cf664` | `provider/id` references whose provider id contains a slash | `coding/resolve.go` | ported, with pi's two cases (in the reference table) |
 | `90d863f7`, `95364a54`, `f049787d` | default models: Xiaomi `mimo-v2.6-pro`, NVIDIA Nemotron 3.5 Super VL, OpenAI `gpt-6.1-sol` | `coding/resolve.go` | ported but NVIDIA's, whose model the embedded catalog lacks: it waits for the catalog regeneration, as does pi's `azure` key (`a37306d4`, the catalog's `azure-openai-responses` renamed). The defaults capture is reshot at `f049787d` (`default-models-f049787d.json`, src mode) after `5806068c2` reproduced the old one byte for byte; the test names both pending entries |
 | `e5fe9777` | drop models retired upstream | `coding/resolve.go` | ported the resolver half (GitHub Copilot `gpt-6.1-sol`); catalog at regeneration |
-| `fecc19e4` | grep context lines aligned with ripgrep for a lone CR | `coding/tooloperations.go` | to port: the engine has no ripgrep but follows its line splitting |
-| `28bea006` | accept Windows Store shell aliases | `internal/proc` | to port |
-| `27cc6bfc` | stop macOS shell groups before killing them | `internal/proc` | to port |
-| `bdd9f039` | `mcp.json` with a UTF-8 BOM | `coding/mcpext` | to port |
-| `ae823bc0` | tool search ranks tools first when the query is their name | `coding/toolsearch` | to port |
-| `3daa2028` | codemode cancellation prompt kept bounded | `coding/codemodetool`, `codemode/` | check: may already be in the codemode snapshot (`d2e7d8b7` is later) |
-| `885a564b` | queue codemode scripts at the worker limit | `coding/codemodetool` | to port |
+| `fecc19e4` | grep context lines aligned with ripgrep for a lone CR | `coding/tools.go` | ported: lines end at LF only, a lone CR stays in its line (the match runs on it, as ripgrep's does, checked against rg 15.0.0) and is dropped from the display; pi's case plus a match across the CR |
+| `28bea006` | accept Windows Store shell aliases | — | n/a: the bug is Node's `existsSync` (nodejs/node#36790); Go's `os.Stat` accepts the aliases, checked on all 82 App Execution Aliases of a Windows 11 machine with Go 1.26 |
+| `27cc6bfc` | stop macOS shell groups before killing them | `internal/proc` | ported as `KillShellProcessTree`, which the coding tools use: on macOS SIGSTOP to the group before SIGKILL. `durable/env` keeps `KillProcessTree`, as pi's durable environment does not stop first. pi's five signal-order cases, run under Linux (WSL) |
+| `bdd9f039` | `mcp.json` with a UTF-8 BOM | `coding/mcpext` | ported the reading half, with pi's case; the engine does not edit `mcp.json` |
+| `ae823bc0` | tool search ranks tools first when the query is their name | `internal/search` | ported as `Ranker.NamesFirst`, which `tool_search` and codemode's `searchTools` set; the durable searches keep plain BM25, as pi's `packages/durable/src/search.ts` does. pi's case |
+| `3daa2028` | codemode cancellation prompt kept bounded | — | n/a: its changes are to worker-backed VMs (Bun's `terminate()` behind a non-interruptible built-in, #10748); the engine's VM runs on a goroutine, and a timeout ends at 200–318 ms for a 200 ms limit with a catastrophic regex, a 2M-element sort, a 50M split and a 3M-object `JSON.stringify` (measured), so nothing stalls the result |
+| `885a564b` | queue codemode scripts at the worker limit | — | n/a: the engine's codemode has no workers and no worker limit (`PI_CODEMODE_MAX_WORKERS`), so a script never waits for one |
 
 ## 3. Core, not ported
 

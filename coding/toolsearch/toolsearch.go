@@ -100,7 +100,7 @@ func searchAndLoad(tools Tools, query string, limit int) []loadedTool {
 			documents = append(documents, NewDocument(d.Tool, d.Namespace))
 		}
 	}
-	matches := Ranker{}.Rank(query, documents, limit)
+	matches := Ranker{NamesFirst: true}.Rank(query, documents, limit)
 	if len(matches) > 0 {
 		next := slices.Clone(active)
 		for _, m := range matches {

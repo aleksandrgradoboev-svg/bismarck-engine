@@ -570,7 +570,7 @@ func discoveryGlobals(tools []agent.AgentTool, samples map[string]string, namesp
 					}
 					documents = append(documents, toolsearch.NewDocument(tool, ns))
 				}
-				matches := toolsearch.Ranker{}.Rank(q, documents, int(math.Min(limit.(float64), math.MaxInt32)))
+				matches := toolsearch.Ranker{NamesFirst: true}.Rank(q, documents, int(math.Min(limit.(float64), math.MaxInt32)))
 				out := make([]searchEntry, len(matches))
 				for i, m := range matches {
 					out[i] = entry(m.Name)
