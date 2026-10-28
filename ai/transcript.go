@@ -486,8 +486,12 @@ func GetDeclaredTools(messages []Message) []Tool {
 }
 
 // HasToolRedefinitions reports whether a tool name was declared twice with
-// different definitions. Transports that reference tools by name (Anthropic
-// tool_addition/tool_removal) cannot express that.
+// different definitions. A transport that can only reference previously
+// declared tools by name cannot replay such a history.
+//
+// Deprecated: no built-in transport needs this anymore: Anthropic expresses
+// redefinitions with inline tool_definition blocks (pi b271b0a5). Kept for API
+// compatibility, as in pi.
 func HasToolRedefinitions(messages []Message) bool {
 	declared := newToolMap()
 	for _, message := range messages {
@@ -508,23 +512,41 @@ func HasToolRedefinitions(messages []Message) bool {
 // HasNonAdditiveToolChanges reports whether tool history contains a removal or
 // a same-name redeclaration that an addition-only transport cannot replay.
 func HasNonAdditiveToolChanges(messages []Message) bool {
-	declared := map[string]bool{}
+	return findLastNonAdditiveToolChange(systemMessagesOf(messages)) >= 0
+}
+
+// systemMessagesOf is pi's `messages.filter(isSystemMessage)`.
+func systemMessagesOf(messages []Message) []Message {
+	var out []Message
 	for _, message := range messages {
-		system, ok := systemMessageOf(message)
-		if !ok {
-			continue
+		if _, ok := systemMessageOf(message); ok {
+			out = append(out, message)
 		}
+	}
+	return out
+}
+
+// findLastNonAdditiveToolChange is the index of the last system message with a
+// removal or a same-name redeclaration, or -1 (pi 530015d9).
+func findLastNonAdditiveToolChange(systemMessages []Message) int {
+	// A name declared before counts as a redeclaration even after its removal:
+	// Kimi K3 ignores a removed tool that a later tool message declares again
+	// (pi caa6967b, verified October 2026).
+	declared := map[string]bool{}
+	last := -1
+	for index, message := range systemMessages {
+		system, _ := systemMessageOf(message)
 		if len(system.ToolsRemoved) > 0 {
-			return true
+			last = index
 		}
 		for _, tool := range system.ToolsAdded {
 			if declared[tool.Name] {
-				return true
+				last = index
 			}
 			declared[tool.Name] = true
 		}
 	}
-	return false
+	return last
 }
 
 // TranscriptTools splits tool declarations between the top-level request field
@@ -532,25 +554,52 @@ func HasNonAdditiveToolChanges(messages []Message) bool {
 type TranscriptTools struct {
 	// RequestTools are the tools sent in the top-level request field.
 	RequestTools []Tool
-	// AnchorsAdditions reports whether later system messages carry their own
-	// ToolsAdded as in-place additions. When false, RequestTools already holds
-	// the complete current tool set.
-	AnchorsAdditions bool
+	// FoldedSystemMessages is the number of leading system messages whose tool
+	// changes RequestTools already holds. Every later system message carries
+	// its own tool changes in place.
+	FoldedSystemMessages int
 }
 
+// TranscriptToolSupport is how a transport can express tool changes after the
+// first request (pi's TranscriptToolSupport, caa6967b).
+type TranscriptToolSupport string
+
+const (
+	// ToolSupportNone: only the top-level tool list exists; it always holds
+	// the current tools.
+	ToolSupportNone TranscriptToolSupport = "none"
+	// ToolSupportAdditions: tools can be added at a later message, but not
+	// removed or redefined.
+	ToolSupportAdditions TranscriptToolSupport = "additions"
+	// ToolSupportChanges: every tool, including the initial ones, is declared
+	// in place, and a later declaration under the same name replaces the
+	// earlier one. Removals are not expressible on the wire, so the transport
+	// announces them as text and the removed tools stay declared.
+	ToolSupportChanges TranscriptToolSupport = "changes"
+)
+
 // ResolveTranscriptTools splits tool declarations between the top-level request
-// field and in-place additions. Transports that can anchor additions at a
-// system message keep the initial tools at the top and load later ones where
-// they appear; that only works when no tool was removed or redeclared, so
-// everything else sends the current tool list.
-func ResolveTranscriptTools(messages []Message, supportsToolAdditions bool) TranscriptTools {
-	anchorsAdditions := supportsToolAdditions && !HasNonAdditiveToolChanges(messages)
-	if !anchorsAdditions {
-		return TranscriptTools{RequestTools: GetCurrentTools(messages)}
+// field and in-place changes (pi caa6967b, 530015d9).
+//
+// With ToolSupportChanges the top-level list stays empty and every system
+// message, the leading one included, declares its tools in place: an in-place
+// declaration can replace an earlier in-place one, but not a top-level one.
+// With ToolSupportAdditions a removal or redefinition cannot be expressed in
+// place, so the top-level list becomes the tool state after the last such
+// change; later additions stay anchored, and the cached prefix is invalidated
+// once per removal instead of on every later addition. With ToolSupportNone the
+// top-level list is the current tool set.
+func ResolveTranscriptTools(messages []Message, support TranscriptToolSupport) TranscriptTools {
+	systemMessages := systemMessagesOf(messages)
+	switch support {
+	case ToolSupportNone:
+		return TranscriptTools{RequestTools: GetCurrentTools(systemMessages), FoldedSystemMessages: len(systemMessages)}
+	case ToolSupportChanges:
+		return TranscriptTools{}
 	}
-	var requestTools []Tool
-	if initial, ok := GetInitialSystemMessage(messages); ok {
-		requestTools = initial.ToolsAdded
+	folded := findLastNonAdditiveToolChange(systemMessages) + 1
+	if _, ok := GetInitialSystemMessage(messages); ok && folded < 1 {
+		folded = 1
 	}
-	return TranscriptTools{RequestTools: requestTools, AnchorsAdditions: true}
+	return TranscriptTools{RequestTools: GetCurrentTools(systemMessages[:folded]), FoldedSystemMessages: folded}
 }

@@ -548,11 +548,16 @@ func (r *FauxProviderRegistration) streamWithDeltas(ctx context.Context, stream 
 			partial.Content = append(partial.Content, ai.ToolCall{ID: b.ID, Name: b.Name, Arguments: map[string]any{}})
 			stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallStart, ContentIndex: index, Partial: partial.Clone()})
 			argsJSON, _ := jstext.Stringify(b.OrderedArguments())
+			// Partial arguments come from the same parser real providers use,
+			// so consumers see them grow (pi f715a15c).
+			toolArguments := NewToolCallArgumentsStream()
 			for _, chunk := range splitByTokenSize(argsJSON, r.minTokenSize, r.maxTokenSize) {
 				r.scheduleChunk(chunk)
 				if abortNow() {
 					return
 				}
+				args, order := toolArguments.Append(chunk)
+				partial.Content[index] = ai.ToolCall{ID: b.ID, Name: b.Name, Arguments: args, ArgumentsOrder: order}
 				stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: index, Delta: chunk, Partial: partial.Clone()})
 			}
 			partial.Content[index] = b
@@ -609,14 +614,16 @@ func (r *FauxProviderRegistration) withUsageEstimate(message *ai.AssistantMessag
 		if prev, ok := r.promptCache[sessionID]; ok {
 			cachedChars := commonPromptPrefixLength(prev, prompt)
 			cacheRead = estimateCodeUnitTokens(cachedChars)
-			cacheWrite = estimateCodeUnitTokens(promptLength - cachedChars)
-			input = promptTokens - cacheRead
-			if input < 0 {
-				input = 0
+			cacheWrite = promptTokens - cacheRead
+			if cacheWrite < 0 {
+				cacheWrite = 0
 			}
 		} else {
 			cacheWrite = promptTokens
 		}
+		// Every prompt token is either read from or written to the simulated
+		// cache (pi f3fa8bd9).
+		input = 0
 		r.promptCache[sessionID] = prompt
 		r.mu.Unlock()
 	}

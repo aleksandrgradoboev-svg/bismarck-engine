@@ -3,6 +3,7 @@ package coding
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -188,6 +189,19 @@ func TestPrepareLoadoutFailure(t *testing.T) {
 	}
 }
 
+// branchOf is a projection whose branch holds messages as message entries,
+// in order, each the child of the one before.
+func branchOf(messages ...agent.AgentMessage) BranchProjection {
+	p := BranchProjection{BranchContext: BranchContext{Messages: messages}}
+	parent := ""
+	for i, m := range messages {
+		id := fmt.Sprintf("e%d", i)
+		p.Branch = append(p.Branch, &SessionEntry{ID: id, ParentID: parent, Type: "message", Message: m})
+		parent = id
+	}
+	return p
+}
+
 func declaringTranscript(names ...string) []agent.AgentMessage {
 	tools := make([]ai.Tool, 0, len(names))
 	for _, name := range names {
@@ -196,13 +210,13 @@ func declaringTranscript(names ...string) []agent.AgentMessage {
 	return []agent.AgentMessage{ai.SystemMessage{Content: ai.ContentList{ai.TextContent{Text: "prompt"}}, ToolsAdded: tools}}
 }
 
-// TestRestoreToolsFromTranscript: the transcript's declarations become the
+// TestRestoreToolsFromBranch: the branch's declarations become the
 // loadout; a declared tool that has not registered yet is pending and becomes
 // active when it registers.
-func TestRestoreToolsFromTranscript(t *testing.T) {
+func TestRestoreToolsFromBranch(t *testing.T) {
 	sess := registrySession(t, SessionOptions{})
 	sess.LoadHistory(declaringTranscript("read", "mcp__docs__search"))
-	sess.RestoreToolsFromTranscript()
+	sess.RestoreToolsFromBranch(branchOf(sess.History()...))
 	if got := sess.ActiveToolNames(); !slices.Equal(got, []string{"read"}) {
 		t.Fatalf("active %v", got)
 	}
@@ -220,7 +234,7 @@ func TestRestoreToolsFromTranscript(t *testing.T) {
 
 	// A transcript without a system message leaves the loadout alone.
 	empty := registrySession(t, SessionOptions{})
-	empty.RestoreToolsFromTranscript()
+	empty.RestoreToolsFromBranch(branchOf(empty.History()...))
 	if got := empty.ActiveToolNames(); !slices.Equal(got, []string{"read", "bash", "edit", "write"}) {
 		t.Fatalf("empty transcript %v", got)
 	}
@@ -232,7 +246,7 @@ func TestPendingToolsDropped(t *testing.T) {
 	restored := func(t *testing.T, opts SessionOptions) *Session {
 		sess := registrySession(t, opts)
 		sess.LoadHistory(declaringTranscript("read", "late"))
-		sess.RestoreToolsFromTranscript()
+		sess.RestoreToolsFromBranch(branchOf(sess.History()...))
 		return sess
 	}
 	sess := restored(t, SessionOptions{})

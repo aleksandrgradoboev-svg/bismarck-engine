@@ -60,6 +60,9 @@ jobs:
           # the race detector's slowdown breaks; the test step runs them.
           go test -race -count=1 -skip 'TestOutputAtItemLimitIsLinear|TestMemoryLimit' ./coding/codemodetool/...
           go test -race -count=1 -run 'Nested|Registry|SetPromptSection|ModelOnly|Orchestration|PrepareLoadout|RestoreTools|PendingTools|ToolModifiers|ExcludeTools|AllowlistKeepsMCP|RestoreSkipsUnnamed' ./agent/ ./coding/
+          # A Models request's span stays open on its own goroutine while
+          # another forwards and observes the stream.
+          go test -race -count=1 -run 'Telemetry|ForwardObserved' ./ai/
       # The SQLite file adapter is a module of its own, so the root module needs
       # no driver; ./... above does not reach it.
       - name: vet and test (SQLite file adapter module)

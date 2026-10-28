@@ -291,6 +291,7 @@ type SessionRecorder struct {
 	flushed         bool
 	hasConversation bool
 	createFn        func() (*os.File, error)
+	err             error // see Err
 }
 
 // StartSession creates a new session for cwd and buffers the header plus an
@@ -435,44 +436,53 @@ func (r *SessionRecorder) Path() string { return r.path }
 // ID returns the session id.
 func (r *SessionRecorder) ID() string { return r.id }
 
-func writeLine(f *os.File, entry map[string]any) {
+func writeLine(f *os.File, entry map[string]any) error {
 	data, err := json.Marshal(entry)
 	if err != nil {
-		return
+		return err
 	}
-	_, _ = f.Write(append(data, '\n'))
+	_, err = f.Write(append(data, '\n'))
+	return err
 }
 
 // persist writes entry per pi's _persist(entry): until the session has a user
 // or assistant message (pi _hasConversation) entries are held back and the
 // file is not even created; the entry that completes the conversation flushes
-// them all atomically, and every later entry is appended on its own.
-func (r *SessionRecorder) persist(entry map[string]any) {
+// them all atomically, and every later entry is appended on its own. A failed
+// create or write is returned, with the file closed if the flush opened it.
+func (r *SessionRecorder) persist(entry map[string]any) error {
 	if r.flushed {
 		if r.file != nil {
-			writeLine(r.file, entry)
+			return writeLine(r.file, entry)
 		}
-		return
+		return nil
 	}
 	r.pending = append(r.pending, entry)
 	if !r.hasConversation {
-		return
+		return nil
 	}
 	f, err := r.createFn()
 	if err != nil {
-		// The entries stay pending and the next one retries the create, as
-		// pi's next _persist does; pi also throws the error out of
-		// appendMessage, which the recorder has no way to return.
-		return
+		return err
+	}
+	for _, e := range r.pending {
+		if err := writeLine(f, e); err != nil {
+			f.Close()
+			return err
+		}
 	}
 	r.file = f
-	for _, e := range r.pending {
-		writeLine(f, e)
-	}
 	r.pending = nil
 	r.flushed = true
+	return nil
 }
 
+// appendEntry adds entry as the child of the leaf and makes it the leaf, and
+// returns its id. An entry that fails to persist is not kept: the leaf stays,
+// so later entries chain to the last entry actually written instead of to a
+// parent missing from the file, which a resume would stop at, losing all the
+// history before it (pi 807a5c05, #11460). It then returns "" and Err reports
+// the failure.
 func (r *SessionRecorder) appendEntry(entry map[string]any) string {
 	id := genEntryID(func(id string) bool { return r.byID[id] != nil })
 	entry["id"] = id
@@ -482,10 +492,28 @@ func (r *SessionRecorder) appendEntry(entry map[string]any) string {
 		entry["parentId"] = r.lastID
 	}
 	entry["timestamp"] = isoNow()
+	previousLeaf, wasFlushed := r.lastID, r.flushed
 	r.byID[id] = recordEntry(entry, "")
 	r.lastID = id
-	r.persist(entry)
+	if err := r.persist(entry); err != nil {
+		delete(r.byID, id)
+		r.lastID = previousLeaf
+		if !wasFlushed {
+			r.pending = r.pending[:len(r.pending)-1]
+		}
+		r.err = err
+		return ""
+	}
 	return id
+}
+
+// Err is the error of the most recent entry that failed to persist, nil when
+// none has: such an entry is not kept, and the call that appended it returned
+// "" (pi's SessionManager throws it out of the append instead).
+func (r *SessionRecorder) Err() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.err
 }
 
 // recordedEntry is what the recorder keeps of an entry: its place in the tree
@@ -592,7 +620,8 @@ func (r *SessionRecorder) ForkFrom(entryID string) {
 }
 
 // RecordMessage appends a message entry for an agent transcript message and
-// returns its entry id (usable as a fork point).
+// returns its entry id (usable as a fork point), or "" when it could not be
+// written (see Err).
 func (r *SessionRecorder) RecordMessage(m agent.AgentMessage) string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -600,10 +629,17 @@ func (r *SessionRecorder) RecordMessage(m agent.AgentMessage) string {
 	if err != nil {
 		return ""
 	}
+	// pi's _hasConversation reads the kept entries, so a conversation message
+	// that is not kept does not count.
+	hadConversation := r.hasConversation
 	if role := m.MessageRole(); role == ai.RoleUser || role == ai.RoleAssistant {
 		r.hasConversation = true
 	}
-	return r.appendEntry(map[string]any{"type": "message", "message": json.RawMessage(raw)})
+	id := r.appendEntry(map[string]any{"type": "message", "message": json.RawMessage(raw)})
+	if id == "" {
+		r.hasConversation = hadConversation
+	}
+	return id
 }
 
 // RecordThinkingLevel appends a thinking-level-change entry.

@@ -157,16 +157,14 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 		// pi createClient (openai-completions.ts, upstream 87af49dec)
 		// builds ONE header object and hands it to the SDK as
 		// `defaultHeaders`; headerObject is that object, slots and all.
-		// It opens with pi's runtime user agent —
-		// `{"User-Agent": getPiUserAgent(), ...model.headers}` — so it is a
-		// default every later source outranks, xai included.
+		// It opens with the request identity's headers —
+		// `{...getIdentityHeaders(model, identity), ...model.headers}`
+		// (upstream adc5fa9f) — so the User-Agent and attribution are
+		// defaults every later source outranks, xai included. OpenCode's
+		// session header sits with them (attribution.go).
 		o := &headerObject{}
-		o.merge(piUserAgentHeaders())
-		// pi mergeProviderAttributionHeaders (sdk.ts) puts the attribution
-		// bundle at the bottom of the precedence stack: emit session +
-		// default attribution first so model.headers and options.headers
-		// override them.
-		applyAttributionDefaults(o.set, model, opts.SessionID)
+		mergeIdentityHeaders(o, model, opts.Identity)
+		mergeOpenCodeSession(o, model, opts.SessionID)
 		// Header-owned provider auth (pi resolves it in the auth layer and
 		// delivers it as options.headers, above attribution and below
 		// model/consumer headers).
@@ -321,28 +319,7 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 			}
 			b.grammar = newGrammarInputBuffer(property)
 			b.args = map[string]any{property: ""}
-			b.partialJSON.Reset()
-		}
-		// grammarInput is the raw input accumulated on a custom tool call so far.
-		grammarInput := func(b *blockBuilder) string {
-			if b.grammar == nil {
-				return ""
-			}
-			s, _ := b.args[b.grammar.property].(string)
-			return s
-		}
-		// appendGrammarInput advances a custom tool call to nextInput and returns
-		// the synthesized JSON delta (empty when there is nothing to emit).
-		appendGrammarInput := func(b *blockBuilder, nextInput string, final bool) (string, error) {
-			if b.grammar == nil {
-				return "", nil
-			}
-			delta, _, err := b.grammar.append(nextInput, final)
-			if err != nil {
-				return "", err
-			}
-			b.args = map[string]any{b.grammar.property: nextInput}
-			return delta, nil
+			b.arguments = nil // pi: state.input = customInput(...)
 		}
 		// toolCallName is pi's `toolCall.function?.name ?? toolCall.custom?.name`,
 		// undefined when neither is set.
@@ -384,7 +361,7 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 			}
 			if b == nil {
 				// pi: `id: toolCall.id || ""`.
-				b = &blockBuilder{kind: "toolCall", toolName: jsStringField(name), args: map[string]any{}}
+				b = &blockBuilder{kind: "toolCall", toolName: jsStringField(name), args: map[string]any{}, arguments: NewToolCallArgumentsStream()}
 				if jsTruthy(id) {
 					b.toolID = jsStringField(id)
 				}
@@ -486,33 +463,12 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 			if !jsTruthy(d) {
 				return nil
 			}
-			// pi processes delta fields in order: content first, then reasoning,
-			// then tool_calls, then reasoning_details (openai-completions.ts:299-385).
-			// pi: `content !== null && content !== undefined && content.length > 0`,
-			// then `block.text += content`: an array's string is its elements
-			// joined, and an object is read by its own "length".
-			if content := jsGet(d, "content"); content != nil && content != jsUndefined {
-				positive, err := jsLengthPositive(content)
-				if err != nil {
-					return err
-				}
-				if positive {
-					if textBuilder == nil {
-						textBuilder = &blockBuilder{kind: "text"}
-						order = append(order, textBuilder)
-						materialize()
-						stream.Push(ai.AssistantMessageEvent{Type: ai.EventTextStart, ContentIndex: indexOf(textBuilder), Partial: output.Clone()})
-					}
-					text, err := jsToString(content)
-					if err != nil {
-						return err
-					}
-					textBuilder.text.WriteString(text)
-					materialize()
-					stream.Push(ai.AssistantMessageEvent{Type: ai.EventTextDelta, ContentIndex: indexOf(textBuilder), Delta: text, Partial: output.Clone()})
-				}
-			}
-
+			// pi processes delta fields in order: reasoning, then
+			// reasoning_details, then content, then tool_calls. Reasoning goes
+			// first because some proxies (e.g. LiteLLM) put reasoning and answer
+			// in one delta, and the thinking block must precede the text block
+			// (pi 63035734, #10926).
+			//
 			// Reasoning may arrive in reasoning_content (llama.cpp), reasoning, or
 			// reasoning_text. Use the first non-empty string field to avoid
 			// duplication (e.g. chutes.ai returns both with the same content),
@@ -537,62 +493,6 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 				thinkBuilder.thinking.WriteString(reasoningDelta)
 				materialize()
 				stream.Push(ai.AssistantMessageEvent{Type: ai.EventThinkingDelta, ContentIndex: indexOf(thinkBuilder), Delta: reasoningDelta, Partial: output.Clone()})
-			}
-
-			// pi: `for (const toolCall of choice.delta.tool_calls)` when it is
-			// truthy. A string iterates its characters; anything else that is
-			// not an array throws.
-			if toolCalls := jsGet(d, "tool_calls"); jsTruthy(toolCalls) {
-				var entries []any
-				switch v := toolCalls.(type) {
-				case []any:
-					entries = v
-				case string:
-					for _, r := range v {
-						entries = append(entries, string(r))
-					}
-				default:
-					return errToolCallsNotIterable
-				}
-				for _, toolCall := range entries {
-					b, err := ensureToolCallBlock(toolCall)
-					if err != nil {
-						return err
-					}
-					// id and name are first-wins, never overwritten (pi :350-356).
-					if id := jsGet(toolCall, "id"); b.toolID == "" && jsTruthy(id) {
-						b.toolID = jsStringField(id)
-						setToolBuilderByID(id, b)
-					}
-					if name := toolCallName(toolCall); b.toolName == "" && jsTruthy(name) {
-						b.toolName = jsStringField(name)
-					}
-
-					// pi pushes a toolcall_delta for EVERY delta entry, with an empty
-					// delta string when no arguments arrived (pi :358-369).
-					delta := ""
-					if arguments := jsGet(jsGet(toolCall, "function"), "arguments"); jsTruthy(arguments) {
-						text, err := jsToString(arguments)
-						if err != nil {
-							return err
-						}
-						delta = text
-						b.partialJSON.WriteString(delta)
-						b.args, b.argsOrder = parseStreamingJSON(b.partialJSON.String())
-					} else if input := jsGet(jsGet(toolCall, "custom"), "input"); jsTruthy(input) {
-						text, err := jsToString(input)
-						if err != nil {
-							return err
-						}
-						jsonDelta, gerr := appendGrammarInput(b, grammarInput(b)+text, false)
-						if gerr != nil {
-							return gerr
-						}
-						delta = jsonDelta
-					}
-					materialize()
-					stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: indexOf(b), Delta: delta, Partial: output.Clone()})
-				}
 			}
 
 			// reasoning_details: OpenRouter's structured reasoning replay channel
@@ -626,6 +526,94 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 				// fold into the entry they extend (upstream c5ad7c1b0).
 				thinkingDetails = appendOpenAIReasoningDetail(thinkingDetails, json.RawMessage(text))
 			}
+
+			// pi: `content !== null && content !== undefined && content.length > 0`,
+			// then `block.text += content`: an array's string is its elements
+			// joined, and an object is read by its own "length".
+			if content := jsGet(d, "content"); content != nil && content != jsUndefined {
+				positive, err := jsLengthPositive(content)
+				if err != nil {
+					return err
+				}
+				if positive {
+					if textBuilder == nil {
+						textBuilder = &blockBuilder{kind: "text"}
+						order = append(order, textBuilder)
+						materialize()
+						stream.Push(ai.AssistantMessageEvent{Type: ai.EventTextStart, ContentIndex: indexOf(textBuilder), Partial: output.Clone()})
+					}
+					text, err := jsToString(content)
+					if err != nil {
+						return err
+					}
+					textBuilder.text.WriteString(text)
+					materialize()
+					stream.Push(ai.AssistantMessageEvent{Type: ai.EventTextDelta, ContentIndex: indexOf(textBuilder), Delta: text, Partial: output.Clone()})
+				}
+			}
+
+			// pi: `for (const toolCall of choice.delta.tool_calls)` when it is
+			// truthy. A string iterates its characters; anything else that is
+			// not an array throws.
+			if toolCalls := jsGet(d, "tool_calls"); jsTruthy(toolCalls) {
+				var entries []any
+				switch v := toolCalls.(type) {
+				case []any:
+					entries = v
+				case string:
+					for _, r := range v {
+						entries = append(entries, string(r))
+					}
+				default:
+					return errToolCallsNotIterable
+				}
+				for _, toolCall := range entries {
+					b, err := ensureToolCallBlock(toolCall)
+					if err != nil {
+						return err
+					}
+					// id and name are first-wins, never overwritten (pi :350-356).
+					if id := jsGet(toolCall, "id"); b.toolID == "" && jsTruthy(id) {
+						b.toolID = jsStringField(id)
+						setToolBuilderByID(id, b)
+					}
+					if name := toolCallName(toolCall); b.toolName == "" && jsTruthy(name) {
+						b.toolName = jsStringField(name)
+					}
+
+					// pi pushes a toolcall_delta for EVERY delta entry, with an empty
+					// delta string when no arguments arrived (pi :358-369).
+					// Since pi f715a15c the arguments go to the call's own kind of
+					// input only: function arguments to a JSON call, custom input
+					// to a grammar call; the other kind is dropped.
+					delta := ""
+					if arguments := jsGet(jsGet(toolCall, "function"), "arguments"); jsTruthy(arguments) && b.grammar == nil {
+						text, err := jsToString(arguments)
+						if err != nil {
+							return err
+						}
+						delta = text
+						if _, isString := arguments.(string); isString {
+							b.args, b.argsOrder = b.arguments.Append(text)
+						} else {
+							b.args, b.argsOrder = b.arguments.appendNonString(text)
+						}
+					} else if input := jsGet(jsGet(toolCall, "custom"), "input"); jsTruthy(input) && b.grammar != nil {
+						text, err := jsToString(input)
+						if err != nil {
+							return err
+						}
+						jsonDelta, _, gerr := b.grammar.appendDelta(text)
+						if gerr != nil {
+							return gerr
+						}
+						delta = jsonDelta
+						b.args = map[string]any{b.grammar.property: b.grammar.Input()}
+					}
+					materialize()
+					stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: indexOf(b), Delta: delta, Partial: output.Clone()})
+				}
+			}
 			return nil
 		})
 
@@ -654,17 +642,18 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 				stream.Push(ai.AssistantMessageEvent{Type: ai.EventThinkingEnd, ContentIndex: indexOf(b), Content: b.thinking.String(), Partial: output.Clone()})
 			case "toolCall":
 				if b.grammar != nil {
-					delta, gerr := appendGrammarInput(b, grammarInput(b), true)
+					delta, ok, gerr := b.grammar.close("", false)
 					if gerr != nil {
 						fail(gerr)
 						return
 					}
-					if delta != "" {
+					if ok {
 						materialize()
 						stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: indexOf(b), Delta: delta, Partial: output.Clone()})
 					}
 				} else {
-					b.args, b.argsOrder = parseStreamingJSON(b.partialJSON.String())
+					// The finished call is parsed strictly (pi 87f9a364).
+					b.args, b.argsOrder, b.argsError = b.arguments.Finish()
 				}
 				materialize()
 				tc := b.toContent().(ai.ToolCall)
@@ -730,8 +719,11 @@ func buildOpenAIParams(model *ai.Model, req ai.TranscriptContext, opts *OpenAIOp
 	// Tool additions anchor in the transcript only where the model takes both
 	// later system messages and the tools they add; otherwise the request
 	// declares the complete current tool set.
-	supportsToolAdditions := compat.SupportsMidConvoSystemMessages && compat.SupportsMidConvoToolAdditions
-	transcriptTools := ai.ResolveTranscriptTools(req.Messages, supportsToolAdditions)
+	toolSupport := ai.ToolSupportNone
+	if compat.SupportsMidConvoSystemMessages && compat.SupportsMidConvoToolAdditions {
+		toolSupport = ai.ToolSupportAdditions
+	}
+	transcriptTools := ai.ResolveTranscriptTools(req.Messages, toolSupport)
 
 	// pi's convertMessages resolves the transcript, and its tools, again itself
 	// (a no-op on a transcript the stream already resolved), so a builder handed
@@ -742,7 +734,8 @@ func buildOpenAIParams(model *ai.Model, req ai.TranscriptContext, opts *OpenAIOp
 	transformed := transformMessages(resolved.Messages, model, func(id string) string {
 		return normalizeOpenAIToolCallID(model, id)
 	})
-	anchorsAdditions := ai.ResolveTranscriptTools(resolved.Messages, supportsToolAdditions).AnchorsAdditions
+	foldedSystemMessages := ai.ResolveTranscriptTools(resolved.Messages, toolSupport).FoldedSystemMessages
+	systemIndex := 0
 	instructionRole := "system"
 	if model.Reasoning && compat.SupportsDeveloperRole {
 		instructionRole = "developer"
@@ -769,8 +762,13 @@ func buildOpenAIParams(model *ai.Model, req ai.TranscriptContext, opts *OpenAIOp
 
 		if sm, ok := asSystemMsg(m); ok {
 			// i counts the transformed transcript, as pi's loop does: the message
-			// at index 0 is the prompt, any later one an update.
-			if i > 0 && anchorsAdditions && len(sm.ToolsAdded) > 0 {
+			// at index 0 is the prompt, any later one an update. transformMessages
+			// keeps system messages in order, so their position matches the
+			// transcript, and those past the folded ones anchor their additions
+			// (pi caa6967b).
+			anchors := systemIndex >= foldedSystemMessages
+			systemIndex++
+			if anchors && len(sm.ToolsAdded) > 0 {
 				tools, err := convertOpenAITools(sm.ToolsAdded, compat)
 				if err != nil {
 					return nil, err
@@ -971,7 +969,10 @@ func buildOpenAIParams(model *ai.Model, req ai.TranscriptContext, opts *OpenAIOp
 				}
 				textResult := strings.Join(text, "\n")
 				content := textResult
-				if content == "" {
+				// Whitespace-only output (a bare \r\n from bash) counts as empty:
+				// some providers reject it with a 400 that then repeats on every
+				// request of the session (pi 4dd2b149, #8720).
+				if jstext.Trim(textResult) == "" {
 					// Only claim an attached image when one is actually present;
 					// empty results with no image get a distinct placeholder so the
 					// model doesn't hallucinate an attachment (pi #6290).
@@ -1609,6 +1610,10 @@ func parseChunkUsage(raw any, model *ai.Model) (ai.Usage, error) {
 		TotalTokens: jsTokenCount(total),
 	}
 	ai.CalculateCost(model, &usage)
+	// OpenRouter adds billing fields to the streamed usage (pi cae8d69e).
+	if isOpenRouterModel(model) {
+		applyOpenRouterReportedCost(&usage, raw)
+	}
 	return usage, nil
 }
 

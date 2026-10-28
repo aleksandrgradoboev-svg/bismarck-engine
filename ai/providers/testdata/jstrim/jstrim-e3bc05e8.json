@@ -1,0 +1,489 @@
+{
+	"sha": "e3bc05e8",
+	"source": "upstream e3bc05e8 packages/ai/src, @anthropic-ai/sdk 0.129.0 sha512-MH7LB20kNpGLUpPTe2OG5XvL/KhX8HUO9XyBaFjgFk6TLS4Xjt0VPIuMKywe7POKKPslX+QxSlVok9e+8kG5Nw==, openai 7.19.0 sha512-MX2s3u2L5racTO0CC/SWpCOasJQBCJrqLKXK+l82cAhdeF8mPMBEe/gxMm0ZFa2xpKpOFLRjxv5afYEZbBXmbQ==, @google/genai 2.21.0 sha512-+PDtco2/Z0ONdzCGekCoCT+O1VJS9xJQNN4XzQpXG/t3El/SWWMkCWlFRO1KmivOHPa4Q0VjUYu1HBKCZ/v33Q==, node v24.18.0",
+	"bodies": {
+		"anthropic": {
+			"payload": {
+				"model": "claude-sonnet-4-5",
+				"messages": [
+					{
+						"role": "user",
+						"content": ""
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": ""
+							}
+						]
+					},
+					{
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": ""
+							},
+							{
+								"type": "thinking",
+								"thinking": "",
+								"signature": ""
+							},
+							{
+								"type": "text",
+								"text": "unsigned"
+							}
+						]
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "last",
+								"cache_control": {
+									"type": "ephemeral"
+								}
+							}
+						]
+					}
+				],
+				"max_tokens": 1000,
+				"stream": true,
+				"betas": [
+					"x-beta",
+					"y-beta"
+				],
+				"system": [
+					{
+						"type": "text",
+						"text": "base prompt",
+						"cache_control": {
+							"type": "ephemeral"
+						}
+					}
+				],
+				"thinking": {
+					"type": "disabled"
+				}
+			}
+		},
+		"completions": {
+			"payload": {
+				"model": "gpt-4o",
+				"messages": [
+					{
+						"role": "developer",
+						"content": "base prompt"
+					},
+					{
+						"role": "user",
+						"content": "first"
+					},
+					{
+						"role": "assistant",
+						"content": "",
+						"reasoning_content": ""
+					},
+					{
+						"role": "user",
+						"content": "second"
+					},
+					{
+						"role": "assistant",
+						"content": "visible"
+					},
+					{
+						"role": "user",
+						"content": "third"
+					}
+				],
+				"stream": true,
+				"stream_options": {
+					"include_usage": true
+				},
+				"store": false,
+				"max_completion_tokens": 1000
+			}
+		},
+		"googleContents": [
+			{
+				"parts": [
+					{
+						"text": "Hi"
+					}
+				],
+				"role": "user"
+			},
+			{
+				"parts": [
+					{
+						"text": ""
+					},
+					{
+						"text": "",
+						"thought": true
+					},
+					{
+						"functionCall": {
+							"args": {
+								"command": "ls"
+							},
+							"id": "call_1",
+							"name": "bash"
+						}
+					}
+				],
+				"role": "model"
+			},
+			{
+				"parts": [
+					{
+						"functionResponse": {
+							"name": "bash",
+							"response": {
+								"error": "No result provided"
+							},
+							"id": "call_1"
+						}
+					}
+				],
+				"role": "user"
+			}
+		]
+	},
+	"auth": {
+		"anthropicBom": {
+			"error": "No API key for provider: anthropic"
+		},
+		"anthropicNel": {
+			"payload": true
+		},
+		"completionsBom": {
+			"error": "No API key for provider: openai"
+		},
+		"completionsNel": {
+			"payload": true
+		}
+	},
+	"streams": {
+		"completions": {
+			"space": {
+				"sse": "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+				"stopReason": "stop",
+				"errorMessage": "",
+				"text": "hi"
+			},
+			"tab": {
+				"sse": "data:\t{\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+				"stopReason": "stop",
+				"errorMessage": "",
+				"text": "hi"
+			},
+			"bomBefore": {
+				"sse": "data:﻿{\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+				"stopReason": "error",
+				"errorMessage": "Error reading response: malformed server-sent event JSON.",
+				"text": ""
+			},
+			"nbspBefore": {
+				"sse": "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+				"stopReason": "error",
+				"errorMessage": "Error reading response: malformed server-sent event JSON.",
+				"text": ""
+			},
+			"nelBefore": {
+				"sse": "data:{\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+				"stopReason": "error",
+				"errorMessage": "Error reading response: malformed server-sent event JSON.",
+				"text": ""
+			},
+			"vtAfter": {
+				"sse": "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":null}]}\u000b\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+				"stopReason": "error",
+				"errorMessage": "Error reading response: malformed server-sent event JSON.",
+				"text": ""
+			},
+			"nelAfter": {
+				"sse": "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+				"stopReason": "error",
+				"errorMessage": "Error reading response: malformed server-sent event JSON.",
+				"text": ""
+			},
+			"emSpaceAfter": {
+				"sse": "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":null}]} \n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+				"stopReason": "error",
+				"errorMessage": "Error reading response: malformed server-sent event JSON.",
+				"text": ""
+			}
+		},
+		"responses": {
+			"space": {
+				"sse": "data: {\"type\":\"response.created\",\"response\":{\"id\":\"r\"}}\n\ndata: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}\n\ndata: {\"type\":\"response.content_part.added\",\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\"}]}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":0}}}}\n\n",
+				"stopReason": "stop",
+				"errorMessage": "",
+				"text": "hi"
+			},
+			"tab": {
+				"sse": "data: {\"type\":\"response.created\",\"response\":{\"id\":\"r\"}}\n\ndata:\t{\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}\n\ndata: {\"type\":\"response.content_part.added\",\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\"}]}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":0}}}}\n\n",
+				"stopReason": "stop",
+				"errorMessage": "",
+				"text": "hi"
+			},
+			"bomBefore": {
+				"sse": "data: {\"type\":\"response.created\",\"response\":{\"id\":\"r\"}}\n\ndata:﻿{\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}\n\ndata: {\"type\":\"response.content_part.added\",\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\"}]}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":0}}}}\n\n",
+				"stopReason": "error",
+				"errorMessage": "Error reading response: malformed server-sent event JSON.",
+				"text": ""
+			},
+			"nbspBefore": {
+				"sse": "data: {\"type\":\"response.created\",\"response\":{\"id\":\"r\"}}\n\ndata: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}\n\ndata: {\"type\":\"response.content_part.added\",\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\"}]}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":0}}}}\n\n",
+				"stopReason": "error",
+				"errorMessage": "Error reading response: malformed server-sent event JSON.",
+				"text": ""
+			},
+			"nelBefore": {
+				"sse": "data: {\"type\":\"response.created\",\"response\":{\"id\":\"r\"}}\n\ndata:{\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}\n\ndata: {\"type\":\"response.content_part.added\",\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\"}]}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":0}}}}\n\n",
+				"stopReason": "error",
+				"errorMessage": "Error reading response: malformed server-sent event JSON.",
+				"text": ""
+			},
+			"vtAfter": {
+				"sse": "data: {\"type\":\"response.created\",\"response\":{\"id\":\"r\"}}\n\ndata: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}\u000b\n\ndata: {\"type\":\"response.content_part.added\",\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\"}]}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":0}}}}\n\n",
+				"stopReason": "error",
+				"errorMessage": "Error reading response: malformed server-sent event JSON.",
+				"text": ""
+			},
+			"nelAfter": {
+				"sse": "data: {\"type\":\"response.created\",\"response\":{\"id\":\"r\"}}\n\ndata: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}\n\ndata: {\"type\":\"response.content_part.added\",\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\"}]}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":0}}}}\n\n",
+				"stopReason": "error",
+				"errorMessage": "Error reading response: malformed server-sent event JSON.",
+				"text": ""
+			},
+			"emSpaceAfter": {
+				"sse": "data: {\"type\":\"response.created\",\"response\":{\"id\":\"r\"}}\n\ndata: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}} \n\ndata: {\"type\":\"response.content_part.added\",\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\"}]}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":0}}}}\n\n",
+				"stopReason": "error",
+				"errorMessage": "Error reading response: malformed server-sent event JSON.",
+				"text": ""
+			}
+		},
+		"google": {
+			"plain": {
+				"sse": "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hi\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}]}\n\n",
+				"stopReason": "stop",
+				"errorMessage": "",
+				"text": "hi"
+			},
+			"bomBeforeData": {
+				"sse": "﻿data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hi\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}]}\n\n",
+				"stopReason": "stop",
+				"errorMessage": "",
+				"text": "hi"
+			},
+			"nbspBeforeData": {
+				"sse": " data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hi\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}]}\n\n",
+				"stopReason": "stop",
+				"errorMessage": "",
+				"text": "hi"
+			},
+			"nelBeforeData": {
+				"sse": "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hi\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}]}\n\n",
+				"stopReason": "error",
+				"errorMessage": "Google stream ended without a finish reason",
+				"text": ""
+			},
+			"bomAfterColon": {
+				"sse": "data:﻿{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hi\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}]}\n\n",
+				"stopReason": "stop",
+				"errorMessage": "",
+				"text": "hi"
+			},
+			"trailingBom": {
+				"sse": "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hi\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}]}\n\n﻿",
+				"stopReason": "stop",
+				"errorMessage": "",
+				"text": "hi"
+			},
+			"trailingNel": {
+				"sse": "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hi\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}]}\n\n",
+				"stopReason": "error",
+				"errorMessage": "Incomplete JSON segment at the end",
+				"text": "hi"
+			}
+		},
+		"piMessages": {
+			"space": {
+				"sse": "data: {\"type\":\"start\"}\n\ndata: {\"type\":\"text_start\",\"contentIndex\":0}\n\ndata: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"hi\"}\n\ndata: {\"type\":\"text_end\",\"contentIndex\":0,\"content\":\"hi\"}\n\ndata: {\"type\":\"done\",\"reason\":\"stop\",\"usage\":{\"input\":1,\"output\":1,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":2,\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0,\"total\":0}}}\n\n",
+				"stopReason": "stop",
+				"errorMessage": "",
+				"text": "hi"
+			},
+			"bomBefore": {
+				"sse": "data: {\"type\":\"start\"}\n\ndata: {\"type\":\"text_start\",\"contentIndex\":0}\n\ndata: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"hi\"}\n\ndata: {\"type\":\"text_end\",\"contentIndex\":0,\"content\":\"hi\"}\n\ndata:﻿{\"type\":\"done\",\"reason\":\"stop\",\"usage\":{\"input\":1,\"output\":1,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":2,\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0,\"total\":0}}}\n\n",
+				"stopReason": "stop",
+				"errorMessage": "",
+				"text": "hi"
+			},
+			"nelBefore": {
+				"sse": "data: {\"type\":\"start\"}\n\ndata: {\"type\":\"text_start\",\"contentIndex\":0}\n\ndata: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"hi\"}\n\ndata: {\"type\":\"text_end\",\"contentIndex\":0,\"content\":\"hi\"}\n\ndata:{\"type\":\"done\",\"reason\":\"stop\",\"usage\":{\"input\":1,\"output\":1,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":2,\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0,\"total\":0}}}\n\n",
+				"stopReason": "error",
+				"errorMessage": "Unexpected token '', \"{\"type\":\"\"... is not valid JSON",
+				"text": ""
+			}
+		}
+	},
+	"transform": [
+		{
+			"type": "thinking",
+			"thinking": ""
+		},
+		{
+			"type": "text",
+			"text": "visible"
+		}
+	],
+	"grammar": {
+		"bomLark": {
+			"lark": "﻿",
+			"regex": "a+",
+			"result": {
+				"format": "regex",
+				"definition": "a+",
+				"inputProperty": "input"
+			}
+		},
+		"nelLark": {
+			"lark": "",
+			"regex": "a+",
+			"result": {
+				"format": "lark",
+				"definition": "",
+				"inputProperty": "input"
+			}
+		},
+		"bomLarkBlankRegex": {
+			"lark": "﻿",
+			"regex": "　",
+			"error": "Tool \"g\" cannot use grammar constrained sampling: no supported grammar variant was provided."
+		},
+		"nelRegexOnly": {
+			"regex": "",
+			"result": {
+				"format": "regex",
+				"definition": "",
+				"inputProperty": "input"
+			}
+		}
+	},
+	"streamingJson": [
+		{
+			"input": "﻿",
+			"result": {}
+		},
+		{
+			"input": "",
+			"result": {}
+		},
+		{
+			"input": "{\"a\":1 ",
+			"result": {
+				"a": 1
+			}
+		},
+		{
+			"input": "﻿{\"a\":1",
+			"result": {
+				"a": 1
+			}
+		},
+		{
+			"input": "{\"a\":\"x ",
+			"result": {
+				"a": "x"
+			}
+		},
+		{
+			"input": "{\"a\":\"x",
+			"result": {
+				"a": "x"
+			}
+		},
+		{
+			"input": "{\"a\":[1,2 ",
+			"result": {
+				"a": [
+					1,
+					2
+				]
+			}
+		},
+		{
+			"input": "{\"a\":1",
+			"result": {}
+		},
+		{
+			"input": "{\"a\":1,　",
+			"result": {
+				"a": 1
+			}
+		}
+	],
+	"retryAfter": [
+		{
+			"bytes": [
+				53
+			],
+			"seconds": 5
+		},
+		{
+			"bytes": [
+				160,
+				53
+			],
+			"seconds": 5
+		},
+		{
+			"bytes": [
+				133,
+				53
+			],
+			"seconds": null
+		},
+		{
+			"bytes": [
+				194,
+				160,
+				53
+			],
+			"seconds": null
+		},
+		{
+			"bytes": [
+				194,
+				133,
+				53
+			],
+			"seconds": null
+		},
+		{
+			"bytes": [
+				239,
+				187,
+				191,
+				53
+			],
+			"seconds": null
+		},
+		{
+			"bytes": [
+				226,
+				128,
+				131,
+				53
+			],
+			"seconds": null
+		}
+	]
+}

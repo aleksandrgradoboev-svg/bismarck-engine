@@ -3,7 +3,7 @@
 // transcript_completions_native_test.go in this package.
 //
 //   node --experimental-strip-types capture-completions-native.mts <extraction> <out.json> <sha>
-//   e.g. ... capture-completions-native.mts <dir> completions-native-95fbc0499.json 95fbc0499
+//   e.g. ... capture-completions-native.mts <dir> completions-native-e3bc05e8.json e3bc05e8
 //
 // <extraction> holds packages/ai at <sha> (`git archive <sha> packages/ai` from
 // the upstream clone) and a node_modules resolving pi-ai's dependencies (the npm
@@ -15,6 +15,9 @@
 // when 890f92088 flipped openai-completions' detected supportsStrictMode to
 // false: the only movement was `"strict":false` leaving every openai-completions
 // tool, since none of these models sets the key. 0.87.0 ships that runtime.
+// Re-captured at e3bc05e8 with the src's own pinned dependencies (openai 7.19.0
+// nested for pi-ai): the same bytes as at 95fbc0499, which that node_modules
+// also reproduces.
 //
 // Each case records its model and its raw context next to the body. The two
 // Kimi cases are packages/ai/test/transcript-tool-changes.test.ts's

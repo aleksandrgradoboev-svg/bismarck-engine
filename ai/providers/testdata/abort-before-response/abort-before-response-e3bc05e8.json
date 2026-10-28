@@ -1,0 +1,137 @@
+{
+	"source": "upstream e3bc05e8 packages/ai/src/api (retryProviderRequest), @anthropic-ai/sdk 0.129.0 sha512-MH7LB20kNpGLUpPTe2OG5XvL/KhX8HUO9XyBaFjgFk6TLS4Xjt0VPIuMKywe7POKKPslX+QxSlVok9e+8kG5Nw==, openai 7.19.0 sha512-MX2s3u2L5racTO0CC/SWpCOasJQBCJrqLKXK+l82cAhdeF8mPMBEe/gxMm0ZFa2xpKpOFLRjxv5afYEZbBXmbQ==, @google/genai 2.21.0 sha512-+PDtco2/Z0ONdzCGekCoCT+O1VJS9xJQNN4XzQpXG/t3El/SWWMkCWlFRO1KmivOHPa4Q0VjUYu1HBKCZ/v33Q==, node v24.18.0",
+	"runs": [
+		{
+			"api": "anthropic-messages",
+			"mode": "an already-aborted signal",
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "This operation was aborted",
+			"onPayload": 0,
+			"requests": 0
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "an abort before the response arrives",
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"onPayload": 1,
+			"requests": 1
+		},
+		{
+			"api": "anthropic-messages",
+			"mode": "an abort during a retry wait",
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"onPayload": 1,
+			"requests": 1
+		},
+		{
+			"api": "openai-completions",
+			"mode": "an already-aborted signal",
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"onPayload": 1,
+			"requests": 0
+		},
+		{
+			"api": "openai-completions",
+			"mode": "an abort before the response arrives",
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"onPayload": 1,
+			"requests": 1
+		},
+		{
+			"api": "openai-completions",
+			"mode": "an abort during a retry wait",
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"onPayload": 1,
+			"requests": 1
+		},
+		{
+			"api": "openai-responses",
+			"mode": "an already-aborted signal",
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"onPayload": 1,
+			"requests": 0
+		},
+		{
+			"api": "openai-responses",
+			"mode": "an abort before the response arrives",
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"onPayload": 1,
+			"requests": 1
+		},
+		{
+			"api": "openai-responses",
+			"mode": "an abort during a retry wait",
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"onPayload": 1,
+			"requests": 1
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "an already-aborted signal",
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"onPayload": 0,
+			"requests": 0
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "an abort before the response arrives",
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"onPayload": 1,
+			"requests": 1
+		},
+		{
+			"api": "google-generative-ai",
+			"mode": "an abort during a retry wait",
+			"events": [
+				"error"
+			],
+			"stopReason": "aborted",
+			"errorMessage": "Request aborted",
+			"onPayload": 1,
+			"requests": 1
+		}
+	]
+}

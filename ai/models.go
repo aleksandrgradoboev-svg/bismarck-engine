@@ -94,6 +94,8 @@ func CalculateCost(model *Model, usage *Usage) CostBreakdown {
 	usage.Cost.CacheRead = float64(rateCacheRead / 1_000_000 * float64(usage.CacheRead))
 	usage.Cost.CacheWrite = (float64(rateCacheWrite*float64(shortWrite)) + float64(rateInput*2*float64(longWrite))) / 1_000_000
 	usage.Cost.Total = usage.Cost.Input + usage.Cost.Output + usage.Cost.CacheRead + usage.Cost.CacheWrite
+	// A catalog estimate (pi 7c22a93d).
+	usage.Cost.TotalFromProvider = False
 	return usage.Cost
 }
 

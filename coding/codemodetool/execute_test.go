@@ -34,6 +34,23 @@ func schema(t *testing.T, text string) *ai.Schema {
 	return &s
 }
 
+// searchTools ranks a tool first when the query names it, as tool_search does
+// (pi ae823bc0, #11331).
+func TestSearchToolsRanksTheToolTheQueryNamesFirst(t *testing.T) {
+	describe := func(name, description string) coding.ToolDefinition {
+		return coding.ToolDefinition{Tool: agent.AgentTool{Name: name, Description: description, Parameters: ai.Object()}, Exposure: coding.ToolExposureCodemode}
+	}
+	h := setup(t, coding.SessionOptions{},
+		describe("mcp__app__queue_read", "Read a queued message of this thread."),
+		describe("mcp__dev-app__thread_read", "Read durable state and a paginated timeline from any thread. The default view returns user messages, assistant messages and plans. Continue with afterPosition until hasMore is false."),
+	)
+	// Scripts see tools by identifier: dev-app becomes dev_app.
+	text := resultText(t, h.run(`text((await searchTools("thread_read", {limit: 1})).map(t => t.name).join(","))`))
+	if !strings.Contains(text, "mcp__dev_app__thread_read") || strings.Contains(text, "mcp__app__queue_read") {
+		t.Fatalf("searchTools:\n%s", text)
+	}
+}
+
 func testTools(t *testing.T) []coding.ToolDefinition {
 	echo := agent.AgentTool{Name: "echo", Label: "Echo", Description: "Echo text back.\n\nSecond paragraph.",
 		Parameters: ai.Object(ai.Prop("text", ai.String("Text to echo"))),
@@ -372,6 +389,38 @@ func TestNestedCallsThroughHooks(t *testing.T) {
 	}
 	if !slices.Equal(statuses, []string{"error", "ok"}) {
 		t.Fatalf("statuses %v", statuses)
+	}
+}
+
+// pi agent-session-codemode.test.ts "summarizes union and multi-line output
+// types instead of inlining them" (f6ee9ce9, #11501); the schemas are the
+// JSON TypeBox writes for the test's.
+func TestDescriptionSummarizesUnionAndMultiLineOutputTypes(t *testing.T) {
+	outputTool := func(name, outputSchema string) coding.ToolDefinition {
+		var schema ai.Schema
+		if err := json.Unmarshal([]byte(outputSchema), &schema); err != nil {
+			t.Fatal(err)
+		}
+		return coding.ToolDefinition{Tool: agent.AgentTool{Name: name, Label: name, Description: name + " tool", Parameters: ai.Object(), OutputSchema: &schema,
+			Execute: func(context.Context, string, map[string]any, agent.ToolUpdateFunc) (agent.AgentToolResult, error) {
+				return agent.AgentToolResult{}, nil
+			}}}
+	}
+	process := outputTool("process", `{"anyOf":[`+
+		`{"type":"object","properties":{"action":{"const":"start","type":"string"},"process":{"type":"object","properties":{"id":{"description":"Process id","type":"string"},"pid":{"type":"integer"}},"required":["id","pid"]}},"required":["action","process"]},`+
+		`{"type":"object","properties":{"action":{"const":"list","type":"string"},"processes":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}},"truncated":{"type":"boolean"}},"required":["action","processes"]}]}`)
+	entries := outputTool("entries", `{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"size":{"type":"integer"}},"required":["id","size"]}}`)
+	count := outputTool("count", `{"type":"number"}`)
+	h := setup(t, coding.SessionOptions{}, process, entries, count)
+	h.sess.SetActiveTools([]string{"process", "entries", "count", ToolName})
+	for name, want := range map[string]string{
+		"process": "process tool\n\nCodemode: `tools.process(args)` resolves to `{ action: \"start\", process } | { action: \"list\", processes, truncated? }`.",
+		"entries": "entries tool\n\nCodemode: `tools.entries(args)` resolves to a value; `await describeTool(\"entries\")` shows its type.",
+		"count":   "count tool\n\nCodemode: `tools.count(args)` resolves to `number`.",
+	} {
+		if got := toolDescription(h.sess, name); got != want {
+			t.Errorf("%s:\n got %q\nwant %q", name, got, want)
+		}
 	}
 }
 

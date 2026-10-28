@@ -128,6 +128,8 @@ var (
 	// Gemini 3 Pro/Flash ids with or without a minor version, such as
 	// gemini-3-flash-preview, gemini-3.1-pro-preview and gemini-3.8-flash.
 	gemini3LevelRe = regexp.MustCompile(`gemini-3(?:\.\d+)?-(?:pro|flash)`)
+	// Gemini 4 and later, such as gemini-4-argon (pi 1692bba6, #10890).
+	gemini4LevelRe = regexp.MustCompile(`gemini-(?:[4-9]|[1-9]\d)`)
 	// Both hosted Gemma 4 naming forms: gemma-4-* and gemma4-*.
 	gemma4Re = regexp.MustCompile(`gemma-?4`)
 )
@@ -139,6 +141,7 @@ var (
 func usesGoogleThinkingLevel(model *ai.Model) bool {
 	id := strings.ToLower(model.ID)
 	return gemini3LevelRe.MatchString(id) ||
+		gemini4LevelRe.MatchString(id) ||
 		id == "gemini-flash-latest" ||
 		id == "gemini-flash-lite-latest" ||
 		gemma4Re.MatchString(id)
@@ -439,9 +442,10 @@ func StreamGoogle(ctx context.Context, model *ai.Model, req ai.TranscriptContext
 			// below; genai's User-Agent and x-goog-api-client defaults are not
 			// sent at all (docs/UPSTREAM.md D10/D12).
 			o := &headerObject{}
-			o.merge(piUserAgentHeaders())
-			o.mergeStrings(getSessionAttributionHeaders(model, opts.SessionID))
-			o.mergeStrings(getDefaultAttributionHeaders(model))
+			// pi createClient: providerHeadersToRecord(getIdentityHeaders(
+			// model, identity), model.headers, optionsHeaders) (adc5fa9f).
+			mergeIdentityHeaders(o, model, opts.Identity)
+			mergeOpenCodeSession(o, model, opts.SessionID)
 			o.merge(model.Headers)
 			o.merge(opts.Headers)
 			if err := o.applyAsRecord(r.Header, recordEntry{"Content-Type", "application/json"}); err != nil {
@@ -1026,7 +1030,8 @@ func googleContents(model *ai.Model, req ai.TranscriptContext) []any {
 				}
 			}
 			textResult := strings.Join(texts, "\n")
-			hasText := len(textResult) > 0
+			// Whitespace-only output counts as empty (pi 4dd2b149, #8720).
+			hasText := jstext.Trim(textResult) != ""
 			hasImages := len(imageParts) > 0
 
 			// responseValue: text if present, else placeholder for image-only, else "".
@@ -1133,6 +1138,82 @@ func schemaToGeneric(s *ai.Schema) any {
 	return out
 }
 
+// googleSchemaNameMaps are the keywords whose values map names to subschemas,
+// so their keys are not schema keywords (pi google-shared.ts, 7314819f,
+// a7b94a03).
+var googleSchemaNameMaps = map[string]bool{
+	"properties": true, "patternProperties": true, "$defs": true, "definitions": true,
+	"dependentSchemas": true, "dependencies": true,
+}
+
+// googleSchemaSubschemas are the keywords holding a subschema or an array of
+// subschemas, not literal data (pi a7b94a03).
+var googleSchemaSubschemas = map[string]bool{
+	"additionalProperties": true, "unevaluatedProperties": true, "propertyNames": true,
+	"items": true, "prefixItems": true, "additionalItems": true, "unevaluatedItems": true,
+	"contains": true, "allOf": true, "anyOf": true, "oneOf": true, "not": true,
+	"if": true, "then": true, "else": true, "contentSchema": true,
+}
+
+// rewriteConstAsEnum is pi's rewriteConstAsEnum: string and number `const`
+// values become single-value `enum`s, since Gemini ignores `const` in
+// parametersJsonSchema but honors `enum`. It descends only into
+// schema-bearing keywords, so literal data (default, examples, a const's own
+// value) is left as written (pi 7314819f, a7b94a03, #11308). schema is
+// DecodeOrderedValue's form; keys keep their order, and the enum takes the
+// place a JS object gives a key added after the const is deleted: the end.
+func rewriteConstAsEnum(schema any, isNameMap bool) any {
+	switch v := schema.(type) {
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = rewriteConstAsEnum(item, false)
+		}
+		return out
+	case ai.OrderedObject:
+		result := make(ai.OrderedObject, 0, len(v)+1)
+		for _, field := range v {
+			value := field.Value
+			switch {
+			case isNameMap || googleSchemaSubschemas[field.Key]:
+				value = rewriteConstAsEnum(value, false)
+			case googleSchemaNameMaps[field.Key]:
+				value = rewriteConstAsEnum(value, true)
+			}
+			result = append(result, ai.OrderedField{Key: field.Key, Value: value})
+		}
+		if isNameMap {
+			return result
+		}
+		constValue, hasConst := result.Get("const")
+		if _, hasEnum := result.Get("enum"); !hasConst || hasEnum {
+			return result
+		}
+		switch constValue.(type) {
+		case string, float64:
+			result = slices.DeleteFunc(result, func(f ai.OrderedField) bool { return f.Key == "const" })
+			result = append(result, ai.OrderedField{Key: "enum", Value: []any{constValue}})
+		}
+		return result
+	default:
+		return schema
+	}
+}
+
+// googleParametersJSONSchema is the parametersJsonSchema pi sends: the
+// parameters with const rewritten as enum, in the key order pi's object has.
+func googleParametersJSONSchema(parameters *ai.Schema) (any, error) {
+	raw, err := json.Marshal(parameters)
+	if err != nil {
+		return nil, err
+	}
+	value, err := ai.DecodeOrderedValue(raw)
+	if err != nil {
+		return nil, err
+	}
+	return rewriteConstAsEnum(value, false), nil
+}
+
 // googleTools converts tools to Gemini functionDeclarations. When useParameters is
 // true it emits the legacy OpenAPI `parameters` field (sanitized of meta-keys),
 // otherwise the full-JSON-Schema `parametersJsonSchema`; either way the schema
@@ -1157,7 +1238,11 @@ func googleTools(tools []ai.Tool, useParameters, supportsStrictMode bool) ([]any
 				decl["parameters"] = sanitizeForOpenApi(schemaToGeneric(parameters))
 			}
 		} else if parameters != nil {
-			decl["parametersJsonSchema"] = parameters
+			schema, err := googleParametersJSONSchema(parameters)
+			if err != nil {
+				return nil, err
+			}
+			decl["parametersJsonSchema"] = schema
 		}
 		decls = append(decls, decl)
 	}

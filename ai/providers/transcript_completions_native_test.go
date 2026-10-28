@@ -22,9 +22,10 @@ import (
 // packages/ai/test/transcript-tool-changes.test.ts at the sha, same fixture and
 // expected values, through ai.StreamSimple as the suite goes through compat.ts
 // streamSimple. Every body is also compared whole to pi's, captured under node
-// at 95fbc0499 by testdata/transcript/capture-completions-native.mts.
+// at e3bc05e8 by testdata/transcript/capture-completions-native.mts (the same
+// bodies as at 95fbc0499: these fixtures remove no tool).
 
-const completionsNativeCaptureFile = "testdata/transcript/completions-native-95fbc0499.json"
+const completionsNativeCaptureFile = "testdata/transcript/completions-native-e3bc05e8.json"
 
 // completionsNativeCase is one captured case: pi's model, its raw context, and
 // the body pi built from them — or, for a stream that failed before building

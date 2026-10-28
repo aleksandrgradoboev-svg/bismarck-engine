@@ -21,10 +21,11 @@ import (
 
 // Where pi trims, it trims with String.prototype.trim, which strips U+FEFF and
 // keeps U+0085 — the reverse of strings.TrimSpace. Every expectation here is
-// pi's own, captured under node at 2b0a123de (openai 7.19.0) by
+// pi's own, captured under node at e3bc05e8 (openai 7.19.0; since 91130942
+// another model's thinking is dropped, not sent as text) by
 // testdata/jstrim/capture-jstrim.mts; the contexts below are that script's.
 
-const jstrimCaptureFile = "testdata/jstrim/jstrim-2b0a123de.json"
+const jstrimCaptureFile = "testdata/jstrim/jstrim-e3bc05e8.json"
 
 const (
 	jsBOM = "\ufeff" // blank to JavaScript, not to strings.TrimSpace
@@ -52,8 +53,9 @@ type jstrimCapture struct {
 	Auth      map[string]json.RawMessage         `json:"auth"`
 	Streams   map[string]map[string]jstrimStream `json:"streams"`
 	Transform []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
+		Type     string `json:"type"`
+		Text     string `json:"text"`
+		Thinking string `json:"thinking"`
 	} `json:"transform"`
 	Grammar map[string]struct {
 		Lark   string `json:"lark"`
@@ -295,9 +297,9 @@ func TestJSTrimStreamDecoding(t *testing.T) {
 	}
 }
 
-// transformMessages drops another model's blank thinking and turns the rest
-// into text. Every converter drops blank text afterwards, so only the
-// transformed content itself shows which blocks the trim let through.
+// transformMessages drops the model's own blank unsigned thinking and keeps the
+// rest (another model's thinking is dropped whole since pi 91130942), so the
+// transformed content shows which blocks the trim let through.
 func TestJSTrimTransformMessages(t *testing.T) {
 	want := loadJSTrimCapture(t).Transform
 	if len(want) == 0 {
@@ -306,7 +308,7 @@ func TestJSTrimTransformMessages(t *testing.T) {
 	model := foldModel("gpt-4o", ai.APIOpenAICompletions, "openai", "")
 	out := transformMessages([]ai.Message{
 		ai.NewUserText("hi", 1),
-		jstrimAssistant(ai.APIAnthropicMessages, "anthropic", "claude-sonnet-4-5", 2,
+		jstrimAssistant(ai.APIOpenAICompletions, "openai", "gpt-4o", 2,
 			ai.ThinkingContent{Thinking: jsBOM},
 			ai.ThinkingContent{Thinking: jsNEL},
 			ai.ThinkingContent{Thinking: "\u3000"},
@@ -319,15 +321,18 @@ func TestJSTrimTransformMessages(t *testing.T) {
 	}
 	var got []string
 	for _, block := range am.Content {
-		if text, ok := block.(ai.TextContent); ok {
-			got = append(got, "text:"+text.Text)
-		} else {
+		switch b := block.(type) {
+		case ai.TextContent:
+			got = append(got, "text:"+b.Text)
+		case ai.ThinkingContent:
+			got = append(got, "thinking:"+b.Thinking)
+		default:
 			got = append(got, fmt.Sprintf("%T", block))
 		}
 	}
 	var wantBlocks []string
 	for _, block := range want {
-		wantBlocks = append(wantBlocks, block.Type+":"+block.Text)
+		wantBlocks = append(wantBlocks, block.Type+":"+block.Text+block.Thinking)
 	}
 	if !slices.Equal(got, wantBlocks) {
 		t.Fatalf("content = %+q, pi = %+q", got, wantBlocks)

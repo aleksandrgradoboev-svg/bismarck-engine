@@ -29,9 +29,10 @@ const (
 	// (upstream 4e69b0c28).
 	midConvoOutputConfigBeta = "mid-conversation-output-config-2026-07-01"
 	thinkingBindingBeta      = "thinking-binding-controls-2026-08-01"
-	// midConvoToolChangesBeta turns on tool_addition/tool_removal blocks in
-	// mid-conversation system messages (upstream 9e05370b2).
-	midConvoToolChangesBeta = "mid-conversation-tool-changes-2026-07-01"
+	// inlineToolsBeta turns on tool_addition blocks with inline tool
+	// definitions and tool_removal blocks in mid-conversation system messages
+	// (upstream 9e05370b2, inline since b271b0a5).
+	inlineToolsBeta         = "inline-tools-2026-09-15"
 	claudeCodeVersion       = "2.1.280"
 	anthropicDefaultBaseURL = "https://api.anthropic.com"
 )
@@ -154,8 +155,10 @@ type anthropicCompat struct {
 	// the leading system prompt before the request is built.
 	supportsMidConvoSystemMessages bool
 	// supportsMidConvoToolChanges reports whether the model accepts
-	// tool_addition/tool_removal blocks in those system messages (pi
-	// AnthropicMessagesCompat.supportsMidConvoToolChanges, upstream 9e05370b2).
+	// tool_addition blocks with inline tool definitions (inline-tools-2026-09-15)
+	// and tool_removal blocks in those system messages (pi
+	// AnthropicMessagesCompat.supportsMidConvoToolChanges, upstream 9e05370b2,
+	// b271b0a5).
 	// Default: false. It takes effect only together with
 	// supportsMidConvoSystemMessages.
 	supportsMidConvoToolChanges bool
@@ -536,7 +539,9 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 		// request can replay this turn at the same level rather than at the
 		// current one (pi 4e69b0c28). Unmanaged models leave it empty, pi's
 		// `undefined`.
-		if getAnthropicCompat(model).supportsMidConvoEffort {
+		// Disabled thinking sends no effort markers, so it records none (pi
+		// dc939913).
+		if anthropicEffortMessages(model, opts) {
 			output.ProviderThinkingLevel = anthropicActiveEffort(opts)
 		}
 		fail := func(err error) {
@@ -596,157 +601,181 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 			model.Provider != "github-copilot" &&
 			isOAuthToken(apiKey)
 
-		body, err := buildAnthropicParams(model, normalized, oauth, opts)
-		if err != nil {
-			fail(err)
-			return
-		}
-		if opts.OnPayload != nil {
-			next, perr := opts.OnPayload(body, model)
-			if perr != nil {
-				// pi: a throw from onPayload propagates and fails the stream.
-				fail(perr)
+		// A request rejected for strict tool limits is built again once with
+		// "prefer" tools non-strict, onPayload included (pi d4d53612).
+		disablePreferredStrictTools := false
+		var resp *http.Response
+		var nullBody bool
+		for {
+			if ctx != nil && ctx.Err() != nil {
+				fail(errOperationAborted)
 				return
 			}
-			// pi: any `!== undefined` return replaces the params wholesale —
-			// except `stream`, which is re-forced to true immediately afterwards
-			// (`params = {...next, stream: true}`, upstream 4e69b0c28). A hook
-			// cannot turn a streaming request into a non-streaming one.
-			//
-			// The spread builds a FRESH object, so the map the hook returned stays
-			// the hook's: copying rather than writing through it keeps a hook that
-			// kept a reference (or handed back the very map it was given) from
-			// seeing the request mutate under it. Copying also gives a nil map the
-			// meaning pi gives `{...null, stream: true}` — a body of just the
-			// re-forced flag — instead of panicking on a write to a nil map.
-			if m, ok := next.(map[string]any); ok {
-				overridden := make(map[string]any, len(m)+1)
-				maps.Copy(overridden, m)
-				overridden["stream"] = true
-				body = overridden
-			}
-		}
-		// The beta namespace rewrites a deprecated top-level `output_format` into
-		// `output_config.format` before it looks at anything else, and refuses a
-		// params object carrying both (transformOutputFormat, @anthropic-ai/sdk
-		// resources/beta/messages/messages.js). pi never emits `output_format`, so
-		// only an onPayload hook reaches either path.
-		body, err = transformAnthropicOutputFormat(body)
-		if err != nil {
-			fail(err)
-			return
-		}
-		// The SDK's beta namespace destructures `betas` OUT of the params object
-		// and re-emits it as the per-request `anthropic-beta` header, so it never
-		// reaches the wire body — but it is in the object `onPayload` sees, which
-		// is why buildAnthropicParams puts it there.
-		body, betaHeader := splitAnthropicBetas(body)
-		payload, err := json.Marshal(body)
-		if err != nil {
-			fail(err)
-			return
-		}
-
-		baseURL := model.BaseURL
-		if model.Provider == "cloudflare-ai-gateway" {
-			// pi: resolveCloudflareBaseUrl(model) throws on a missing env var,
-			// which surfaces as a failed stream.
-			resolved, rerr := resolveCloudflareBaseURL(model, opts.Env)
-			if rerr != nil {
-				fail(rerr)
-				return
-			}
-			baseURL = resolved
-		}
-		if baseURL == "" {
-			baseURL = anthropicDefaultBaseURL
-		}
-		// pi calls `client.beta.messages.create(...)`, and the SDK's beta
-		// namespace posts to `/v1/messages?beta=true` (upstream 4e69b0c28). The
-		// query string is part of the request pi makes; difftest compares bodies
-		// only, so it is pinned by test instead.
-		// The SDK's buildURL makes the request URL with `new URL(...)` before
-		// anything else about the request, and fetch sends what that makes of
-		// it (requestURL).
-		url, err := requestURL(sdkJoinURL(baseURL, "/v1/messages?beta=true"))
-		if err != nil {
-			fail(err)
-			return
-		}
-		// pi builds the client once per stream, and its constructor reads the
-		// environment then (see anthropicClientHeaders).
-		headers := anthropicClientHeaders(model, opts, oauth, apiKey, authToken, normalized.Messages)
-		// The betas header is a PER-REQUEST header in the SDK, so it beats every
-		// default header the merge produced — including one the consumer
-		// spelled differently, and including the empty-string value an empty
-		// `betas` list produces, which REPLACES the inherited header rather than
-		// leaving it standing. The beta namespace builds it before the client
-		// builds any other header, so its value is converted, and refused, first
-		// (see sdkHeaders).
-		if betaHeader != nil {
-			headers.request = []recordEntry{{"anthropic-beta", *betaHeader}}
-		}
-		retry := retryFromOptions(opts.StreamOptions, anthropicSDKErrorMessage)
-		// pi's federation client: one per base URL, config and fetch, so its
-		// token cache outlives the request (anthropicFederationTokens).
-		var tokens *anthropicTokenCache
-		if federation != nil {
-			tokens = anthropicFederationTokens(baseURL, federation, retry.httpClient)
-			// shouldRetry: a 401 from a request that sent the cached token
-			// invalidates it, so the next request exchanges afresh.
-			retry.onErrorStatus = func(status int) {
-				if status == http.StatusUnauthorized {
-					tokens.invalidate()
-				}
-			}
-		}
-		build := func() (*http.Request, error) {
-			r, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
-			if err != nil {
-				return nil, err
-			}
-			attempt := headers
-			if tokens != nil {
-				// The SDK builds the per-request headers before the request, and
-				// authHeaders awaits the token (exchanging when it must) as the
-				// request is built: each attempt is a fresh create() in pi, so
-				// each asks the cache. The token goes out in the SDK's auth bundle,
-				// as `Authorization: Bearer <token>`.
-				if _, err := headerValues(attempt.request); err != nil {
-					return nil, err
-				}
-				token, err := tokens.getToken(ctx)
-				if err != nil {
-					return nil, err
-				}
-				attempt.auth = []recordEntry{{"authorization", "Bearer " + token}}
-			}
-			if err := attempt.apply(r.Header); err != nil {
-				return nil, err
-			}
-			if tokens != nil {
-				appendAnthropicOAuthBeta(r.Header)
-			}
-			return r, nil
-		}
-		resp, err := sendWithRetry(ctx, build, retry)
-		if err != nil {
-			fail(sdkFetchError(err))
-			return
-		}
-		nullBody := nullResponseBody(resp)
-		defer resp.Body.Close()
-		respBody := sdkResponseBody(ctx, resp, opts.HTTPClient)
-
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			data, err := readSDKErrorBody(ctx, respBody)
+			body, hasPreferredStrictTools, err := buildAnthropicParams(model, normalized, oauth, opts, disablePreferredStrictTools)
 			if err != nil {
 				fail(err)
 				return
 			}
+			if opts.OnPayload != nil {
+				next, perr := opts.OnPayload(body, model)
+				if perr != nil {
+					// pi: a throw from onPayload propagates and fails the stream.
+					fail(perr)
+					return
+				}
+				// pi: any `!== undefined` return replaces the params wholesale —
+				// except `stream`, which is re-forced to true immediately afterwards
+				// (`params = {...next, stream: true}`, upstream 4e69b0c28). A hook
+				// cannot turn a streaming request into a non-streaming one.
+				//
+				// The spread builds a FRESH object, so the map the hook returned stays
+				// the hook's: copying rather than writing through it keeps a hook that
+				// kept a reference (or handed back the very map it was given) from
+				// seeing the request mutate under it. Copying also gives a nil map the
+				// meaning pi gives `{...null, stream: true}` — a body of just the
+				// re-forced flag — instead of panicking on a write to a nil map.
+				if m, ok := next.(map[string]any); ok {
+					overridden := make(map[string]any, len(m)+1)
+					maps.Copy(overridden, m)
+					overridden["stream"] = true
+					body = overridden
+				}
+			}
+			// The beta namespace rewrites a deprecated top-level `output_format` into
+			// `output_config.format` before it looks at anything else, and refuses a
+			// params object carrying both (transformOutputFormat, @anthropic-ai/sdk
+			// resources/beta/messages/messages.js). pi never emits `output_format`, so
+			// only an onPayload hook reaches either path.
+			body, err = transformAnthropicOutputFormat(body)
+			if err != nil {
+				fail(err)
+				return
+			}
+			// The SDK's beta namespace destructures `betas` OUT of the params object
+			// and re-emits it as the per-request `anthropic-beta` header, so it never
+			// reaches the wire body — but it is in the object `onPayload` sees, which
+			// is why buildAnthropicParams puts it there.
+			body, betaHeader := splitAnthropicBetas(body)
+			payload, err := json.Marshal(body)
+			if err != nil {
+				fail(err)
+				return
+			}
+
+			baseURL := model.BaseURL
+			if model.Provider == "cloudflare-ai-gateway" {
+				// pi: resolveCloudflareBaseUrl(model) throws on a missing env var,
+				// which surfaces as a failed stream.
+				resolved, rerr := resolveCloudflareBaseURL(model, opts.Env)
+				if rerr != nil {
+					fail(rerr)
+					return
+				}
+				baseURL = resolved
+			}
+			if baseURL == "" {
+				baseURL = anthropicDefaultBaseURL
+			}
+			// pi calls `client.beta.messages.create(...)`, and the SDK's beta
+			// namespace posts to `/v1/messages?beta=true` (upstream 4e69b0c28). The
+			// query string is part of the request pi makes; difftest compares bodies
+			// only, so it is pinned by test instead.
+			// The SDK's buildURL makes the request URL with `new URL(...)` before
+			// anything else about the request, and fetch sends what that makes of
+			// it (requestURL).
+			url, err := requestURL(sdkJoinURL(baseURL, "/v1/messages?beta=true"))
+			if err != nil {
+				fail(err)
+				return
+			}
+			// pi builds the client once per stream, and its constructor reads the
+			// environment then (see anthropicClientHeaders).
+			headers := anthropicClientHeaders(model, opts, oauth, apiKey, authToken, normalized.Messages)
+			// The betas header is a PER-REQUEST header in the SDK, so it beats every
+			// default header the merge produced — including one the consumer
+			// spelled differently, and including the empty-string value an empty
+			// `betas` list produces, which REPLACES the inherited header rather than
+			// leaving it standing. The beta namespace builds it before the client
+			// builds any other header, so its value is converted, and refused, first
+			// (see sdkHeaders).
+			if betaHeader != nil {
+				headers.request = []recordEntry{{"anthropic-beta", *betaHeader}}
+			}
+			retry := retryFromOptions(opts.StreamOptions, anthropicSDKErrorMessage)
+			// pi's federation client: one per base URL, config and fetch, so its
+			// token cache outlives the request (anthropicFederationTokens).
+			var tokens *anthropicTokenCache
+			if federation != nil {
+				tokens = anthropicFederationTokens(baseURL, federation, retry.httpClient)
+				// shouldRetry: a 401 from a request that sent the cached token
+				// invalidates it, so the next request exchanges afresh.
+				retry.onErrorStatus = func(status int) {
+					if status == http.StatusUnauthorized {
+						tokens.invalidate()
+					}
+				}
+			}
+			build := func() (*http.Request, error) {
+				r, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+				if err != nil {
+					return nil, err
+				}
+				attempt := headers
+				if tokens != nil {
+					// The SDK builds the per-request headers before the request, and
+					// authHeaders awaits the token (exchanging when it must) as the
+					// request is built: each attempt is a fresh create() in pi, so
+					// each asks the cache. The token goes out in the SDK's auth bundle,
+					// as `Authorization: Bearer <token>`.
+					if _, err := headerValues(attempt.request); err != nil {
+						return nil, err
+					}
+					token, err := tokens.getToken(ctx)
+					if err != nil {
+						return nil, err
+					}
+					attempt.auth = []recordEntry{{"authorization", "Bearer " + token}}
+				}
+				if err := attempt.apply(r.Header); err != nil {
+					return nil, err
+				}
+				if tokens != nil {
+					appendAnthropicOAuthBeta(r.Header)
+				}
+				return r, nil
+			}
+			resp, err = sendWithRetry(ctx, build, retry)
+			if err != nil {
+				fail(sdkFetchError(err))
+				return
+			}
+			nullBody = nullResponseBody(resp)
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				break
+			}
+			data, err := readSDKErrorBody(ctx, sdkResponseBody(ctx, resp, opts.HTTPClient))
+			resp.Body.Close()
+			if err != nil {
+				fail(err)
+				return
+			}
+			// Only a rejected request is downgraded, never a started stream.
+			if (ctx == nil || ctx.Err() == nil) && !disablePreferredStrictTools && hasPreferredStrictTools &&
+				isAnthropicStrictToolLimitError(resp.StatusCode, data) {
+				disablePreferredStrictTools = true
+				output.Diagnostics = append(output.Diagnostics, ai.Diagnostic{
+					Type:      "anthropic_strict_tools_fallback",
+					Timestamp: nowMillis(),
+					Error:     &ai.DiagnosticErrorInfo{Message: anthropicAPIErrorMessage(resp.StatusCode, data, false)},
+					Details:   ai.OrderedObject{{Key: "reason", Value: "strict_tool_limits_exceeded"}},
+				})
+				continue
+			}
 			fail(formatProviderError("Anthropic", resp.StatusCode, data))
 			return
 		}
+		defer resp.Body.Close()
+		respBody := sdkResponseBody(ctx, resp, opts.HTTPClient)
 		// pi awaits onResponse once the SDK has returned the response — the SDK
 		// throws on a non-2xx status first, so an error response never reaches
 		// it — and before pushing start; a throw fails the stream.
@@ -764,16 +793,11 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 		}
 
 		// blocks is pi's `output.content` as its handler holds it: each block's
-		// builder with the two fields pi deletes on content_block_stop — the
-		// event's raw `index` a block is found by (nil once deleted: undefined)
-		// and whether its partialJson is gone — and the raw seeds of its
-		// text, thinking and signature, which pi converts only when a delta is
-		// appended to them (see anthropicSeed).
+		// builder with the raw seeds of its text, thinking and signature, which
+		// pi converts only when a delta is appended to them (see anthropicSeed).
 		type anthropicBlock struct {
 			*blockBuilder
-			index          json.RawMessage
-			partialDeleted bool
-			seeds          anthropicSeeds
+			seeds anthropicSeeds
 		}
 		var blocks []*anthropicBlock
 		materialize := func() {
@@ -783,17 +807,33 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 			}
 			output.Content = content
 		}
-		// findBlock is pi's `blocks.findIndex((b) => b.index === event.index)`:
-		// the first block whose index is strictly equal, so a string "0" finds
-		// no block started at 0, and an event with no index finds the first
-		// block whose index is gone.
-		findBlock := func(index json.RawMessage) int {
-			for i, b := range blocks {
-				if rawStrictEqual(b.index, index) {
+		// openBlocks is pi's openBlocks Map (f715a15c): the stream state of each
+		// block that has started and not stopped, keyed by the event's raw
+		// `index` and kept off the content blocks. Map keys compare as
+		// SameValueZero, which for JSON values is rawStrictEqual: a string "0"
+		// finds no block started at 0, an event with no index finds a block
+		// started with none, and a block that stopped takes no more events. A
+		// block started again at an open index takes its entry over.
+		type openAnthropicBlock struct {
+			index     json.RawMessage
+			block     int
+			arguments *ToolCallArgumentsStream // tool_use blocks only
+		}
+		var openBlocks []openAnthropicBlock
+		findOpen := func(index json.RawMessage) int {
+			for i := range openBlocks {
+				if rawStrictEqual(openBlocks[i].index, index) {
 					return i
 				}
 			}
 			return -1
+		}
+		setOpen := func(open openAnthropicBlock) {
+			if i := findOpen(open.index); i >= 0 {
+				openBlocks[i] = open
+			} else {
+				openBlocks = append(openBlocks, open)
+			}
 		}
 
 		// The model to cost against, recomputed on every message_start and read by
@@ -822,7 +862,7 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 		// stop reason assigned one, however empty its text (see
 		// mapAnthropicStopReason).
 		errorMessageSet := false
-		err = iterateAnthropicSSE(respBody, ctx, onEvent, func(ev rawObject) error {
+		err := iterateAnthropicSSE(respBody, ctx, onEvent, func(ev rawObject) error {
 			typ, _ := rawStringBytes(ev["type"])
 			switch string(typ) {
 			case "message_start":
@@ -923,7 +963,12 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 				default:
 					return nil
 				}
-				blocks = append(blocks, &anthropicBlock{blockBuilder: b, index: ev["index"], seeds: seeds})
+				blocks = append(blocks, &anthropicBlock{blockBuilder: b, seeds: seeds})
+				open := openAnthropicBlock{index: ev["index"], block: len(blocks) - 1}
+				if b.kind == "toolCall" {
+					open.arguments = NewToolCallArgumentsStream()
+				}
+				setOpen(open)
 				materialize()
 				stream.Push(ai.AssistantMessageEvent{Type: evType, ContentIndex: len(blocks) - 1, Partial: output.Clone()})
 			case "content_block_delta":
@@ -947,10 +992,14 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 				default:
 					return nil
 				}
-				idx := findBlock(ev["index"])
-				if idx < 0 || blocks[idx].kind != kind {
+				// pi: `open?.block.type === <kind>`; a block that stopped, or
+				// never started at this index, takes no delta.
+				oi := findOpen(ev["index"])
+				if oi < 0 || blocks[openBlocks[oi].block].kind != kind {
 					return nil
 				}
+				open := openBlocks[oi]
+				idx := open.block
 				b := blocks[idx]
 				// pi's `+=` onto a string appends String() of the member
 				// ("undefined" when it is absent); the pushed event carries the
@@ -976,14 +1025,16 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 					materialize()
 					stream.Push(ai.AssistantMessageEvent{Type: ai.EventThinkingDelta, ContentIndex: idx, Delta: pushed, Partial: output.Clone()})
 				case "input_json_delta":
-					if b.partialDeleted {
-						// A block's stop deleted partialJson: `undefined += piece`.
-						b.partialJSON.Reset()
-						b.partialJSON.WriteString("undefined")
-						b.partialDeleted = false
+					// pi f715a15c: `open.arguments.append(partial_json)`.
+					switch raw := delta[member]; {
+					case isString:
+						b.args, b.argsOrder = open.arguments.Append(piece)
+					case raw == nil || jsonValueKind(raw) == 'n':
+						// The parser reads `delta.length` of undefined or null.
+						return fmt.Errorf("Cannot read properties of %s (reading 'length')", piece)
+					default:
+						b.args, b.argsOrder = open.arguments.appendNonString(piece)
 					}
-					b.partialJSON.WriteString(piece)
-					b.args, b.argsOrder = parseStreamingJSON(b.partialJSON.String())
 					materialize()
 					stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: idx, Delta: pushed, Partial: output.Clone()})
 				case "signature_delta":
@@ -1000,12 +1051,15 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 					}
 				}
 			case "content_block_stop":
-				idx := findBlock(ev["index"])
-				if idx < 0 {
+				// pi: `openBlock(event.index)`, then `openBlocks.delete(...)`.
+				oi := findOpen(ev["index"])
+				if oi < 0 {
 					return nil
 				}
+				open := openBlocks[oi]
+				openBlocks = append(openBlocks[:oi], openBlocks[oi+1:]...)
+				idx := open.block
 				b := blocks[idx]
-				b.index = nil // pi: delete block.index
 				materialize()
 				switch b.kind {
 				case "text":
@@ -1013,12 +1067,8 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 				case "thinking":
 					stream.Push(ai.AssistantMessageEvent{Type: ai.EventThinkingEnd, ContentIndex: idx, Content: b.thinking.String(), Partial: output.Clone()})
 				case "toolCall":
-					partial := b.partialJSON.String()
-					if b.partialDeleted {
-						partial = "" // parseStreamingJson(undefined) is {}
-					}
-					b.args, b.argsOrder = parseStreamingJSON(partial)
-					b.partialDeleted = true // pi: delete block.partialJson
+					// The finished call is parsed strictly (pi 87f9a364).
+					b.args, b.argsOrder, b.argsError = open.arguments.Finish()
 					materialize()
 					tc := b.toContent().(ai.ToolCall)
 					stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallEnd, ContentIndex: idx, ToolCall: &tc, Partial: output.Clone()})
@@ -1050,6 +1100,13 @@ func StreamAnthropic(ctx context.Context, model *ai.Model, req ai.TranscriptCont
 				}
 				output.Usage.TotalTokens = output.Usage.Input + output.Usage.Output + output.Usage.CacheRead + output.Usage.CacheWrite
 				ai.CalculateCost(usageModel, &output.Usage)
+				// OpenRouter adds billing fields to the streamed message_delta
+				// usage (pi cae8d69e).
+				if isOpenRouterModel(model) && rawTruthy(ev["usage"]) {
+					if reported, err := ai.DecodeOrderedValue(ev["usage"]); err == nil {
+						applyOpenRouterReportedCost(&output.Usage, reported)
+					}
+				}
 			case "message_stop":
 				sawStop = true
 			}
@@ -1107,19 +1164,28 @@ type blockBuilder struct {
 	// toolNamespace is the OpenAI Responses namespace of a namespaced or
 	// dynamically loaded tool call; empty for every other provider.
 	toolNamespace string
-	partialJSON   strings.Builder
 	args          map[string]any
 	// argsOrder is args in the order pi's JS object lists their keys
 	// (ai.ToolCall.ArgumentsOrder).
 	argsOrder ai.OrderedObject
+	// argsError is the finished call's ArgumentsError (parseToolCallArguments).
+	argsError string
+	// arguments is the stream state of an OpenAI tool call's JSON arguments
+	// (pi keeps it in its stream state, off the content block; the builder is
+	// that state here, as toContent never carries it). Anthropic keeps its own
+	// in openBlocks.
+	arguments *ToolCallArgumentsStream
 	// grammar is set on custom (grammar-constrained) tool calls, whose raw input
-	// is re-synthesized into JSON deltas instead of being parsed from partialJSON.
+	// is re-synthesized into JSON deltas instead of being parsed as arguments.
 	grammar *grammarInputBuffer
+	// grammarUnsent is the JSON text of an OpenAI Responses custom call's
+	// initial input, sent with its first delta (pi CustomInput.unsent).
+	grammarUnsent string
 	// unfinished marks an OpenAI Responses tool call whose output_item.done has
-	// not arrived — pi's partialJson / customInput scratch buffers, which it
-	// deletes when the call finishes (upstream 1b2aa0ca0). The slot map cannot
-	// stand in for it: an event without output_index lands every item on one
-	// key, so a later item replaces an earlier, still open one.
+	// not arrived (pi's unfinishedToolCalls, upstream f715a15c; 1b2aa0ca0 kept
+	// it as the presence of the scratch buffers). The slot map cannot stand in
+	// for it: an event without output_index lands every item on one key, so a
+	// later item replaces an earlier, still open one.
 	unfinished bool
 }
 
@@ -1134,7 +1200,7 @@ func (b *blockBuilder) toContent() ai.Content {
 		if args == nil {
 			args = map[string]any{}
 		}
-		return ai.ToolCall{ID: b.toolID, Name: b.toolName, Arguments: args, ArgumentsOrder: b.argsOrder, Namespace: b.toolNamespace}
+		return ai.ToolCall{ID: b.toolID, Name: b.toolName, Arguments: args, ArgumentsOrder: b.argsOrder, Namespace: b.toolNamespace, ArgumentsError: b.argsError}
 	}
 	return ai.TextContent{}
 }
@@ -1149,6 +1215,24 @@ func anthropicActiveEffort(opts *AnthropicOptions) string {
 		return opts.Effort
 	}
 	return "high"
+}
+
+// anthropicThinkingDisabled is pi's `model.reasoning && options?.thinkingEnabled
+// === false && model.thinkingLevelMap?.off !== null`: an explicit false on a
+// model whose map does not mark "off" unsupported with a present null.
+func anthropicThinkingDisabled(model *ai.Model, opts *AnthropicOptions) bool {
+	if !model.Reasoning || opts == nil || !opts.ThinkingProvided || opts.ThinkingEnabled {
+		return false
+	}
+	off, present := model.ThinkingLevelMap["off"]
+	return !present || off != nil
+}
+
+// anthropicEffortMessages reports whether the request carries per-message
+// effort markers: a managed-effort model, unless thinking is disabled, since
+// effort cannot change between messages then (pi dc939913).
+func anthropicEffortMessages(model *ai.Model, opts *AnthropicOptions) bool {
+	return getAnthropicCompat(model).supportsMidConvoEffort && !anthropicThinkingDisabled(model, opts)
 }
 
 // isAnthropicEffort reports whether a recorded providerThinkingLevel is a value
@@ -1243,7 +1327,7 @@ func getAnthropicBetaFeatures(model *ai.Model, req ai.TranscriptContext, oauth, 
 		features = append(features, midConvoOutputConfigBeta, thinkingBindingBeta)
 	}
 	if nativeToolChanges {
-		features = append(features, midConvoToolChangesBeta)
+		features = append(features, inlineToolsBeta)
 	}
 	return features
 }
@@ -1411,7 +1495,10 @@ func insertAnthropicThinkingLevelMessages(messages []map[string]any, levels map[
 	return append(out, effortMessage(activeEffort))
 }
 
-func buildAnthropicParams(model *ai.Model, req ai.TranscriptContext, oauth bool, opts *AnthropicOptions) (map[string]any, error) {
+// buildAnthropicParams builds the request body. disablePreferredStrictTools
+// sends "prefer" tools non-strict, for the retry after a strict tool limit; the
+// returned flag reports whether any "prefer" tool went out strict (pi d4d53612).
+func buildAnthropicParams(model *ai.Model, req ai.TranscriptContext, oauth bool, opts *AnthropicOptions, disablePreferredStrictTools bool) (map[string]any, bool, error) {
 	retention := ai.CacheRetention("")
 	var env map[string]string
 	if opts != nil {
@@ -1438,28 +1525,56 @@ func buildAnthropicParams(model *ai.Model, req ai.TranscriptContext, oauth bool,
 	if hasInitialSystemMessage {
 		conversationMessages = transformedMessages[1:]
 	}
-	// Native tool changes reference tools by name, so a redefined name cannot be
-	// expressed, and Anthropic rejects a tool list where every tool is deferred,
-	// so there must be an initial active tool to anchor the deferred ones.
-	// Otherwise the current tool list is sent.
+	// Native tool changes keep the request-level tool list fixed and define
+	// every later tool by value in a tool_addition block, which also expresses
+	// same-name redefinitions (pi b271b0a5). Anthropic rejects a tool list where
+	// every tool is deferred, so there must be an initial active tool to anchor
+	// the placeholder. Otherwise the current tool list is sent.
 	initialTools := initialSystemMessage.ToolsAdded
 	nativeToolChanges := compat.supportsMidConvoSystemMessages &&
 		compat.supportsMidConvoToolChanges &&
-		len(initialTools) > 0 &&
-		!ai.HasToolRedefinitions(req.Messages)
+		len(initialTools) > 0
+	// Every tool definition goes through here, so the request knows whether
+	// any "prefer" tool went out strict: only such a request may fall back on
+	// strict tool limits (pi d4d53612).
+	hasPreferredStrictTools := false
+	convertTools := func(tools []ai.Tool, toolCC *cacheControl) ([]map[string]any, error) {
+		definitions, err := convertAnthropicTools(tools, oauth, compat.supportsEagerToolInputStreaming,
+			compat.supportsStrictTools, toolCC, disablePreferredStrictTools)
+		if err != nil {
+			return nil, err
+		}
+		for i, definition := range definitions {
+			if definition["strict"] == true && prefersJSONSchemaStrictSampling(tools[i]) {
+				hasPreferredStrictTools = true
+			}
+		}
+		return definitions, nil
+	}
+	var convertToolDefinitions func([]ai.Tool) ([]map[string]any, error)
+	if nativeToolChanges {
+		convertToolDefinitions = func(tools []ai.Tool) ([]map[string]any, error) {
+			return convertTools(tools, nil)
+		}
+	}
 
 	// A managed-effort model replays each historical turn's own effort, so the
 	// conversion records which converted message each recorded level belongs to.
 	// The provider is passed in only for such a model — pi's
 	// `supportsMidConvoEffort ? model.provider : undefined` — which is also what
 	// switches the recording off entirely for every other model.
+	thinkingDisabled := anthropicThinkingDisabled(model, opts)
+	effortMessages := anthropicEffortMessages(model, opts)
 	managedProvider := ""
-	if compat.supportsMidConvoEffort {
+	if effortMessages {
 		managedProvider = model.Provider
 	}
-	messages, assistantLevels := convertAnthropicMessages(
-		conversationMessages, oauth, cc, compat.allowEmptySignature, managedProvider, nativeToolChanges)
-	if compat.supportsMidConvoEffort {
+	messages, assistantLevels, err := convertAnthropicMessages(
+		conversationMessages, oauth, cc, compat.allowEmptySignature, managedProvider, convertToolDefinitions)
+	if err != nil {
+		return nil, false, err
+	}
+	if effortMessages {
 		messages = insertAnthropicThinkingLevelMessages(messages, assistantLevels, anthropicActiveEffort(opts))
 	}
 
@@ -1505,41 +1620,19 @@ func buildAnthropicParams(model *ai.Model, req ai.TranscriptContext, oauth bool,
 		toolCC = cc
 	}
 	if nativeToolChanges {
-		// Initial tools stay active with the cache breakpoint on the last one.
-		// Every later declaration is deferred and only surfaced by its
-		// tool_addition block; removed tools stay declared and are withdrawn by
-		// tool_removal. The request-level list therefore only grows, keeping the
-		// cached prefix intact across tool changes.
-		initialNames := make(map[string]bool, len(initialTools))
-		for _, tool := range initialTools {
-			initialNames[tool.Name] = true
-		}
-		var laterTools []ai.Tool
-		for _, tool := range ai.GetDeclaredTools(req.Messages) {
-			if !initialNames[tool.Name] {
-				laterTools = append(laterTools, tool)
-			}
-		}
-		initial, err := convertAnthropicTools(initialTools, oauth, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, toolCC)
+		// Initial tools stay active with the cache breakpoint on the last one,
+		// followed by the placeholder. The list never changes afterwards: later
+		// tools are defined by value in tool_addition blocks and withdrawn by
+		// tool_removal, so the cached prefix survives every tool change.
+		initial, err := convertTools(initialTools, toolCC)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		later, err := convertAnthropicTools(laterTools, oauth, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, nil)
-		if err != nil {
-			return nil, err
-		}
-		tools := make([]map[string]any, 0, len(initial)+1+len(later))
-		tools = append(tools, initial...)
-		tools = append(tools, deferredToolPlaceholder())
-		for _, tool := range later {
-			tool["defer_loading"] = true
-			tools = append(tools, tool)
-		}
-		params["tools"] = tools
+		params["tools"] = append(initial, deferredToolPlaceholder())
 	} else if tools := ai.GetCurrentTools(req.Messages); len(tools) > 0 {
-		converted, err := convertAnthropicTools(tools, oauth, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, toolCC)
+		converted, err := convertTools(tools, toolCC)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		params["tools"] = converted
 	}
@@ -1550,13 +1643,17 @@ func buildAnthropicParams(model *ai.Model, req ai.TranscriptContext, oauth bool,
 	// explicit off:null (present-nil), which marks "disabled" as unsupported
 	// and omits the key too (pi 9ccfcd7c: `thinkingLevelMap?.off !== null`).
 	//
-	// A managed-effort model short-circuits all of that: it is ALWAYS adaptive,
-	// with block_binding so a prefix mismatch drops the offending block instead
-	// of surfacing as a persistent 400, and its output_config effort is the
-	// literal "high" — the per-turn effort rides in the trailing system message
-	// insertAnthropicThinkingLevelMessages appended, not here (upstream
-	// 4e69b0c28). It does not consult model.Reasoning or the thinking tri-state.
-	if compat.supportsMidConvoEffort {
+	// A managed-effort model short-circuits all of that unless thinking is
+	// disabled: it is adaptive, with block_binding so a prefix mismatch drops
+	// the offending block instead of surfacing as a persistent 400, and its
+	// output_config effort is the literal "low" — the per-turn effort rides in
+	// the trailing system message insertAnthropicThinkingLevelMessages appended,
+	// not here (upstream 4e69b0c28). Disabled thinking sends no effort at all,
+	// so the model default applies: Anthropic rejects block_binding with
+	// disabled thinking (pi dc939913).
+	if thinkingDisabled {
+		params["thinking"] = map[string]any{"type": "disabled"}
+	} else if effortMessages {
 		display := ""
 		if opts != nil {
 			display = opts.ThinkingDisplay
@@ -1569,28 +1666,28 @@ func buildAnthropicParams(model *ai.Model, req ai.TranscriptContext, oauth bool,
 			"display":       display,
 			"block_binding": map[string]any{"prefix_mismatch_behavior": "drop_block"},
 		}
-		params["output_config"] = map[string]any{"effort": "high"}
-	} else if model.Reasoning && opts != nil && opts.ThinkingProvided {
-		if opts.ThinkingEnabled {
-			display := opts.ThinkingDisplay
-			if display == "" {
-				display = "summarized"
+		// Effort markers set the level for every reply. The top-level effort is
+		// part of the cached prompt, so it stays fixed. It is "low" because
+		// organizations can cap effort and reject requests containing any level
+		// above the cap (pi e3bc05e8, #10063).
+		params["output_config"] = map[string]any{"effort": "low"}
+	} else if model.Reasoning && opts != nil && opts.ThinkingProvided && opts.ThinkingEnabled {
+		display := opts.ThinkingDisplay
+		if display == "" {
+			display = "summarized"
+		}
+		if compat.forceAdaptiveThinking {
+			thinking := map[string]any{"type": "adaptive", "display": display}
+			params["thinking"] = thinking
+			if opts.Effort != "" {
+				params["output_config"] = map[string]any{"effort": opts.Effort}
 			}
-			if compat.forceAdaptiveThinking {
-				thinking := map[string]any{"type": "adaptive", "display": display}
-				params["thinking"] = thinking
-				if opts.Effort != "" {
-					params["output_config"] = map[string]any{"effort": opts.Effort}
-				}
-			} else {
-				budget := opts.ThinkingBudgetTokens
-				if budget == 0 {
-					budget = 1024
-				}
-				params["thinking"] = map[string]any{"type": "enabled", "budget_tokens": budget, "display": display}
+		} else {
+			budget := opts.ThinkingBudgetTokens
+			if budget == 0 {
+				budget = 1024
 			}
-		} else if off, present := model.ThinkingLevelMap["off"]; !present || off != nil {
-			params["thinking"] = map[string]any{"type": "disabled"}
+			params["thinking"] = map[string]any{"type": "enabled", "budget_tokens": budget, "display": display}
 		}
 	}
 
@@ -1627,7 +1724,7 @@ func buildAnthropicParams(model *ai.Model, req ai.TranscriptContext, oauth bool,
 		params["fallbacks"] = wire
 	}
 
-	return params, nil
+	return params, hasPreferredStrictTools, nil
 }
 
 // anthropicStrictUnsupportedKeywords are the keywords Anthropic strict tool use
@@ -1690,16 +1787,40 @@ func isAnthropicStrictUnsupportedKeyword(key string, value any) bool {
 	return false
 }
 
-func convertAnthropicTools(tools []ai.Tool, oauth, eager, supportsStrictTools bool, cc *cacheControl) ([]map[string]any, error) {
+// isAnthropicStrictToolLimitError reports whether a non-2xx response is pi's
+// fallback condition on the SDK's APIError: status 400, error type
+// invalid_request_error, and a known limit in its message.
+func isAnthropicStrictToolLimitError(status int, body []byte) bool {
+	if status != http.StatusBadRequest {
+		return false
+	}
+	var parsed struct {
+		Error struct {
+			Type any `json:"type"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &parsed) != nil || parsed.Error.Type != "invalid_request_error" {
+		return false
+	}
+	return isStrictToolLimitErrorMessage(anthropicAPIErrorMessage(status, body, false))
+}
+
+func convertAnthropicTools(tools []ai.Tool, oauth, eager, supportsStrictTools bool, cc *cacheControl, disablePreferredStrictTools bool) ([]map[string]any, error) {
 	out := make([]map[string]any, len(tools))
 	for i, t := range tools {
 		name := t.Name
 		if oauth {
 			name = toClaudeCodeName(name)
 		}
-		strict, err := resolveJSONSchemaStrictSampling(t, supportsStrictTools, isAnthropicStrictUnsupportedKeyword)
-		if err != nil {
-			return nil, err
+		// The strict-limit fallback sends "prefer" tools with their original
+		// non-strict schemas; "require" tools stay strict (pi d4d53612).
+		strict := false
+		if !disablePreferredStrictTools || !prefersJSONSchemaStrictSampling(t) {
+			var err error
+			strict, err = resolveJSONSchemaStrictSampling(t, supportsStrictTools, isAnthropicStrictUnsupportedKeyword)
+			if err != nil {
+				return nil, err
+			}
 		}
 		parameters, err := jsonSchemaToolParameters(t, strict)
 		if err != nil {
@@ -1775,8 +1896,9 @@ func convertAnthropicTools(tools []ai.Tool, oauth, eager, supportsStrictTools bo
 // system message only reaches this point on a model that accepts one natively
 // (every other transcript was collapsed first); it is rendered as a framed
 // update, with its tool changes as tool_removal/tool_addition blocks when
-// nativeToolChanges is set.
-func convertAnthropicMessages(transformed []ai.Message, oauth bool, cc *cacheControl, allowEmptySig bool, managedProvider string, nativeToolChanges bool) ([]map[string]any, map[int]string) {
+// convertToolDefinitions, which converts the definitions of tool_addition
+// blocks, is set: nil when tool changes are not native.
+func convertAnthropicMessages(transformed []ai.Message, oauth bool, cc *cacheControl, allowEmptySig bool, managedProvider string, convertToolDefinitions func([]ai.Tool) ([]map[string]any, error)) ([]map[string]any, map[int]string, error) {
 	// Seeded non-nil, like pi's `const params: MessageParam[] = []`: a transcript
 	// that converts to nothing must still marshal as `[]`, and a nil slice would
 	// marshal as `null`.
@@ -1786,7 +1908,10 @@ func convertAnthropicMessages(transformed []ai.Message, oauth bool, cc *cacheCon
 	// a map it is guaranteed to leave empty and discard.
 	var assistantLevels map[int]string
 	// Later system messages are held back and emitted directly before the next
-	// assistant message (or at the end of the transcript). Anthropic requires
+	// assistant message that is sent (or at the end of the transcript).
+	// Assistant messages that convert to no blocks are dropped, so holding past
+	// them keeps an update from landing before a user message (pi 3bc6eeba,
+	// #11091). Anthropic requires
 	// tool_result blocks to immediately follow their tool_use, so a system
 	// message between them is rejected; this also mirrors where the
 	// managed-effort system messages are inserted. As a result an update placed
@@ -1810,12 +1935,25 @@ func convertAnthropicMessages(transformed []ai.Message, oauth bool, cc *cacheCon
 			if text := ai.RenderSystemMessageUpdate(sm); text != "" {
 				blocks = append(blocks, map[string]any{"type": "text", "text": sanitizeSurrogates(text)})
 			}
-			if nativeToolChanges {
+			if convertToolDefinitions != nil {
+				redefined := make(map[string]bool, len(sm.ToolsAdded))
+				for _, tool := range sm.ToolsAdded {
+					redefined[tool.Name] = true
+				}
 				for _, tool := range sm.ToolsRemoved {
+					// A new definition under the same name replaces the old
+					// one, so no removal is needed.
+					if redefined[tool.Name] {
+						continue
+					}
 					blocks = append(blocks, map[string]any{"type": "tool_removal", "tool": toolReference(tool.Name)})
 				}
-				for _, tool := range sm.ToolsAdded {
-					blocks = append(blocks, map[string]any{"type": "tool_addition", "tool": toolReference(tool.Name)})
+				definitions, err := convertToolDefinitions(sm.ToolsAdded)
+				if err != nil {
+					return nil, nil, err
+				}
+				for _, definition := range definitions {
+					blocks = append(blocks, map[string]any{"type": "tool_addition", "tool": map[string]any{"type": "tool_definition", "definition": definition}})
 				}
 			}
 			if len(blocks) > 0 {
@@ -1835,11 +1973,11 @@ func convertAnthropicMessages(transformed []ai.Message, oauth bool, cc *cacheCon
 			}
 			params = append(params, map[string]any{"role": "user", "content": blocks})
 		} else if am, ok := asAssistantMsg(m); ok {
-			flushPendingSystemMessages()
 			blocks := convertAssistantBlocks(am, oauth, allowEmptySig)
 			if len(blocks) == 0 {
 				continue
 			}
+			flushPendingSystemMessages()
 			messageIndex := len(params)
 			params = append(params, map[string]any{"role": "assistant", "content": blocks})
 			// Only a turn this very transport produced may have its effort
@@ -1856,17 +1994,28 @@ func convertAnthropicMessages(transformed []ai.Message, oauth bool, cc *cacheCon
 			// Collect all consecutive toolResult messages (needed for z.ai's
 			// Anthropic endpoint).
 			var toolResults []any
+			// Anthropic rejects error tool results that contain anything but
+			// text, so their images follow all tool results of the turn, which
+			// must come first in the user message (pi #10794).
+			var errorImages []any
 			j := i
 			for j < len(transformed) {
 				next, ok := asToolResultMsg(transformed[j])
 				if !ok {
 					break
 				}
+				if split := splitErrorToolResultImages(next); split != nil {
+					next.Content = split.content
+					errorImages = append(errorImages, map[string]any{"type": "text", "text": split.caption})
+					for _, img := range split.images {
+						errorImages = append(errorImages, anthropicImageBlock(img))
+					}
+				}
 				toolResults = append(toolResults, convertToolResult(next))
 				j++
 			}
 			i = j - 1
-			params = append(params, map[string]any{"role": "user", "content": toolResults})
+			params = append(params, map[string]any{"role": "user", "content": append(toolResults, errorImages...)})
 		}
 	}
 
@@ -1892,7 +2041,7 @@ func convertAnthropicMessages(transformed []ai.Message, oauth bool, cc *cacheCon
 			}
 		}
 	}
-	return params, assistantLevels
+	return params, assistantLevels, nil
 }
 
 func convertUserBlocks(content ai.ContentList) []any {
@@ -1905,15 +2054,18 @@ func convertUserBlocks(content ai.ContentList) []any {
 			}
 			blocks = append(blocks, map[string]any{"type": "text", "text": sanitizeSurrogates(v.Text)})
 		case ai.ImageContent:
-			blocks = append(blocks, map[string]any{
-				"type": "image",
-				"source": map[string]any{
-					"type": "base64", "media_type": v.MimeType, "data": v.Data,
-				},
-			})
+			blocks = append(blocks, anthropicImageBlock(v))
 		}
 	}
 	return blocks
+}
+
+// anthropicImageBlock is an image content block (pi's convertImageBlock).
+func anthropicImageBlock(img ai.ImageContent) map[string]any {
+	return map[string]any{
+		"type":   "image",
+		"source": map[string]any{"type": "base64", "media_type": img.MimeType, "data": img.Data},
+	}
 }
 
 func convertAssistantBlocks(am *ai.AssistantMessage, oauth, allowEmptySig bool) []any {
@@ -1996,7 +2148,7 @@ func convertContentBlocks(content ai.ContentList) any {
 			hasText = true
 			blocks = append(blocks, map[string]any{"type": "text", "text": sanitizeSurrogates(v.Text)})
 		case ai.ImageContent:
-			blocks = append(blocks, map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": v.MimeType, "data": v.Data}})
+			blocks = append(blocks, anthropicImageBlock(v))
 		}
 	}
 	if !hasText {
@@ -2036,15 +2188,19 @@ func anthropicClientHeaders(model *ai.Model, opts *AnthropicOptions, oauth bool,
 	if parsed, ok := sdkCustomHeaders("ANTHROPIC_CUSTOM_HEADERS"); ok {
 		o = parsed
 	}
-	o.merge(piUserAgentHeaders())
+	// pi createClient: `mergeHeaders(getIdentityHeaders(model, identity),
+	// {accept, …}, …)` — the identity's User-Agent and attribution come
+	// first, so the provider auth headers, model.Headers and opts.Headers all
+	// override them. OpenCode's session header sits with them (attribution.go).
+	// The OAuth branch sends Claude Code's identity instead of the client's
+	// (pi 04a93bad), so it gets neither: with no "User-Agent" slot, a
+	// consumer header of that spelling lands after claude-cli's and wins.
+	if !oauth {
+		mergeIdentityHeaders(o, model, opts.Identity)
+	}
+	mergeOpenCodeSession(o, model, opts.SessionID)
 	o.set("accept", "application/json")
 	o.set("anthropic-dangerous-direct-browser-access", "true")
-
-	// pi mergeProviderAttributionHeaders (sdk.ts) puts the attribution bundle at
-	// the bottom of the precedence stack: emit session + default attribution
-	// first so the provider auth headers, model.Headers, and opts.Headers all
-	// override them.
-	applyAttributionDefaults(o.set, model, opts.SessionID)
 
 	compat := getAnthropicCompat(model)
 

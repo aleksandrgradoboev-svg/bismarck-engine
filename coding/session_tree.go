@@ -303,6 +303,10 @@ type ProjectedSessionEntry struct {
 type BranchProjection struct {
 	BranchContext
 	Entries []ProjectedSessionEntry
+	// Branch is the whole path from the root to the leaf, entries a compaction
+	// leaves out of the context included (pi getBranch): restoring the tool
+	// loadout reads every system message on it.
+	Branch []*SessionEntry
 }
 
 // BuildProjection reconstructs the active branch's model context with
@@ -326,7 +330,7 @@ func (t *SessionTree) BuildProjection(leafID ...string) BranchProjection {
 	}
 	path := t.Branch(leaf)
 
-	var p BranchProjection
+	p := BranchProjection{Branch: path}
 	p.ThinkingLevel = "off"
 	for _, e := range path {
 		switch e.Type {

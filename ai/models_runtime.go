@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // Models runtime ported from pi packages/ai/src/models.ts (732bb161; facade
@@ -677,6 +678,10 @@ type CreateModelsOptions struct {
 	Credentials CredentialStore
 	ModelsStore ModelsStore
 	AuthContext AuthContext
+	// Identity is the default identity of every request; a request's
+	// Identity overrides it field by field (pi CreateModelsOptions.identity,
+	// upstream adc5fa9f).
+	Identity *ClientIdentity
 }
 
 type modelsImpl struct {
@@ -686,6 +691,7 @@ type modelsImpl struct {
 	credentials CredentialStore
 	modelsStore ModelsStore
 	authContext AuthContext
+	identity    *ClientIdentity
 
 	// refreshMu guards the per-provider refresh generation counters and the
 	// cancel funcs of the refreshes currently in flight (pi's
@@ -704,6 +710,7 @@ func CreateModels(options *CreateModelsOptions) MutableModels {
 	var creds CredentialStore = NewInMemoryCredentialStore()
 	var store ModelsStore = NewInMemoryModelsStore()
 	var ac AuthContext = DefaultProviderAuthContext()
+	var identity *ClientIdentity // copied, so a later change to the caller's does not leak in
 	if options != nil {
 		if options.Credentials != nil {
 			creds = options.Credentials
@@ -714,12 +721,14 @@ func CreateModels(options *CreateModelsOptions) MutableModels {
 		if options.AuthContext != nil {
 			ac = options.AuthContext
 		}
+		identity = MergeClientIdentity(options.Identity)
 	}
 	return &modelsImpl{
 		providers:     map[string]Provider{},
 		credentials:   creds,
 		modelsStore:   store,
 		authContext:   ac,
+		identity:      identity,
 		refreshGens:   map[string]uint64{},
 		refreshCancel: map[string]*providerRefresh{},
 		publishQueue:  newKeyedLock(),
@@ -1474,6 +1483,7 @@ func (m *modelsImpl) applyAuth(
 	ctx context.Context,
 	model *Model,
 	opts *ProviderRequestOptions,
+	sessionID string,
 	transforms ModelsRequestTransforms,
 ) (*Model, *ProviderRequestOptions, error) {
 	var overrides *AuthResolutionOverrides
@@ -1496,7 +1506,16 @@ func (m *modelsImpl) applyAuth(
 	if ro.APIKey == "" { // options?.apiKey ?? auth.apiKey
 		ro.APIKey = auth.APIKey
 	}
-	headers := mergeHeaders(auth.Headers, ro.Headers)
+	requestModel := model
+	if auth.BaseURL != "" {
+		clone := *model
+		clone.BaseURL = auth.BaseURL
+		requestModel = &clone
+	}
+	// OpenCode's session header for any request to OpenCode, custom
+	// providers pointing at it included, below the auth and request headers
+	// (pi 04a93bad).
+	headers := mergeHeaders(mergeHeaders(OpenCodeSessionHeaders(requestModel, sessionID), auth.Headers), ro.Headers)
 	if transforms.TransformHeaders != nil {
 		if headers == nil {
 			headers = ProviderHeaders{} // pi: transformHeaders(headers ?? {})
@@ -1508,13 +1527,7 @@ func (m *modelsImpl) applyAuth(
 	}
 	ro.Headers = headers
 	ro.Env = mergeStringMap(resolution.Env, ro.Env) // explicit env override
-
-	requestModel := model
-	if auth.BaseURL != "" {
-		clone := *model
-		clone.BaseURL = auth.BaseURL
-		requestModel = &clone
-	}
+	ro.Identity = MergeClientIdentity(m.identity, ro.Identity)
 	return requestModel, &ro, nil
 }
 
@@ -1525,6 +1538,16 @@ func (m *modelsImpl) applyAuth(
 
 func (m *modelsImpl) Stream(ctx context.Context, model *Model, req Context, opts *ModelsStreamOptions) *AssistantMessageEventStream {
 	transcript := NormalizeContext(req)
+	var parent telemetry.Span
+	if opts != nil {
+		parent = opts.Telemetry
+	}
+	return observeRequest(model, parent, "", false, func() *AssistantMessageEventStream {
+		return m.stream(ctx, model, transcript, opts)
+	})
+}
+
+func (m *modelsImpl) stream(ctx context.Context, model *Model, transcript TranscriptContext, opts *ModelsStreamOptions) *AssistantMessageEventStream {
 	if err := AssertChatModel(model); err != nil {
 		return ErrorStream(model, err)
 	}
@@ -1534,11 +1557,13 @@ func (m *modelsImpl) Stream(ctx context.Context, model *Model, req Context, opts
 	}
 	var base *ProviderRequestOptions
 	var transforms ModelsRequestTransforms
+	var sessionID string
 	if opts != nil {
 		base = &opts.ProviderRequestOptions
 		transforms = opts.ModelsRequestTransforms
+		sessionID = opts.SessionID
 	}
-	requestModel, requestOptions, err := m.applyAuth(ctx, model, base, transforms)
+	requestModel, requestOptions, err := m.applyAuth(ctx, model, base, sessionID, transforms)
 	if err != nil {
 		return ErrorStream(model, err)
 	}
@@ -1556,6 +1581,18 @@ func (m *modelsImpl) Complete(ctx context.Context, model *Model, req Context, op
 
 func (m *modelsImpl) StreamSimple(ctx context.Context, model *Model, req Context, opts *ModelsSimpleStreamOptions) *AssistantMessageEventStream {
 	transcript := NormalizeContext(req)
+	var parent telemetry.Span
+	var reasoning ThinkingLevel
+	if opts != nil {
+		parent = opts.Telemetry
+		reasoning = opts.Reasoning
+	}
+	return observeRequest(model, parent, reasoning, false, func() *AssistantMessageEventStream {
+		return m.streamSimple(ctx, model, transcript, opts)
+	})
+}
+
+func (m *modelsImpl) streamSimple(ctx context.Context, model *Model, transcript TranscriptContext, opts *ModelsSimpleStreamOptions) *AssistantMessageEventStream {
 	if err := AssertChatModel(model); err != nil {
 		return ErrorStream(model, err)
 	}
@@ -1565,11 +1602,13 @@ func (m *modelsImpl) StreamSimple(ctx context.Context, model *Model, req Context
 	}
 	var base *ProviderRequestOptions
 	var transforms ModelsRequestTransforms
+	var sessionID string
 	if opts != nil {
 		base = &opts.SimpleStreamOptions.ProviderRequestOptions
 		transforms = opts.ModelsRequestTransforms
+		sessionID = opts.SessionID
 	}
-	requestModel, requestOptions, err := m.applyAuth(ctx, model, base, transforms)
+	requestModel, requestOptions, err := m.applyAuth(ctx, model, base, sessionID, transforms)
 	if err != nil {
 		return ErrorStream(model, err)
 	}
@@ -1586,6 +1625,16 @@ func (m *modelsImpl) CompleteSimple(ctx context.Context, model *Model, req Conte
 }
 
 func (m *modelsImpl) StreamDeferred(ctx context.Context, model *Model, handle DeferredHandle, opts *ModelsDeferredFetchOptions) *AssistantMessageEventStream {
+	var parent telemetry.Span
+	if opts != nil {
+		parent = opts.Telemetry
+	}
+	return observeRequest(model, parent, "", true, func() *AssistantMessageEventStream {
+		return m.streamDeferred(ctx, model, handle, opts)
+	})
+}
+
+func (m *modelsImpl) streamDeferred(ctx context.Context, model *Model, handle DeferredHandle, opts *ModelsDeferredFetchOptions) *AssistantMessageEventStream {
 	if err := AssertChatModel(model); err != nil {
 		return ErrorStream(model, err)
 	}
@@ -1600,7 +1649,7 @@ func (m *modelsImpl) StreamDeferred(ctx context.Context, model *Model, handle De
 		base = &opts.ProviderRequestOptions
 		transforms = opts.ModelsRequestTransforms
 	}
-	requestModel, requestOptions, err := m.applyAuth(ctx, model, base, transforms)
+	requestModel, requestOptions, err := m.applyAuth(ctx, model, base, "", transforms)
 	if err != nil {
 		return ErrorStream(model, err)
 	}
@@ -1635,7 +1684,7 @@ func (m *modelsImpl) CancelDeferred(ctx context.Context, model *Model, handle De
 		base = &opts.DeferredCancelOptions
 		transforms = opts.ModelsRequestTransforms
 	}
-	requestModel, requestOptions, err := m.applyAuth(ctx, model, base, transforms)
+	requestModel, requestOptions, err := m.applyAuth(ctx, model, base, "", transforms)
 	if err != nil {
 		return err
 	}

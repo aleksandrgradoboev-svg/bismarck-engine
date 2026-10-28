@@ -1,6 +1,8 @@
 package providers
 
 import (
+	"fmt"
+
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
@@ -8,7 +10,43 @@ import (
 const (
 	nonVisionUserImagePlaceholder = "(image omitted: model does not support images)"
 	nonVisionToolImagePlaceholder = "(tool image omitted: model does not support images)"
+	errorToolImagePlaceholder     = "(image attached after the tool results)"
 )
+
+// splitErrorToolResult is an error tool result split into a text-only result
+// and the images to send after the tool results (pi's SplitErrorToolResult).
+type splitErrorToolResult struct {
+	// content is the result content with each run of images replaced by a note.
+	content ai.ContentList
+	// caption names the tool call, to send before images.
+	caption string
+	images  []ai.ImageContent
+}
+
+// splitErrorToolResultImages splits the images out of an error tool result,
+// for APIs that reject images in error results (Anthropic). The content goes
+// as the tool result, the caption and images after all tool results of the
+// turn, in the same user message. It returns nil for results that need no
+// split (pi 5ab7fe74, #10794).
+func splitErrorToolResultImages(tr ai.ToolResultMessage) *splitErrorToolResult {
+	if !tr.IsError {
+		return nil
+	}
+	var images []ai.ImageContent
+	for _, block := range tr.Content {
+		if img, ok := block.(ai.ImageContent); ok {
+			images = append(images, img)
+		}
+	}
+	if len(images) == 0 {
+		return nil
+	}
+	return &splitErrorToolResult{
+		content: replaceImagesWithPlaceholder(tr.Content, errorToolImagePlaceholder),
+		caption: fmt.Sprintf("Images from the error result of tool call %s (%s):", tr.ToolCallID, tr.ToolName),
+		images:  images,
+	}
+}
 
 // asAssistantMsg normalizes a value/pointer assistant message.
 func asAssistantMsg(m ai.Message) (*ai.AssistantMessage, bool) {
@@ -142,24 +180,24 @@ func transformMessages(messages []ai.Message, model *ai.Model, normalizeToolCall
 		for _, block := range am.Content {
 			switch b := block.(type) {
 			case ai.ThinkingContent:
-				if b.Redacted {
-					if isSameModel {
-						content = append(content, b)
-					}
+				// Thinking from another model is dropped. Signatures and
+				// encrypted reasoning are only valid for the model that produced
+				// them, and readable thinking sent as plain text makes the new
+				// model treat it as part of the visible reply (pi 91130942,
+				// #10995).
+				if !isSameModel {
 					continue
 				}
-				if isSameModel && b.ThinkingSignature != "" {
+				// Keep redacted and signed blocks even if the thinking text is
+				// empty (OpenAI encrypted reasoning); they are needed for replay.
+				if b.Redacted || b.ThinkingSignature != "" {
 					content = append(content, b)
 					continue
 				}
 				if jstext.Trim(b.Thinking) == "" {
 					continue
 				}
-				if isSameModel {
-					content = append(content, b)
-				} else {
-					content = append(content, ai.TextContent{Text: b.Thinking})
-				}
+				content = append(content, b)
 			case ai.TextContent:
 				if isSameModel {
 					content = append(content, b)

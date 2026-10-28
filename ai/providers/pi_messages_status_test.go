@@ -14,7 +14,7 @@ import (
 // piMessagesStatusCaptureFile is written by
 // testdata/pi-messages/capture-pi-messages-status.mts, which streams pi's
 // pi-messages adapter from source at the named sha against a raw server.
-const piMessagesStatusCaptureFile = "testdata/pi-messages/pi-messages-status-49681e1b7.json"
+const piMessagesStatusCaptureFile = "testdata/pi-messages/pi-messages-status-89c921d8.json"
 
 // TestPiMessagesStatusTextMatchesPi serves each captured status line byte for
 // byte and requires pi's errorMessage and the response-failure details'

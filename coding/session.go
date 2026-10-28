@@ -132,6 +132,11 @@ type SessionOptions struct {
 	// StreamFn overrides the stream function (for tests). Default: ai.StreamSimple.
 	// Either way the session asserts a chat model first (see sessionStreamFn).
 	StreamFn agent.StreamFn
+	// Identity is how the session's requests identify the app to providers.
+	// Nil is ClientIdentity(), read at each request. Not in pi, whose coding
+	// agent always identifies as itself: a host embedding the session names
+	// itself here.
+	Identity *ai.ClientIdentity
 }
 
 // sessionStreamFn is the stream function a session's agent uses for every
@@ -143,7 +148,12 @@ type SessionOptions struct {
 // session streams through ai.StreamSimple, the compat global, which asserts
 // nothing (pi's compat streamSimple does not either), so the session asserts
 // here and then delegates to next, or to ai.StreamSimple when next is nil.
-func sessionStreamFn(next agent.StreamFn) agent.StreamFn {
+//
+// Every request also carries the session's identity in place of the agent
+// loop's (pi buildRequestOptions, upstream adc5fa9f): identity, or
+// ClientIdentity() read per request, so a change to PI_TELEMETRY applies at
+// once, as pi's telemetry setting does.
+func sessionStreamFn(next agent.StreamFn, identity *ai.ClientIdentity) agent.StreamFn {
 	if next == nil {
 		next = func(ctx context.Context, model *ai.Model, req ai.TranscriptContext, opts *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 			return ai.StreamSimple(ctx, model, ai.Context{Messages: req.Messages}, opts)
@@ -153,7 +163,15 @@ func sessionStreamFn(next agent.StreamFn) agent.StreamFn {
 		if err := ai.AssertChatModel(model); err != nil {
 			return ai.ErrorStream(model, err)
 		}
-		return next(ctx, model, req, opts)
+		requestOptions := ai.SimpleStreamOptions{}
+		if opts != nil {
+			requestOptions = *opts
+		}
+		requestOptions.Identity = identity
+		if requestOptions.Identity == nil {
+			requestOptions.Identity = ClientIdentity()
+		}
+		return next(ctx, model, req, &requestOptions)
 	}
 }
 
@@ -191,6 +209,10 @@ type resolvedTools struct {
 	// allowlisted reports whether the ToolNames allowlist names the tool; nil
 	// without an allowlist (pi's _allowedTools undefined).
 	allowlisted func(string) bool
+	// base, usesDefaultTools and defaultModifiers: see toolRegistry.
+	base             map[string]bool
+	usesDefaultTools bool
+	defaultModifiers []string
 }
 
 func resolveToolRegistry(cwd string, opts SessionOptions, sessionEnv sessionEnvFn, resize imageResizeFn) resolvedTools {
@@ -360,7 +382,31 @@ func resolveToolRegistry(cwd string, opts SessionOptions, sessionEnv sessionEnvF
 	for _, n := range registryOrder {
 		defs = append(defs, registry[n])
 	}
-	return resolvedTools{defs: defs, active: active, pending: pending, isAllowed: isAllowed, allowlisted: allowed}
+	// pi _baseToolDefinitions: the Tools override, or every built-in (pi
+	// creates all of them, allowed or not).
+	base := map[string]bool{}
+	if opts.Tools != nil {
+		for _, name := range baseNames {
+			base[name] = true
+		}
+	} else {
+		for _, name := range ToolNames {
+			base[name] = true
+		}
+		for _, d := range defs {
+			if d.Source == "builtin" {
+				base[d.Tool.Name] = true
+			}
+		}
+	}
+	// sdk.ts: usesDefaultTools is (options.tools === undefined || toolModifiers
+	// !== undefined) && !options.noTools, with the modifiers passed on.
+	var modifiers []string
+	if hasModifiers {
+		modifiers = opts.ToolNames
+	}
+	return resolvedTools{defs: defs, active: active, pending: pending, isAllowed: isAllowed, allowlisted: allowed,
+		base: base, usesDefaultTools: (opts.ToolNames == nil || hasModifiers) && opts.NoTools == NoToolsOff, defaultModifiers: modifiers}
 }
 
 // toolPromptGuidelines maps each tool with prompt guidelines to them, as
@@ -501,7 +547,8 @@ func (s *Session) CustomEntries(customType string) (data []json.RawMessage, ok b
 }
 
 // AppendCustomEntry appends a custom entry to the recorded session (pi
-// ExtensionAPI.appendEntry); ok is false when no recorder is attached.
+// ExtensionAPI.appendEntry); ok is false when no recorder is attached. The id
+// is empty when the entry could not be written (SessionRecorder.Err).
 func (s *Session) AppendCustomEntry(customType string, data any) (id string, ok bool) {
 	r := s.recorder()
 	if r == nil {
@@ -553,10 +600,16 @@ func (s *Session) LoadHistory(messages []agent.AgentMessage) {
 // previous summary and its file lists merged. An assistant usage recorded
 // before the branch's latest compaction or context edit measured a context
 // that has since changed, so, as in pi, it does not decide the next
-// compaction.
+// compaction. A session on the default tools, changed at most by +name/-name
+// entries in ToolNames, takes the loadout the branch records, with those
+// entries applied (pi 6f2f164a: the constructor's _restoreToolsFromTranscript;
+// see RestoreToolsFromBranch); any other selection stands.
 func (s *Session) LoadBranch(p BranchProjection) {
 	s.Agent.SetMessages(p.Messages)
 	s.setCompaction(resumedCompaction(p))
+	if s.tools.usesDefaultTools {
+		s.restoreToolsFromBranch(p.Branch, s.tools.defaultModifiers)
+	}
 }
 
 // SetModel switches the active model (and API key) for future turns.
@@ -664,7 +717,7 @@ func NewSession(opts SessionOptions) *Session {
 			Model:         opts.Model,
 			ThinkingLevel: thinking,
 		},
-		StreamFn:        sessionStreamFn(opts.StreamFn),
+		StreamFn:        sessionStreamFn(opts.StreamFn, opts.Identity),
 		SessionID:       opts.SessionID,
 		GetApiKey:       func(provider string) string { return opts.APIKey },
 		Temperature:     opts.Temperature,

@@ -1,0 +1,2433 @@
+{
+	"sha": "e3bc05e8",
+	"kimi-k3-anchors-additions": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "kimi-k3",
+			"name": "Kimi K3",
+			"api": "openai-completions",
+			"provider": "moonshotai",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"supportsMidConvoToolAdditions": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "system",
+					"content": "updated guidance",
+					"toolsAdded": [
+						{
+							"name": "late_tool",
+							"description": "late_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 2
+				}
+			]
+		},
+		"body": {
+			"model": "kimi-k3",
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt"
+				},
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "system",
+					"tools": [
+						{
+							"type": "function",
+							"function": {
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						}
+					]
+				},
+				{
+					"role": "system",
+					"content": "updated guidance"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"max_tokens": 1000,
+			"tools": [
+				{
+					"type": "function",
+					"function": {
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				}
+			]
+		}
+	},
+	"kimi-k2-text-inline": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "kimi-k2.7-code",
+			"name": "Kimi K2.7 Code",
+			"api": "openai-completions",
+			"provider": "moonshotai",
+			"compat": {
+				"supportsMidConvoSystemMessages": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "system",
+					"content": "updated guidance",
+					"toolsAdded": [
+						{
+							"name": "late_tool",
+							"description": "late_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 2
+				}
+			]
+		},
+		"body": {
+			"model": "kimi-k2.7-code",
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt"
+				},
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "system",
+					"content": "updated guidance"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"max_tokens": 1000,
+			"tools": [
+				{
+					"type": "function",
+					"function": {
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				},
+				{
+					"type": "function",
+					"function": {
+						"name": "late_tool",
+						"description": "late_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				}
+			]
+		}
+	},
+	"developer-updates-non-additive": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "gpt-test",
+			"name": "GPT test",
+			"api": "openai-completions",
+			"provider": "openai",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"supportsMidConvoToolAdditions": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"sections": {
+						"rules": "<rules>\nold rules\n</rules>",
+						"docs": "<docs>\nread docs\n</docs>"
+					},
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "system",
+					"content": "updated guidance",
+					"sections": {
+						"rules": "<rules>\nnew rules\n</rules>",
+						"docs": null
+					},
+					"toolsRemoved": [
+						{
+							"name": "base_tool"
+						}
+					],
+					"toolsAdded": [
+						{
+							"name": "late_tool",
+							"description": "late_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 2
+				}
+			]
+		},
+		"body": {
+			"model": "gpt-test",
+			"messages": [
+				{
+					"role": "developer",
+					"content": "base prompt\n\n<rules>\nold rules\n</rules>\n\n<docs>\nread docs\n</docs>"
+				},
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "developer",
+					"content": "updated guidance\n\nUpdated system prompt section \"rules\":\n\n<rules>\nnew rules\n</rules>\n\nRemoved system prompt section \"docs\"."
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"store": false,
+			"max_completion_tokens": 1000,
+			"tools": [
+				{
+					"type": "function",
+					"function": {
+						"name": "late_tool",
+						"description": "late_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				}
+			]
+		}
+	},
+	"kimi-k3-addition-without-leading-message": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "kimi-k3",
+			"name": "Kimi K3",
+			"api": "openai-completions",
+			"provider": "moonshotai",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"supportsMidConvoToolAdditions": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "system",
+					"content": "",
+					"toolsAdded": [
+						{
+							"name": "late_tool",
+							"description": "late_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 2
+				},
+				{
+					"role": "user",
+					"content": "after",
+					"timestamp": 3
+				}
+			]
+		},
+		"body": {
+			"model": "kimi-k3",
+			"messages": [
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "system",
+					"tools": [
+						{
+							"type": "function",
+							"function": {
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						}
+					]
+				},
+				{
+					"role": "user",
+					"content": "after"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"max_tokens": 1000
+		}
+	},
+	"bridge-after-tool-result": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "custom-model",
+			"name": "Custom model",
+			"api": "openai-completions",
+			"provider": "custom-provider",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"requiresAssistantAfterToolResult": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "assistant",
+					"content": [
+						{
+							"type": "toolCall",
+							"id": "call_1",
+							"name": "base_tool",
+							"arguments": {}
+						}
+					],
+					"api": "openai-completions",
+					"provider": "custom-provider",
+					"model": "custom-model",
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"totalTokens": 0,
+						"cost": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"total": 0
+						}
+					},
+					"stopReason": "toolUse",
+					"timestamp": 2
+				},
+				{
+					"role": "toolResult",
+					"toolCallId": "call_1",
+					"toolName": "base_tool",
+					"content": [
+						{
+							"type": "text",
+							"text": "done"
+						}
+					],
+					"isError": false,
+					"timestamp": 3
+				},
+				{
+					"role": "user",
+					"content": "after",
+					"timestamp": 5
+				}
+			]
+		},
+		"body": {
+			"model": "custom-model",
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt"
+				},
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "assistant",
+					"content": "",
+					"tool_calls": [
+						{
+							"id": "call_1",
+							"type": "function",
+							"function": {
+								"name": "base_tool",
+								"arguments": "{}"
+							}
+						}
+					]
+				},
+				{
+					"role": "tool",
+					"content": "done",
+					"tool_call_id": "call_1"
+				},
+				{
+					"role": "assistant",
+					"content": "I have processed the tool results."
+				},
+				{
+					"role": "user",
+					"content": "after"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"store": false,
+			"max_completion_tokens": 1000,
+			"tools": [
+				{
+					"type": "function",
+					"function": {
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				}
+			]
+		}
+	},
+	"no-bridge-after-system-update": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "custom-model",
+			"name": "Custom model",
+			"api": "openai-completions",
+			"provider": "custom-provider",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"requiresAssistantAfterToolResult": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "assistant",
+					"content": [
+						{
+							"type": "toolCall",
+							"id": "call_1",
+							"name": "base_tool",
+							"arguments": {}
+						}
+					],
+					"api": "openai-completions",
+					"provider": "custom-provider",
+					"model": "custom-model",
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"totalTokens": 0,
+						"cost": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"total": 0
+						}
+					},
+					"stopReason": "toolUse",
+					"timestamp": 2
+				},
+				{
+					"role": "toolResult",
+					"toolCallId": "call_1",
+					"toolName": "base_tool",
+					"content": [
+						{
+							"type": "text",
+							"text": "done"
+						}
+					],
+					"isError": false,
+					"timestamp": 3
+				},
+				{
+					"role": "system",
+					"content": "updated guidance",
+					"timestamp": 4
+				},
+				{
+					"role": "user",
+					"content": "after",
+					"timestamp": 5
+				}
+			]
+		},
+		"body": {
+			"model": "custom-model",
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt"
+				},
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "assistant",
+					"content": "",
+					"tool_calls": [
+						{
+							"id": "call_1",
+							"type": "function",
+							"function": {
+								"name": "base_tool",
+								"arguments": "{}"
+							}
+						}
+					]
+				},
+				{
+					"role": "tool",
+					"content": "done",
+					"tool_call_id": "call_1"
+				},
+				{
+					"role": "system",
+					"content": "updated guidance"
+				},
+				{
+					"role": "user",
+					"content": "after"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"store": false,
+			"max_completion_tokens": 1000,
+			"tools": [
+				{
+					"type": "function",
+					"function": {
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				}
+			]
+		}
+	},
+	"no-bridge-after-empty-system-update": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "custom-model",
+			"name": "Custom model",
+			"api": "openai-completions",
+			"provider": "custom-provider",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"requiresAssistantAfterToolResult": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "assistant",
+					"content": [
+						{
+							"type": "toolCall",
+							"id": "call_1",
+							"name": "base_tool",
+							"arguments": {}
+						}
+					],
+					"api": "openai-completions",
+					"provider": "custom-provider",
+					"model": "custom-model",
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"totalTokens": 0,
+						"cost": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"total": 0
+						}
+					},
+					"stopReason": "toolUse",
+					"timestamp": 2
+				},
+				{
+					"role": "toolResult",
+					"toolCallId": "call_1",
+					"toolName": "base_tool",
+					"content": [
+						{
+							"type": "text",
+							"text": "done"
+						}
+					],
+					"isError": false,
+					"timestamp": 3
+				},
+				{
+					"role": "system",
+					"content": "",
+					"timestamp": 4
+				},
+				{
+					"role": "user",
+					"content": "after",
+					"timestamp": 5
+				}
+			]
+		},
+		"body": {
+			"model": "custom-model",
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt"
+				},
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "assistant",
+					"content": "",
+					"tool_calls": [
+						{
+							"id": "call_1",
+							"type": "function",
+							"function": {
+								"name": "base_tool",
+								"arguments": "{}"
+							}
+						}
+					]
+				},
+				{
+					"role": "tool",
+					"content": "done",
+					"tool_call_id": "call_1"
+				},
+				{
+					"role": "user",
+					"content": "after"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"store": false,
+			"max_completion_tokens": 1000,
+			"tools": [
+				{
+					"type": "function",
+					"function": {
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				}
+			]
+		}
+	},
+	"grammar-call-replays-declared-tool": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "custom-model",
+			"name": "Custom model",
+			"api": "openai-completions",
+			"provider": "custom-provider",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"supportsOpenAIGrammarTools": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "gram",
+							"description": "gram tool",
+							"parameters": {
+								"type": "object",
+								"required": [
+									"query"
+								],
+								"properties": {
+									"query": {
+										"type": "string"
+									}
+								}
+							},
+							"constrainedSampling": {
+								"type": "grammar",
+								"variants": {
+									"openai_lark": "start: /.+/"
+								}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "assistant",
+					"content": [
+						{
+							"type": "toolCall",
+							"id": "call_g",
+							"name": "gram",
+							"arguments": {
+								"query": "SELECT 1"
+							}
+						}
+					],
+					"api": "openai-completions",
+					"provider": "custom-provider",
+					"model": "custom-model",
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"totalTokens": 0,
+						"cost": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"total": 0
+						}
+					},
+					"stopReason": "toolUse",
+					"timestamp": 2
+				},
+				{
+					"role": "toolResult",
+					"toolCallId": "call_g",
+					"toolName": "gram",
+					"content": [
+						{
+							"type": "text",
+							"text": "1"
+						}
+					],
+					"isError": false,
+					"timestamp": 3
+				},
+				{
+					"role": "system",
+					"content": "",
+					"toolsRemoved": [
+						{
+							"name": "gram"
+						}
+					],
+					"timestamp": 4
+				},
+				{
+					"role": "user",
+					"content": "after",
+					"timestamp": 5
+				}
+			]
+		},
+		"body": {
+			"model": "custom-model",
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt"
+				},
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "assistant",
+					"content": null,
+					"tool_calls": [
+						{
+							"id": "call_g",
+							"type": "custom",
+							"custom": {
+								"name": "gram",
+								"input": "SELECT 1"
+							}
+						}
+					]
+				},
+				{
+					"role": "tool",
+					"content": "1",
+					"tool_call_id": "call_g"
+				},
+				{
+					"role": "user",
+					"content": "after"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"store": false,
+			"max_completion_tokens": 1000,
+			"tools": []
+		}
+	},
+	"grammar-call-collapsed-current-tools": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "custom-model",
+			"name": "Custom model",
+			"api": "openai-completions",
+			"provider": "custom-provider",
+			"compat": {
+				"supportsOpenAIGrammarTools": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "gram",
+							"description": "gram tool",
+							"parameters": {
+								"type": "object",
+								"required": [
+									"query"
+								],
+								"properties": {
+									"query": {
+										"type": "string"
+									}
+								}
+							},
+							"constrainedSampling": {
+								"type": "grammar",
+								"variants": {
+									"openai_lark": "start: /.+/"
+								}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "assistant",
+					"content": [
+						{
+							"type": "toolCall",
+							"id": "call_g",
+							"name": "gram",
+							"arguments": {
+								"query": "SELECT 1"
+							}
+						}
+					],
+					"api": "openai-completions",
+					"provider": "custom-provider",
+					"model": "custom-model",
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"totalTokens": 0,
+						"cost": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"total": 0
+						}
+					},
+					"stopReason": "toolUse",
+					"timestamp": 2
+				},
+				{
+					"role": "toolResult",
+					"toolCallId": "call_g",
+					"toolName": "gram",
+					"content": [
+						{
+							"type": "text",
+							"text": "1"
+						}
+					],
+					"isError": false,
+					"timestamp": 3
+				},
+				{
+					"role": "system",
+					"content": "",
+					"toolsRemoved": [
+						{
+							"name": "gram"
+						}
+					],
+					"timestamp": 4
+				},
+				{
+					"role": "user",
+					"content": "after",
+					"timestamp": 5
+				}
+			]
+		},
+		"body": {
+			"model": "custom-model",
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt"
+				},
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "assistant",
+					"content": null,
+					"tool_calls": [
+						{
+							"id": "call_g",
+							"type": "function",
+							"function": {
+								"name": "gram",
+								"arguments": "{\"query\":\"SELECT 1\"}"
+							}
+						}
+					]
+				},
+				{
+					"role": "tool",
+					"content": "1",
+					"tool_call_id": "call_g"
+				},
+				{
+					"role": "user",
+					"content": "after"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"store": false,
+			"max_completion_tokens": 1000,
+			"tools": []
+		}
+	},
+	"kimi-k3-update-after-empty-leading-message": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "kimi-k3",
+			"name": "Kimi K3",
+			"api": "openai-completions",
+			"provider": "moonshotai",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"supportsMidConvoToolAdditions": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "system",
+					"content": "x",
+					"sections": {
+						"rules": "R"
+					},
+					"toolsAdded": [
+						{
+							"name": "late_tool",
+							"description": "late_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 1
+				},
+				{
+					"role": "user",
+					"content": "hi",
+					"timestamp": 2
+				}
+			]
+		},
+		"body": {
+			"model": "kimi-k3",
+			"messages": [
+				{
+					"role": "system",
+					"tools": [
+						{
+							"type": "function",
+							"function": {
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						}
+					]
+				},
+				{
+					"role": "system",
+					"content": "x\n\nUpdated system prompt section \"rules\":\n\nR"
+				},
+				{
+					"role": "user",
+					"content": "hi"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"max_tokens": 1000,
+			"tools": [
+				{
+					"type": "function",
+					"function": {
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				}
+			]
+		}
+	},
+	"update-after-empty-leading-message": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "custom-model",
+			"name": "Custom model",
+			"api": "openai-completions",
+			"provider": "custom-provider",
+			"compat": {
+				"supportsMidConvoSystemMessages": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "system",
+					"content": "x",
+					"sections": {
+						"rules": "R"
+					},
+					"timestamp": 1
+				},
+				{
+					"role": "user",
+					"content": "hi",
+					"timestamp": 2
+				}
+			]
+		},
+		"body": {
+			"model": "custom-model",
+			"messages": [
+				{
+					"role": "system",
+					"content": "x\n\nUpdated system prompt section \"rules\":\n\nR"
+				},
+				{
+					"role": "user",
+					"content": "hi"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"store": false,
+			"max_completion_tokens": 1000,
+			"tools": [
+				{
+					"type": "function",
+					"function": {
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				}
+			]
+		}
+	},
+	"developer-updates-anchor-additions": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "gpt-test",
+			"name": "GPT test",
+			"api": "openai-completions",
+			"provider": "openai",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"supportsMidConvoToolAdditions": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "system",
+					"content": "updated guidance",
+					"toolsAdded": [
+						{
+							"name": "late_tool",
+							"description": "late_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 2
+				}
+			]
+		},
+		"body": {
+			"model": "gpt-test",
+			"messages": [
+				{
+					"role": "developer",
+					"content": "base prompt"
+				},
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "system",
+					"tools": [
+						{
+							"type": "function",
+							"function": {
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						}
+					]
+				},
+				{
+					"role": "developer",
+					"content": "updated guidance"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"store": false,
+			"max_completion_tokens": 1000,
+			"tools": [
+				{
+					"type": "function",
+					"function": {
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				}
+			]
+		}
+	},
+	"anchored-grammar-tool-and-later-additions": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "custom-model",
+			"name": "Custom model",
+			"api": "openai-completions",
+			"provider": "custom-provider",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"supportsMidConvoToolAdditions": true,
+				"supportsOpenAIGrammarTools": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "system",
+					"content": "",
+					"toolsAdded": [
+						{
+							"name": "gram",
+							"description": "gram tool",
+							"parameters": {
+								"type": "object",
+								"required": [
+									"query"
+								],
+								"properties": {
+									"query": {
+										"type": "string"
+									}
+								}
+							},
+							"constrainedSampling": {
+								"type": "grammar",
+								"variants": {
+									"openai_lark": "start: /.+/"
+								}
+							}
+						}
+					],
+					"timestamp": 2
+				},
+				{
+					"role": "assistant",
+					"content": [
+						{
+							"type": "toolCall",
+							"id": "call_g",
+							"name": "gram",
+							"arguments": {
+								"query": "SELECT 1"
+							}
+						}
+					],
+					"api": "openai-completions",
+					"provider": "custom-provider",
+					"model": "custom-model",
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"totalTokens": 0,
+						"cost": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"total": 0
+						}
+					},
+					"stopReason": "toolUse",
+					"timestamp": 3
+				},
+				{
+					"role": "toolResult",
+					"toolCallId": "call_g",
+					"toolName": "gram",
+					"content": [
+						{
+							"type": "text",
+							"text": "1"
+						}
+					],
+					"isError": false,
+					"timestamp": 4
+				},
+				{
+					"role": "system",
+					"content": "more",
+					"toolsAdded": [
+						{
+							"name": "late_tool",
+							"description": "late_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						},
+						{
+							"name": "later_tool",
+							"description": "later_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 5
+				},
+				{
+					"role": "user",
+					"content": "after",
+					"timestamp": 6
+				}
+			]
+		},
+		"body": {
+			"model": "custom-model",
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt"
+				},
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "system",
+					"tools": [
+						{
+							"type": "custom",
+							"custom": {
+								"name": "gram",
+								"description": "gram tool",
+								"format": {
+									"type": "grammar",
+									"grammar": {
+										"syntax": "lark",
+										"definition": "start: /.+/"
+									}
+								}
+							}
+						}
+					]
+				},
+				{
+					"role": "assistant",
+					"content": null,
+					"tool_calls": [
+						{
+							"id": "call_g",
+							"type": "custom",
+							"custom": {
+								"name": "gram",
+								"input": "SELECT 1"
+							}
+						}
+					]
+				},
+				{
+					"role": "tool",
+					"content": "1",
+					"tool_call_id": "call_g"
+				},
+				{
+					"role": "system",
+					"tools": [
+						{
+							"type": "function",
+							"function": {
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						},
+						{
+							"type": "function",
+							"function": {
+								"name": "later_tool",
+								"description": "later_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						}
+					]
+				},
+				{
+					"role": "system",
+					"content": "more"
+				},
+				{
+					"role": "user",
+					"content": "after"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"store": false,
+			"max_completion_tokens": 1000,
+			"tools": [
+				{
+					"type": "function",
+					"function": {
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				}
+			]
+		}
+	},
+	"cache-control-first-instruction-is-kimi-tools-message": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "custom-model",
+			"name": "Custom model",
+			"api": "openai-completions",
+			"provider": "custom-provider",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"supportsMidConvoToolAdditions": true,
+				"cacheControlFormat": "anthropic"
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "system",
+					"content": "guidance",
+					"toolsAdded": [
+						{
+							"name": "late_tool",
+							"description": "late_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 2
+				},
+				{
+					"role": "user",
+					"content": "after",
+					"timestamp": 3
+				}
+			]
+		},
+		"body": {
+			"model": "custom-model",
+			"messages": [
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "system",
+					"tools": [
+						{
+							"type": "function",
+							"function": {
+								"name": "late_tool",
+								"description": "late_tool tool",
+								"parameters": {
+									"type": "object",
+									"properties": {}
+								}
+							}
+						}
+					]
+				},
+				{
+					"role": "system",
+					"content": "guidance"
+				},
+				{
+					"role": "user",
+					"content": [
+						{
+							"type": "text",
+							"text": "after",
+							"cache_control": {
+								"type": "ephemeral"
+							}
+						}
+					]
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"store": false,
+			"max_completion_tokens": 1000
+		}
+	},
+	"kimi-k3-redeclaration-is-non-additive": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "kimi-k3",
+			"name": "Kimi K3",
+			"api": "openai-completions",
+			"provider": "moonshotai",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"supportsMidConvoToolAdditions": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "system",
+					"content": "",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "redefined",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 2
+				},
+				{
+					"role": "user",
+					"content": "after",
+					"timestamp": 3
+				}
+			]
+		},
+		"body": {
+			"model": "kimi-k3",
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt"
+				},
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "user",
+					"content": "after"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"max_tokens": 1000,
+			"tools": [
+				{
+					"type": "function",
+					"function": {
+						"name": "base_tool",
+						"description": "redefined",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				}
+			]
+		}
+	},
+	"grammar-call-additions-flag-alone-collapses": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "custom-model",
+			"name": "Custom model",
+			"api": "openai-completions",
+			"provider": "custom-provider",
+			"compat": {
+				"supportsMidConvoToolAdditions": true,
+				"supportsOpenAIGrammarTools": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "gram",
+							"description": "gram tool",
+							"parameters": {
+								"type": "object",
+								"required": [
+									"query"
+								],
+								"properties": {
+									"query": {
+										"type": "string"
+									}
+								}
+							},
+							"constrainedSampling": {
+								"type": "grammar",
+								"variants": {
+									"openai_lark": "start: /.+/"
+								}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "assistant",
+					"content": [
+						{
+							"type": "toolCall",
+							"id": "call_g",
+							"name": "gram",
+							"arguments": {
+								"query": "SELECT 1"
+							}
+						}
+					],
+					"api": "openai-completions",
+					"provider": "custom-provider",
+					"model": "custom-model",
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"totalTokens": 0,
+						"cost": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"total": 0
+						}
+					},
+					"stopReason": "toolUse",
+					"timestamp": 2
+				},
+				{
+					"role": "toolResult",
+					"toolCallId": "call_g",
+					"toolName": "gram",
+					"content": [
+						{
+							"type": "text",
+							"text": "1"
+						}
+					],
+					"isError": false,
+					"timestamp": 3
+				},
+				{
+					"role": "system",
+					"content": "",
+					"toolsRemoved": [
+						{
+							"name": "gram"
+						}
+					],
+					"timestamp": 4
+				},
+				{
+					"role": "user",
+					"content": "after",
+					"timestamp": 5
+				}
+			]
+		},
+		"body": {
+			"model": "custom-model",
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt"
+				},
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "assistant",
+					"content": null,
+					"tool_calls": [
+						{
+							"id": "call_g",
+							"type": "function",
+							"function": {
+								"name": "gram",
+								"arguments": "{\"query\":\"SELECT 1\"}"
+							}
+						}
+					]
+				},
+				{
+					"role": "tool",
+					"content": "1",
+					"tool_call_id": "call_g"
+				},
+				{
+					"role": "user",
+					"content": "after"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"store": false,
+			"max_completion_tokens": 1000,
+			"tools": []
+		}
+	},
+	"whitespace-only-system-update": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "custom-model",
+			"name": "Custom model",
+			"api": "openai-completions",
+			"provider": "custom-provider",
+			"compat": {
+				"supportsMidConvoSystemMessages": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "system",
+					"content": "  ",
+					"timestamp": 2
+				},
+				{
+					"role": "user",
+					"content": "after",
+					"timestamp": 3
+				}
+			]
+		},
+		"body": {
+			"model": "custom-model",
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt"
+				},
+				{
+					"role": "user",
+					"content": "before"
+				},
+				{
+					"role": "system",
+					"content": "  "
+				},
+				{
+					"role": "user",
+					"content": "after"
+				}
+			],
+			"stream": true,
+			"stream_options": {
+				"include_usage": true
+			},
+			"store": false,
+			"max_completion_tokens": 1000,
+			"tools": [
+				{
+					"type": "function",
+					"function": {
+						"name": "base_tool",
+						"description": "base_tool tool",
+						"parameters": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				}
+			]
+		}
+	},
+	"kimi-k3-anchored-tool-conversion-fails": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "kimi-k3",
+			"name": "Kimi K3",
+			"api": "openai-completions",
+			"provider": "moonshotai",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"supportsMidConvoToolAdditions": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "base_tool",
+							"description": "base_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "system",
+					"content": "updated guidance",
+					"toolsAdded": [
+						{
+							"name": "late_tool",
+							"description": "late_tool tool",
+							"parameters": {
+								"type": "object",
+								"properties": {}
+							},
+							"constrainedSampling": {
+								"type": "json_schema",
+								"strict": "require"
+							}
+						}
+					],
+					"timestamp": 2
+				}
+			]
+		},
+		"stopReason": "error",
+		"errorMessage": "Tool \"late_tool\" requires JSON-schema constrained sampling, but strict tools are unsupported."
+	},
+	"streamed-custom-call-to-removed-grammar-tool": {
+		"model": {
+			"baseUrl": "http://127.0.0.1:9",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 100000,
+			"maxTokens": 1000,
+			"id": "custom-model",
+			"name": "Custom model",
+			"api": "openai-completions",
+			"provider": "custom-provider",
+			"compat": {
+				"supportsMidConvoSystemMessages": true,
+				"supportsOpenAIGrammarTools": true
+			}
+		},
+		"context": {
+			"messages": [
+				{
+					"role": "system",
+					"content": "base prompt",
+					"toolsAdded": [
+						{
+							"name": "gram",
+							"description": "gram tool",
+							"parameters": {
+								"type": "object",
+								"required": [
+									"query"
+								],
+								"properties": {
+									"query": {
+										"type": "string"
+									}
+								}
+							},
+							"constrainedSampling": {
+								"type": "grammar",
+								"variants": {
+									"openai_lark": "start: /.+/"
+								}
+							}
+						}
+					],
+					"timestamp": 0
+				},
+				{
+					"role": "user",
+					"content": "before",
+					"timestamp": 1
+				},
+				{
+					"role": "system",
+					"content": "",
+					"toolsRemoved": [
+						{
+							"name": "gram"
+						}
+					],
+					"timestamp": 2
+				},
+				{
+					"role": "user",
+					"content": "after",
+					"timestamp": 3
+				}
+			]
+		},
+		"sse": "data: {\"id\":\"c1\",\"model\":\"custom-model\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_g\",\"type\":\"custom\",\"custom\":{\"name\":\"gram\",\"input\":\"SELECT \"}}]}}]}\n\ndata: {\"id\":\"c1\",\"model\":\"custom-model\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"custom\":{\"input\":\"1\"}}]}}]}\n\ndata: {\"id\":\"c1\",\"model\":\"custom-model\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n",
+		"content": [
+			{
+				"type": "toolCall",
+				"id": "call_g",
+				"name": "gram",
+				"arguments": {
+					"query": "SELECT 1"
+				}
+			}
+		],
+		"stopReason": "toolUse"
+	}
+}

@@ -242,6 +242,38 @@ func TestSessionRunPrintDeclaresPrompt(t *testing.T) {
 	}
 }
 
+// pi system-prompt-updates.test.ts "does not patch the prompt when the
+// active tools are only reordered" (b9e3eef6, #11495).
+func TestSessionReorderedActiveToolsDoNotPatchThePrompt(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{})
+	defer reg.Unregister()
+	sess := NewSession(SessionOptions{Model: reg.GetModel(), Cwd: t.TempDir()})
+	reg.SetResponses([]providers.FauxResponseStep{fauxText("first"), fauxText("second")})
+	if _, err := sess.Run(context.Background(), "one"); err != nil {
+		t.Fatal(err)
+	}
+	before := sess.ActiveToolNames()
+	reversed := slices.Clone(before)
+	slices.Reverse(reversed)
+	sess.SetActiveTools(reversed)
+	if got := sess.ActiveToolNames(); !reflect.DeepEqual(got, before) {
+		t.Fatalf("active tools after reordering = %v, want %v", got, before)
+	}
+	if _, err := sess.Run(context.Background(), "two"); err != nil {
+		t.Fatal(err)
+	}
+	systems := 0
+	for _, message := range sess.History() {
+		if _, ok := message.(ai.SystemMessage); ok {
+			systems++
+		}
+	}
+	if systems != 1 {
+		t.Fatalf("%d system messages, want 1: roles %v", systems, messageRoles(sess.History()))
+	}
+}
+
 // uiNotice is an app-defined, UI-only message, which agent.AgentMessage
 // invites and ConvertToLlm drops before the provider.
 type uiNotice struct{ Text string }

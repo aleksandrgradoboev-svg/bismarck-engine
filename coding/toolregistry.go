@@ -149,6 +149,16 @@ type toolRegistry struct {
 	// They are activated when they register, and dropped when SetActiveTools
 	// deactivates a tool or the next run starts.
 	pending map[string]bool
+	// base are the built-in tools' names, or the Tools override's (pi
+	// _baseToolDefinitions); a restored loadout activates a tool the branch
+	// never mentioned only when it is not one of them.
+	base map[string]bool
+	// usesDefaultTools is whether the initial tools are the default selection,
+	// changed at most by +name/-name entries (pi usesDefaultTools); such a
+	// session restores its loadout from the branch it resumes, with those
+	// entries, defaultModifiers, applied to it.
+	usesDefaultTools bool
+	defaultModifiers []string
 	// hidden are the declared tools whose declarations requests leave out,
 	// from PrepareLoadout hooks (pi _hiddenDeclarations).
 	hidden map[string]bool
@@ -195,11 +205,20 @@ func (r *toolRegistry) isActivatable(name string) bool {
 }
 
 // loadout is pi _applyToolLoadout without prepareLoadout hooks: the
-// registered, non-hidden, activatable tools among names, deduplicated in
-// first-occurrence order.
+// registered, non-hidden, activatable tools among names, deduplicated. The
+// active tools are a set (pi b9e3eef6, #11495): those that stay active keep
+// their current order and newly active ones follow in the order names lists
+// them, so reordering the same names does not change the prompt.
 func (r *toolRegistry) loadout(names []string) []string {
+	ordered := make([]string, 0, len(r.active)+len(names))
+	for _, name := range r.active {
+		if slices.Contains(names, name) {
+			ordered = append(ordered, name)
+		}
+	}
+	ordered = append(ordered, names...)
 	out := make([]string, 0, len(names))
-	for _, name := range names {
+	for _, name := range ordered {
 		if _, ok := r.defs[name]; !ok || slices.Contains(out, name) || r.exposureOf(name) == ToolExposureHidden || !r.isActivatable(name) {
 			continue
 		}
@@ -211,7 +230,8 @@ func (r *toolRegistry) loadout(names []string) []string {
 // newToolRegistry seeds the registry from the session's initial tools, all
 // direct, with the initial loadout.
 func newToolRegistry(resolved resolvedTools) *toolRegistry {
-	r := &toolRegistry{defs: map[string]ToolDefinition{}, isAllowed: resolved.isAllowed, allowlisted: resolved.allowlisted, pending: map[string]bool{}}
+	r := &toolRegistry{defs: map[string]ToolDefinition{}, isAllowed: resolved.isAllowed, allowlisted: resolved.allowlisted, pending: map[string]bool{},
+		base: resolved.base, usesDefaultTools: resolved.usesDefaultTools, defaultModifiers: resolved.defaultModifiers}
 	for _, d := range resolved.defs {
 		r.defs[d.Tool.Name] = d
 		r.order = append(r.order, d.Tool.Name)
@@ -549,30 +569,72 @@ func (s *Session) SetActiveTools(names []string) {
 	}
 }
 
-// RestoreToolsFromTranscript activates the loadout the transcript declares,
-// if it declares one (pi _restoreToolsFromTranscript, which pi runs after
-// /tree navigation). Declared tools that are not registered yet stay pending
-// and are activated when they register, until the next run starts. Tools
-// reachable only from other tools are never declared, but they do not depend on
-// the active set, so the declarations are the whole loadout.
-//
-// A resumed session does not call it: pi's createAgentSession always passes
-// the initial tools, which take precedence over the transcript's.
-func (s *Session) RestoreToolsFromTranscript() {
-	messages := s.Agent.State().Messages
+// RestoreToolsFromBranch activates the loadout branch's system messages
+// declare, if they declare one (pi _restoreToolsFromTranscript, which pi runs
+// after /tree navigation; LoadBranch runs it when the session resumes). Every
+// system message on the branch counts, those before a compaction too: the
+// compaction's snapshot is derived from them, and a tool removed before it stays
+// inactive. Extension tools the branch never added or removed were registered
+// after it recorded its loadout, so they are activated as newly registered
+// tools are; built-in tools follow the default selection instead (pi
+// bd3c9b82). Declared tools that are not registered yet stay pending and are
+// activated when they register, until the next run starts. Tools reachable
+// only from other tools are never declared, but they do not depend on the
+// active set, so the declarations are the whole loadout.
+func (s *Session) RestoreToolsFromBranch(p BranchProjection) {
+	s.restoreToolsFromBranch(p.Branch, nil)
+}
+
+// restoreToolsFromBranch is RestoreToolsFromBranch with pi's modifiers: the
+// +name/-name entries applied to the restored loadout.
+func (s *Session) restoreToolsFromBranch(branch []*SessionEntry, modifiers []string) {
+	var systemMessages []ai.Message
+	mentioned := map[string]bool{}
+	for _, e := range branch {
+		if e.Type != "message" {
+			continue
+		}
+		var system ai.SystemMessage
+		switch v := e.Message.(type) {
+		case ai.SystemMessage:
+			system = v
+		case *ai.SystemMessage:
+			if v == nil {
+				continue
+			}
+			system = *v
+		default:
+			continue
+		}
+		systemMessages = append(systemMessages, system)
+		for _, tool := range system.ToolsAdded {
+			mentioned[tool.Name] = true
+		}
+		for _, tool := range system.ToolsRemoved {
+			mentioned[tool.Name] = true
+		}
+	}
 	s.toolsMu.Lock()
 	defer s.toolsMu.Unlock()
 	r := s.tools
 	clear(r.pending)
-	current, found := ai.GetCurrentSystemMessage(messages)
-	if !found {
+	// No recorded loadout: keep the current tools.
+	if len(systemMessages) == 0 {
 		return
 	}
-	names := make([]string, 0, len(current.ToolsAdded))
-	for _, tool := range current.ToolsAdded {
+	var names []string
+	for _, tool := range ai.GetCurrentTools(systemMessages) {
 		names = append(names, tool.Name)
-		if r.isAllowed(tool.Name) {
-			r.pending[tool.Name] = true
+	}
+	for _, name := range r.order {
+		if !mentioned[name] && !r.base[name] && r.isActivatedOnRegistration(name) {
+			names = append(names, name)
+		}
+	}
+	names = ApplyToolModifiers(names, modifiers)
+	for _, name := range names {
+		if r.isAllowed(name) {
+			r.pending[name] = true
 		}
 	}
 	s.applyLocked(names)

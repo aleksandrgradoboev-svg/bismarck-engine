@@ -1,0 +1,147 @@
+{
+	"sha": "59ca40cf",
+	"source": {
+		"typebox": {
+			"version": "1.3.27",
+			"integrity": "sha512-zu+jc1pcy4UiNThxikUr36f0Rybk9PEeCg/NE6adeWr/SKsdNO4EzZHYRDlv2YCVAfj3Odq3dESSo/jNyoBXzA=="
+		},
+		"node": "v24.18.0"
+	},
+	"cases": {
+		"tuple/coerces-by-position": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[{\"type\":\"number\"},{\"type\":\"string\"},{\"type\":\"boolean\"}]}}}",
+			"arguments": "{\"p\":[\"1\",2,\"true\",\"extra\"]}",
+			"result": "{\"p\":[1,\"2\",true,\"extra\"]}"
+		},
+		"tuple/errors-by-position": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[{\"type\":\"number\"},{\"type\":\"string\"},{\"type\":\"boolean\"}]}}}",
+			"arguments": "{\"p\":[\"x\",{},3]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.0: must be number\n  - p.1: must be string\n  - p.2: must be boolean\n\nReceived arguments:\n{\n  \"p\": [\n    \"x\",\n    {},\n    3\n  ]\n}"
+		},
+		"tuple/shorter-array": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[{\"type\":\"number\"},{\"type\":\"string\"},{\"type\":\"boolean\"}]}}}",
+			"arguments": "{\"p\":[\"1\"]}",
+			"result": "{\"p\":[1]}"
+		},
+		"tuple/empty-array": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[{\"type\":\"number\"},{\"type\":\"string\"},{\"type\":\"boolean\"}]}}}",
+			"arguments": "{\"p\":[]}",
+			"result": "{\"p\":[]}"
+		},
+		"tuple/boolean-positions": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[true,false]}}}",
+			"arguments": "{\"p\":[\"1\",\"2\"]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.1: schema is false\n\nReceived arguments:\n{\n  \"p\": [\n    \"1\",\n    \"2\"\n  ]\n}"
+		},
+		"tuple/non-schema-element": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[{\"type\":\"number\"},5],\"additionalItems\":false}}}",
+			"arguments": "{\"p\":[\"1\",\"x\",\"y\"]}",
+			"result": "{\"p\":[1,\"x\",\"y\"]}"
+		},
+		"tuple/empty-items": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[],\"additionalItems\":false}}}",
+			"arguments": "{\"p\":[1]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.0: schema is false\n\nReceived arguments:\n{\n  \"p\": [\n    1\n  ]\n}"
+		},
+		"additionalItems/false": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[{\"type\":\"number\"},{\"type\":\"string\"},{\"type\":\"boolean\"}],\"additionalItems\":false}}}",
+			"arguments": "{\"p\":[1,\"a\",true,\"x\"]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.3: schema is false\n\nReceived arguments:\n{\n  \"p\": [\n    1,\n    \"a\",\n    true,\n    \"x\"\n  ]\n}"
+		},
+		"additionalItems/false-within-tuple": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[{\"type\":\"number\"},{\"type\":\"string\"},{\"type\":\"boolean\"}],\"additionalItems\":false}}}",
+			"arguments": "{\"p\":[1,\"a\",true]}",
+			"result": "{\"p\":[1,\"a\",true]}"
+		},
+		"additionalItems/schema-not-coerced": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[{\"type\":\"number\"},{\"type\":\"string\"},{\"type\":\"boolean\"}],\"additionalItems\":{\"type\":\"number\"}}}}",
+			"arguments": "{\"p\":[1,\"a\",true,\"7\",8]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.3: must be number\n\nReceived arguments:\n{\n  \"p\": [\n    1,\n    \"a\",\n    true,\n    \"7\",\n    8\n  ]\n}"
+		},
+		"additionalItems/stops-at-first": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[{\"type\":\"number\"},{\"type\":\"string\"},{\"type\":\"boolean\"}],\"additionalItems\":{\"type\":\"number\"}}}}",
+			"arguments": "{\"p\":[1,\"a\",true,\"x\",\"y\"]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.3: must be number\n\nReceived arguments:\n{\n  \"p\": [\n    1,\n    \"a\",\n    true,\n    \"x\",\n    \"y\"\n  ]\n}"
+		},
+		"additionalItems/ignored-for-single-items": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":{\"type\":\"number\"},\"additionalItems\":false}}}",
+			"arguments": "{\"p\":[1,2]}",
+			"result": "{\"p\":[1,2]}"
+		},
+		"additionalItems/ignored-without-items": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"additionalItems\":false}}}",
+			"arguments": "{\"p\":[1,2]}",
+			"result": "{\"p\":[1,2]}"
+		},
+		"order/additionalItems-before-items": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[{\"type\":\"number\"}],\"additionalItems\":{\"type\":\"number\"}}}}",
+			"arguments": "{\"p\":[\"x\",\"y\"]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.1: must be number\n  - p.0: must be number\n\nReceived arguments:\n{\n  \"p\": [\n    \"x\",\n    \"y\"\n  ]\n}"
+		},
+		"order/max-min-prefix": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"prefixItems\":[{\"type\":\"number\"}],\"minItems\":3,\"maxItems\":1}}}",
+			"arguments": "{\"p\":[\"x\",\"y\"]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p: must not have more than 1 items\n  - p: must not have fewer than 3 items\n  - p.0: must be number\n\nReceived arguments:\n{\n  \"p\": [\n    \"x\",\n    \"y\"\n  ]\n}"
+		},
+		"prefixItems/not-coerced": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"prefixItems\":[{\"type\":\"number\"},{\"type\":\"string\"}]}}}",
+			"arguments": "{\"p\":[\"1\",2]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.0: must be number\n  - p.1: must be string\n\nReceived arguments:\n{\n  \"p\": [\n    \"1\",\n    2\n  ]\n}"
+		},
+		"prefixItems/valid": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"prefixItems\":[{\"type\":\"number\"},{\"type\":\"string\"}]}}}",
+			"arguments": "{\"p\":[1,\"a\",null]}",
+			"result": "{\"p\":[1,\"a\",null]}"
+		},
+		"prefixItems/items-validates-after-prefix": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"prefixItems\":[{\"type\":\"string\"}],\"items\":{\"type\":\"number\"}}}}",
+			"arguments": "{\"p\":[\"a\",\"b\"]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.1: must be number\n\nReceived arguments:\n{\n  \"p\": [\n    \"a\",\n    \"b\"\n  ]\n}"
+		},
+		"prefixItems/items-coerces-every-position": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"prefixItems\":[{\"type\":\"number\"}],\"items\":{\"type\":\"string\"}}}}",
+			"arguments": "{\"p\":[1,2]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.0: must be number\n\nReceived arguments:\n{\n  \"p\": [\n    1,\n    2\n  ]\n}"
+		},
+		"prefixItems/items-false": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"prefixItems\":[{\"type\":\"number\"}],\"items\":false}}}",
+			"arguments": "{\"p\":[1,2]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.1: schema is false\n\nReceived arguments:\n{\n  \"p\": [\n    1,\n    2\n  ]\n}"
+		},
+		"prefixItems/items-true": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"prefixItems\":[{\"type\":\"number\"}],\"items\":true}}}",
+			"arguments": "{\"p\":[1,\"x\"]}",
+			"result": "{\"p\":[1,\"x\"]}"
+		},
+		"prefixItems/non-schema-element": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"prefixItems\":[5],\"items\":{\"type\":\"number\"}}}}",
+			"arguments": "{\"p\":[\"x\"]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.0: must be number\n\nReceived arguments:\n{\n  \"p\": [\n    \"x\"\n  ]\n}"
+		},
+		"prefixItems/with-tuple": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"prefixItems\":[{\"type\":\"string\"}],\"items\":[{\"type\":\"number\"}]}}}",
+			"arguments": "{\"p\":[\"1\"]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.0: must be string\n\nReceived arguments:\n{\n  \"p\": [\n    \"1\"\n  ]\n}"
+		},
+		"nested/coerces-inside-position": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[{\"type\":\"object\",\"properties\":{\"n\":{\"type\":\"integer\"}}}]}}}",
+			"arguments": "{\"p\":[{\"n\":\"3\"}]}",
+			"result": "{\"p\":[{\"n\":3}]}"
+		},
+		"nested/null-as-omission": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"},\"b\":{\"type\":[\"string\",\"null\"]}}},{\"type\":\"string\"}]}}}",
+			"arguments": "{\"p\":[{\"a\":null,\"b\":null},null]}",
+			"result": "{\"p\":[{\"b\":null},\"\"]}"
+		},
+		"nested/error-path": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"array\",\"items\":[{\"type\":\"number\"},{\"type\":\"object\",\"properties\":{\"n\":{\"type\":\"integer\"}}}]}}}",
+			"arguments": "{\"p\":[1,{\"n\":\"x\"}]}",
+			"error": "Validation failed for tool \"test_tool\":\n  - p.1.n: must be integer\n\nReceived arguments:\n{\n  \"p\": [\n    1,\n    {\n      \"n\": \"x\"\n    }\n  ]\n}"
+		},
+		"union/anyOf-tuple-branch": {
+			"parameters": "{\"type\":\"object\",\"properties\":{\"p\":{\"anyOf\":[{\"type\":\"array\",\"items\":[{\"type\":\"number\"}]},{\"type\":\"string\"}]}}}",
+			"arguments": "{\"p\":[\"1\"]}",
+			"result": "{\"p\":[1]}"
+		}
+	}
+}

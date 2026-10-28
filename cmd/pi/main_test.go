@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
@@ -13,13 +15,37 @@ import (
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/coding"
 )
 
+// pi deleted-cwd.test.ts (88ffcdc7, #11509): a working directory that no
+// longer exists is reported, any other failure is not swallowed. As pi's mocks
+// process.cwd, the test hands workingDirectoryOf the errors os.Getwd returns.
+func TestWorkingDirectoryReportsADeletedOne(t *testing.T) {
+	gone := func() (string, error) {
+		return "", &os.SyscallError{Syscall: "getwd", Err: syscall.ENOENT}
+	}
+	if cwd, isGone, err := workingDirectoryOf(gone); !isGone || err != nil || cwd != "" {
+		t.Fatalf("deleted cwd: %q, gone %v, %v", cwd, isGone, err)
+	}
+	if !strings.Contains(msgCwdGone, "The current working directory no longer exists") {
+		t.Fatalf("message %q", msgCwdGone)
+	}
+	denied := func() (string, error) {
+		return "", &os.SyscallError{Syscall: "getwd", Err: syscall.EACCES}
+	}
+	if _, isGone, err := workingDirectoryOf(denied); isGone || !errors.Is(err, syscall.EACCES) {
+		t.Fatalf("unrelated failure: gone %v, %v", isGone, err)
+	}
+	if cwd, isGone, err := workingDirectoryOf(os.Getwd); isGone || err != nil || cwd == "" {
+		t.Fatalf("live cwd: %q, gone %v, %v", cwd, isGone, err)
+	}
+}
+
 // Resuming a session file resumes its compaction: the next compaction extends
 // the file's with the update prompt, its summary as <previous-summary>, as pi's
 // does. A resume that loaded only the messages would summarize the old summary
 // as a [User] turn under the initial prompt. The file is one pi 0.87.1 wrote
 // (coding/testdata/compaction/capture-resume.mts).
 func TestResumeExtendsTheSessionsCompaction(t *testing.T) {
-	data, err := os.ReadFile("../../coding/testdata/compaction/resume-0.87.1.json")
+	data, err := os.ReadFile("../../coding/testdata/compaction/resume-1.4.0.json")
 	if err != nil {
 		t.Fatal(err)
 	}

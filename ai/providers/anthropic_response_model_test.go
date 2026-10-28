@@ -26,11 +26,11 @@ import (
 // added to packages/ai/test/anthropic-sse-parsing.test.ts; the remaining cases
 // are this port's edges. Every expected message is pi's, captured under node by
 // testdata/response-model/capture-anthropic-response-model.mts, last at
-// d86654abb (v0.99.1) against the 0.99.1 build. Re-captured at every regen:
-// each time the behavioural entries came back identical and only the catalog
-// model moved.
+// e3bc05e8 against the 1.4.0 build. Up to d86654abb every re-capture left the
+// behavioural entries identical and moved only the catalog model; at e3bc05e8
+// they gained totalFromProvider and dropped another model's thinking.
 
-const anthropicResponseModelCaptureFile = "testdata/response-model/anthropic-response-model-d86654abb.json"
+const anthropicResponseModelCaptureFile = "testdata/response-model/anthropic-response-model-e3bc05e8.json"
 
 // anthropicResponseModelCapture decodes one captured entry into plain JSON
 // values.
@@ -125,8 +125,7 @@ func streamAnthropicResponseModel(t *testing.T, model *ai.Model, sse string) (ai
 
 // responseModelJSON is a message as plain JSON values, with a streamed
 // assistant message's wall-clock timestamp dropped as the capture drops it,
-// and its durationMs, which is measured and which the capture predates
-// (d86654abb; pi 36a686ee added it).
+// and its durationMs, which is measured, so the capture drops it too.
 func responseModelJSON(t *testing.T, message ai.Message) any {
 	t.Helper()
 	raw, err := json.Marshal(message)

@@ -185,3 +185,20 @@ func TestProviderAuthOnlyGlobal(t *testing.T) {
 	checkErrors(t, c.Errors, `server "plain": auth requires an https URL`, `server "empty": auth.provider must be a provider name`,
 		`server "radius": auth is only allowed in the global mcp.json`)
 }
+
+// pi's "reads and edits mcp.json files that start with a UTF-8 BOM"
+// (bdd9f039, #11191), its reading half: the engine does not edit mcp.json.
+func TestConfigReadsFilesThatStartWithABOM(t *testing.T) {
+	bom := string([]byte{0xEF, 0xBB, 0xBF})
+	p := setupConfig(t, bom+`{"mcpServers":{"demo":{"command":"echo","enabled":false}}}`+"\n",
+		bom+`{"mcpServers":{"local":{"command":"local-cmd"}}}`+"\n")
+	loaded := load(p, true)
+	checkErrors(t, loaded.Errors)
+	var got []string
+	for _, s := range loaded.Servers {
+		got = append(got, s.Name+" "+s.Scope)
+	}
+	if strings.Join(got, ",") != "demo global,local project" {
+		t.Fatalf("servers %v", got)
+	}
+}

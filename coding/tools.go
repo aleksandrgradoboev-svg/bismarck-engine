@@ -1824,11 +1824,14 @@ func grepToolOps(cwd string, custom *GrepOperations) agent.AgentTool {
 						return true
 					}
 				}
-				// pi normalizes \r\n and bare \r to \n before splitting
-				// (grep.ts getFileLines). Reading the whole file also avoids any
-				// per-line length cap (rg has none).
+				// Lines end at LF only, as ripgrep counts them; a lone CR stays in
+				// its line, so it neither adds a line nor shifts the numbers
+				// after it (pi fecc19e4, #11465: getFileLines normalizes \r\n
+				// and splits on \n). The match runs on the line as ripgrep reads
+				// it; a displayed line has its \r removed, as pi's are. Reading
+				// the whole file also avoids any per-line length cap (rg has
+				// none).
 				content := strings.ReplaceAll(string(data), "\r\n", "\n")
-				content = strings.ReplaceAll(content, "\r", "\n")
 				lines := strings.Split(content, "\n")
 				for i, line := range lines {
 					if matchCount >= limit {
@@ -1850,7 +1853,7 @@ func grepToolOps(cwd string, custom *GrepOperations) agent.AgentTool {
 							end = len(lines) - 1
 						}
 						for j := start; j <= end; j++ {
-							text, was := TruncateLine(lines[j], 0)
+							text, was := TruncateLine(strings.ReplaceAll(lines[j], "\r", ""), 0)
 							if was {
 								linesTruncated = true
 							}

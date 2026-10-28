@@ -3,13 +3,16 @@
 // TestAnthropicNative*RequestBody in this package.
 //
 //   node --experimental-strip-types capture-anthropic-native.mts <extraction> <out.json> <sha>
-//   e.g. ... capture-anthropic-native.mts <dir> anthropic-native-9e05370b2.json 9e05370b2
+//   e.g. ... capture-anthropic-native.mts <dir> anthropic-native-e3bc05e8.json e3bc05e8
 //
 // <extraction> holds packages/ai at <sha> (`git archive <sha> packages/ai` from
-// the upstream clone) and a node_modules resolving pi-ai's dependencies (the npm
-// build's). The npm build 0.85.1 predates upstream 9e05370b2, so these are src
-// captures: re-verify them against the first build that ships it (the BUILD
-// wins).
+// the upstream clone) and a node_modules resolving the dependencies the module
+// imports at the versions packages/ai/package.json pins (for e3bc05e8:
+// @anthropic-ai/sdk 0.129.0, typebox 1.3.27, partial-json 0.1.7,
+// http(s)-proxy-agent 9.1.0, @earendil-works/pi-telemetry 1.4.0). These are src
+// captures: re-verify them against the first build that ships the sha (the
+// BUILD wins). The same node_modules reproduces the previous capture at
+// 9e05370b2 byte for byte.
 //
 // The models, `context` and the two fallback contexts are
 // packages/ai/test/transcript-tool-changes.test.ts's; every other context is an
@@ -86,7 +89,8 @@ const context = {
 		},
 	],
 };
-// The suite's two fallback contexts.
+// The suite's two fallback contexts at 9e05370b2. Since b271b0a5 the
+// redefinition is sent natively, by value; only the second still falls back.
 const redefinedTool = { ...baseTool, description: "changed" };
 const fallbackRedefinition = {
 	messages: [
@@ -148,8 +152,11 @@ const oauthContext = {
 // Managed effort on a native model: a held update is flushed immediately before
 // the next assistant message, ahead of that turn's effort-only system message,
 // and the final flush precedes the trailing effort message.
+// Off is unsupported, as on Claude Opus 5.5: since pi dc939913 a managed model
+// that supports it sends disabled thinking for streamSimple without reasoning.
 const effortModel = {
 	...nativeModel,
+	thinkingLevelMap: { off: null },
 	compat: { ...nativeModel.compat, supportsMidConvoEffort: true },
 };
 const effortContext = {
@@ -253,9 +260,9 @@ const apiKeyClaudeCodeNamesContext = {
 	],
 };
 
-// A held update is flushed on reaching an assistant message even when that
-// message converts to no blocks (whitespace-only text), so it lands before the
-// next user message rather than at the end.
+// A held update is held past an assistant message that converts to no blocks
+// (whitespace-only text), so it lands at the end rather than before the next
+// user message, which Anthropic rejects with a 400 (pi 3bc6eeba).
 const emptyAssistantContext = {
 	messages: [
 		{ role: "system", content: "base prompt", toolsAdded: [baseTool], timestamp: 0 },

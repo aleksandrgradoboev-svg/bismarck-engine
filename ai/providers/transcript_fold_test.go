@@ -105,7 +105,7 @@ func TestFoldsAnthropicUpdatesIntoTheSystemPromptWithoutNativeSupport(t *testing
 	model := foldModel("claude-sonnet-4-5", ai.APIAnthropicMessages, "anthropic", "")
 	body := captureStreamSimplePayload(t, model, transcriptChangesContext())
 
-	if betas, _ := body["betas"].([]string); slices.Contains(betas, "mid-conversation-tool-changes-2026-07-01") {
+	if betas, _ := body["betas"].([]string); slices.Contains(betas, inlineToolsBeta) {
 		t.Fatalf("betas = %v, must not carry the native tool-changes beta", betas)
 	}
 	var system []string
@@ -249,7 +249,7 @@ func TestConvertersFoldAnUnresolvedTranscript(t *testing.T) {
 	}
 
 	responses := foldModel("gpt-4.1", ai.APIOpenAIResponses, "openai", "")
-	input, err := responsesInput(responses, ai.NormalizeContext(transcriptChangesContext()))
+	input, err := responsesInput(responses, ai.NormalizeContext(transcriptChangesContext()), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +271,7 @@ func TestResponsesLeadingSystemMessageDoesNotAdvanceFallbackIDs(t *testing.T) {
 		},
 		ai.NewUserText("again", 3),
 	}}
-	input, err := responsesInput(model, ai.NormalizeContext(req))
+	input, err := responsesInput(model, ai.NormalizeContext(req), "")
 	if err != nil {
 		t.Fatal(err)
 	}

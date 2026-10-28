@@ -16,9 +16,13 @@ import (
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
 )
 
+// validJSONEscapes are the single-character escapes. A \u escape is valid only
+// with four hex digits, checked on its own; any other \u (\usepackage) is kept
+// as literal text like other invalid escapes, instead of failing the parse and
+// dropping the field and everything after it (pi 4b994d5e, #10868).
 var validJSONEscapes = map[byte]bool{
 	'"': true, '\\': true, '/': true, 'b': true, 'f': true,
-	'n': true, 'r': true, 't': true, 'u': true,
+	'n': true, 'r': true, 't': true,
 }
 
 func isHexDigit(b byte) bool {
@@ -363,6 +367,45 @@ func jsonValueKind[T ~string | ~[]byte](text T) byte {
 		}
 	}
 	return 0
+}
+
+// parseToolCallArguments is pi's parseToolCallArguments: it parses the model's
+// complete arguments text of a finished tool call. Unlike parseStreamingJSON it
+// never keeps a partially parsed prefix: text that is not a JSON object, after
+// the string repair, means the model sent malformed arguments, so the
+// arguments are {} and the error describes the problem — JSON.parse's message,
+// as V8 writes it, or that the value is not an object — followed by the text
+// the model sent, for tool validation to report back (pi 87f9a364, #10897).
+func parseToolCallArguments(text string) (map[string]any, ai.OrderedObject, string) {
+	if jstext.Trim(text) == "" {
+		return map[string]any{}, nil, ""
+	}
+	fail := func(message string) (map[string]any, ai.OrderedObject, string) {
+		return map[string]any{}, nil, message + "\n\nReceived arguments:\n" + text
+	}
+	// pi's parseJsonWithRepair: JSON.parse of the text; on failure, of its
+	// repair when that differs (whose error then surfaces), else the first
+	// error.
+	source := text
+	value, err := ai.DecodeOrderedValue([]byte(source))
+	if err != nil {
+		if repaired := repairJSON(text); repaired != text {
+			source = repaired
+			value, err = ai.DecodeOrderedValue([]byte(source))
+		}
+	}
+	if err != nil {
+		if syntaxErr := jstext.JSONSyntaxError(source); syntaxErr != nil {
+			return fail(syntaxErr.Error())
+		}
+		return fail(err.Error())
+	}
+	obj, isObject := value.(ai.OrderedObject)
+	if !isObject {
+		return fail("Tool arguments must be a JSON object")
+	}
+	nullNonFinite(obj)
+	return obj.Plain(), obj, ""
 }
 
 // parseStreamingJSON is pi's parseStreamingJson, which reads a tool call's

@@ -38,12 +38,19 @@ func isChatGPTSignIn(model *ai.Model, apiKey string) bool {
 		apiKey != "" && !strings.HasPrefix(apiKey, "sk-")
 }
 
+// chatGPTWorkspaceLimitHint is pi's CHATGPT_WORKSPACE_LIMIT_HINT (upstream cedefc53).
+const chatGPTWorkspaceLimitHint = "You've reached your ChatGPT workspace's usage limit. Ask your workspace admin to increase it at admin.openai.com → Workspace → Usage limits."
+
 // withChatGPTUsageHint points at the usage page when the subscription's usage
-// limit, which Sign in with ChatGPT shares with other apps, failed the stream.
+// limit, which Sign in with ChatGPT shares with other apps, failed the stream,
+// and at the workspace admin when a ChatGPT Business plan's per-user limit did.
 // pi applies it to every error its stream catches.
 func withChatGPTUsageHint(message string) string {
 	if strings.Contains(message, "subscription_sharing_usage_limit_exceeded") {
 		return message + "\nCheck your ChatGPT usage: " + chatGPTUsageURL
+	}
+	if strings.Contains(message, "subscription_sharing_workplace_individual_usage_limit_exceeded") {
+		return message + "\n" + chatGPTWorkspaceLimitHint
 	}
 	return message
 }
@@ -95,6 +102,26 @@ type responsesCompat struct {
 	// `max_output_tokens` parameter. Some Codex-protocol gateways reject it.
 	// Default: true.
 	SupportsMaxOutputTokens bool
+	// SupportsMidConvoEffort reports whether thinking level changes are sent as
+	// configuration_update input items instead of changing reasoning.effort, so
+	// a change keeps the prompt cache. Ignored with Sign in with ChatGPT on the
+	// openai provider. Default: false (pi 60ac3bcc).
+	SupportsMidConvoEffort bool
+}
+
+// configurationUpdateRequestEffort is the fixed reasoning.effort while
+// configuration_update items carry the thinking level (pi 60ac3bcc).
+const configurationUpdateRequestEffort = "medium"
+
+// responsesConfigurationUpdateEffort is pi's getConfigurationUpdateEffort: the
+// effort to send in configuration_update items, or "" to send it as
+// reasoning.effort.
+func responsesConfigurationUpdateEffort(model *ai.Model, opts *OpenAIResponsesOptions, compat responsesCompat) string {
+	// Sign in with ChatGPT rejects configuration_update items.
+	if !compat.SupportsMidConvoEffort || opts == nil || opts.ReasoningEffort == "" || isChatGPTSignIn(model, opts.APIKey) {
+		return ""
+	}
+	return effortValue(model, opts.ReasoningEffort)
 }
 
 // detectResponsesSessionAffinityFormat is pi's detectSessionAffinityFormat:
@@ -124,6 +151,7 @@ func getResponsesCompat(model *ai.Model) responsesCompat {
 	applyCompat(o, "supportsToolSearch", &c.SupportsToolSearch)
 	applyCompat(o, "supportsExplicitPromptCacheMode", &c.SupportsExplicitPromptCacheMode)
 	applyCompat(o, "supportsMaxOutputTokens", &c.SupportsMaxOutputTokens)
+	applyCompat(o, "supportsMidConvoEffort", &c.SupportsMidConvoEffort)
 	return c
 }
 
@@ -295,6 +323,9 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 		output := &ai.AssistantMessage{
 			Content: ai.ContentList{}, Api: model.Api, Provider: model.Provider, Model: model.ID,
 			StopReason: ai.StopPending, Timestamp: nowMillis(),
+			// The reply records the level it ran at, so later requests rebuild its
+			// configuration_update item unchanged (pi 60ac3bcc).
+			ProviderThinkingLevel: responsesConfigurationUpdateEffort(model, opts, getResponsesCompat(model)),
 		}
 		fail := func(err error) {
 			if ctx != nil && ctx.Err() != nil {
@@ -339,16 +370,14 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 		// pi createClient (openai-responses.ts, upstream 87af49dec)
 		// builds ONE header object and hands it to the SDK as
 		// `defaultHeaders`; headerObject is that object, slots and all.
-		// It opens with pi's runtime user agent —
-		// `{"User-Agent": getPiUserAgent(), ...model.headers}` — so it is a
-		// default every later source outranks, xai included.
+		// It opens with the request identity's headers —
+		// `{...getIdentityHeaders(model, identity), ...model.headers}`
+		// (upstream adc5fa9f) — so the User-Agent and attribution are
+		// defaults every later source outranks, xai included. OpenCode's
+		// session header sits with them (attribution.go).
 		o := &headerObject{}
-		o.merge(piUserAgentHeaders())
-		// pi mergeProviderAttributionHeaders (sdk.ts) puts the attribution
-		// bundle at the bottom of the precedence stack: emit session +
-		// default attribution first so model.headers and options.headers
-		// override them.
-		applyAttributionDefaults(o.set, model, opts.SessionID)
+		mergeIdentityHeaders(o, model, opts.Identity)
+		mergeOpenCodeSession(o, model, opts.SessionID)
 		// Header-owned provider auth (pi resolves it in the auth layer and
 		// delivers it as options.headers, above attribution and below
 		// model/consumer headers).
@@ -511,29 +540,22 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 			}
 			return nil
 		}
-		// grammarInput is the raw input accumulated on a custom tool call so far.
-		grammarInput := func(b *blockBuilder) string {
-			if b.grammar == nil {
-				return ""
-			}
-			s, _ := b.args[b.grammar.property].(string)
-			return s
-		}
-		// appendGrammarInput advances a custom tool call to nextInput and pushes
-		// the synthesized JSON delta, if any.
-		appendGrammarInput := func(slot *responsesOutputSlot, nextInput string, final bool) error {
-			b := slot.block
-			if b.grammar == nil {
-				return nil
-			}
-			delta, ok, err := b.grammar.append(nextInput, final)
+		// sendGrammarInput is pi's sendCustomInput: the block shows the input so
+		// far, and the JSON piece to push (ok false: none) carries the initial
+		// input's text in front of the first one.
+		sendGrammarInput := func(slot *responsesOutputSlot, jsonDelta string, ok bool, err error) error {
 			if err != nil {
 				return err
 			}
-			b.args = map[string]any{b.grammar.property: nextInput}
+			b := slot.block
+			b.args = map[string]any{b.grammar.property: b.grammar.Input()}
+			if b.grammarUnsent != "" {
+				jsonDelta, ok = b.grammarUnsent+jsonDelta, true
+				b.grammarUnsent = ""
+			}
 			materialize()
 			if ok {
-				stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: slot.contentIndex, Delta: delta, Partial: output.Clone()})
+				stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: slot.contentIndex, Delta: jsonDelta, Partial: output.Clone()})
 			}
 			return nil
 		}
@@ -562,11 +584,17 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 				b = &blockBuilder{kind: "text"}
 				startEvent = ai.EventTextStart
 			case "function_call":
+				// pi f715a15c: `item.arguments ? args.append(item.arguments) :
+				// {}` — the arguments the item already carries show from the
+				// start event on.
 				b = &blockBuilder{
 					kind: "toolCall", toolID: item.CallID + "|" + item.ID, toolName: item.Name,
 					toolNamespace: item.Namespace, args: map[string]any{},
+					arguments: NewToolCallArgumentsStream(),
 				}
-				b.partialJSON.WriteString(item.Arguments)
+				if item.Arguments != "" {
+					b.args, b.argsOrder = b.arguments.Append(item.Arguments)
+				}
 				startEvent = ai.EventToolCallStart
 			case "custom_tool_call":
 				// The "input" fallback should never be taken; it only gives a
@@ -578,9 +606,9 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 				// The input the item already carries is present on the block the
 				// start event announces (pi 8b5899dce, reverting 5c6655e76's
 				// replay-as-a-delta). pi writes `item.input || ""`, so the property
-				// is there even for an item that carries no input at all. Only the
-				// JSON delta buffer stays empty: the first delta synthesized after
-				// this opens the object and carries the initial input with it.
+				// is there even for an item that carries no input at all. The
+				// initial input's JSON text waits for the first delta synthesized
+				// after this, which opens the object (pi customInput's unsent).
 				input := ""
 				if item.Input != nil {
 					input = *item.Input
@@ -590,6 +618,8 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 					toolNamespace: item.Namespace,
 					args:          map[string]any{property: input}, grammar: newGrammarInputBuffer(property),
 				}
+				// An empty input appends nothing and cannot fail: the buffer is new.
+				b.grammarUnsent, _, _ = b.grammar.appendDelta(input)
 				startEvent = ai.EventToolCallStart
 			default:
 				return nil
@@ -814,8 +844,7 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 				if slot == nil || slot.block.grammar != nil {
 					return nil
 				}
-				slot.block.partialJSON.WriteString(ev.Delta)
-				slot.block.args, slot.block.argsOrder = parseStreamingJSON(slot.block.partialJSON.String())
+				slot.block.args, slot.block.argsOrder = slot.block.arguments.Append(ev.Delta)
 				materialize()
 				stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: slot.contentIndex, Delta: ev.Delta, Partial: output.Clone()})
 			case "response.function_call_arguments.done":
@@ -823,31 +852,32 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 				if slot == nil || slot.block.grammar != nil {
 					return nil
 				}
-				previous := slot.block.partialJSON.String()
-				slot.block.partialJSON.Reset()
-				slot.block.partialJSON.WriteString(ev.Arguments)
-				slot.block.args, slot.block.argsOrder = parseStreamingJSON(ev.Arguments)
-				materialize()
-				// Emit the trailing delta so a provider that only sends
+				// The complete text replaces the streamed one; when it continues
+				// it, the missing piece is pushed, so a provider that only sends
 				// .done (no incremental deltas) still yields full args.
-				if strings.HasPrefix(ev.Arguments, previous) {
-					delta := ev.Arguments[len(previous):]
-					if delta != "" {
-						stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: slot.contentIndex, Delta: delta, Partial: output.Clone()})
-					}
+				delta, _, args, order := slot.block.arguments.Replace(ev.Arguments)
+				slot.block.args, slot.block.argsOrder = args, order
+				materialize()
+				if delta != "" {
+					stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: slot.contentIndex, Delta: delta, Partial: output.Clone()})
 				}
 			case "response.custom_tool_call_input.delta":
 				slot := getSlot(ev.slotKey(), "toolCall")
 				if slot == nil || slot.block.grammar == nil {
 					return nil
 				}
-				return appendGrammarInput(slot, grammarInput(slot.block)+ev.Delta, false)
+				delta, ok, err := slot.block.grammar.appendDelta(ev.Delta)
+				return sendGrammarInput(slot, delta, ok, err)
 			case "response.custom_tool_call_input.done":
 				slot := getSlot(ev.slotKey(), "toolCall")
 				if slot == nil || slot.block.grammar == nil {
 					return nil
 				}
-				return appendGrammarInput(slot, ev.Input, true)
+				// pi f715a15c closes with event.input, undefined when absent (an
+				// absent input closed with the input so far; before, it threw).
+				hasInput := jsGet(ev.JS, "input") != jsUndefined
+				delta, ok, err := slot.block.grammar.close(ev.Input, hasInput)
+				return sendGrammarInput(slot, delta, ok, err)
 			case "response.output_item.done":
 				if ev.Item == nil {
 					return nil
@@ -903,13 +933,14 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 					stream.Push(ai.AssistantMessageEvent{Type: ai.EventTextEnd, ContentIndex: slot.contentIndex, Content: slot.block.text.String(), Partial: output.Clone()})
 					delete(outputSlots, ev.slotKey())
 				case ev.Item.Type == "function_call" && slot != nil && slot.block.kind == "toolCall" && slot.block.grammar == nil:
-					// pi 8c9dbffa: parseStreamingJson(item.arguments || partialJson || "{}")
-					// — the done event's item.arguments wins over the scratch buffer.
-					argsJSON := ev.Item.Arguments
-					if argsJSON == "" {
-						argsJSON = slot.block.partialJSON.String()
+					// pi: `if (item.arguments) replace(item.arguments)`, then
+					// finish() — the done event's item.arguments wins over the
+					// streamed text (8c9dbffa), and the finished call is parsed
+					// strictly (87f9a364).
+					if ev.Item.Arguments != "" {
+						slot.block.arguments.Replace(ev.Item.Arguments)
 					}
-					slot.block.args, slot.block.argsOrder = parseStreamingJSON(orEmptyJSON(argsJSON))
+					slot.block.args, slot.block.argsOrder, slot.block.argsError = slot.block.arguments.Finish()
 					// Guarded so an absent namespace on the done item cannot clobber
 					// the one captured at output_item.added.
 					if ev.Item.Namespace != "" {
@@ -921,15 +952,17 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 					stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallEnd, ContentIndex: slot.contentIndex, ToolCall: &tc, Partial: output.Clone()})
 					delete(outputSlots, ev.slotKey())
 				case ev.Item.Type == "custom_tool_call" && slot != nil && slot.block.grammar != nil:
-					// pi: item.input ?? the input accumulated so far.
-					finalInput := grammarInput(slot.block)
+					// pi: closeCustomInput(block, input, item.input) — with no
+					// final input (absent; the port reads a null one alike) the
+					// input so far stands.
+					finalInput := ""
 					if ev.Item.Input != nil {
 						finalInput = *ev.Item.Input
 					}
-					if gerr := appendGrammarInput(slot, finalInput, true); gerr != nil {
+					delta, ok, gerr := slot.block.grammar.close(finalInput, ev.Item.Input != nil)
+					if gerr := sendGrammarInput(slot, delta, ok, gerr); gerr != nil {
 						return gerr
 					}
-					slot.block.grammar = nil
 					// Guarded so an absent namespace on the done item cannot clobber
 					// the one captured at output_item.added.
 					if ev.Item.Namespace != "" {
@@ -1025,11 +1058,13 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 
 func buildResponsesParams(model *ai.Model, req ai.TranscriptContext, opts *OpenAIResponsesOptions) (map[string]any, error) {
 	compat := getResponsesCompat(model)
-	// body.tools holds the initial tools when additions can be anchored at their
-	// system messages (responsesInput emits the later ones there), and the
-	// complete current tool set otherwise.
-	transcriptTools := ai.ResolveTranscriptTools(req.Messages, compat.SupportsAdditionalTools || compat.SupportsToolSearch)
-	input, err := responsesInput(model, req)
+	// body.tools holds what ResolveTranscriptTools folds: nothing when every
+	// tool is declared in place, the tools up to the last removal when only
+	// additions anchor (responsesInput emits the later ones at their system
+	// messages), and the complete current tool set otherwise (pi caa6967b).
+	transcriptTools := ai.ResolveTranscriptTools(req.Messages, getResponsesToolSupport(compat))
+	configurationUpdateEffort := responsesConfigurationUpdateEffort(model, opts, compat)
+	input, err := responsesInput(model, req, configurationUpdateEffort)
 	if err != nil {
 		return nil, err
 	}
@@ -1098,6 +1133,11 @@ func buildResponsesParams(model *ai.Model, req ai.TranscriptContext, opts *OpenA
 			effort := "medium"
 			if opts.ReasoningEffort != "" {
 				effort = effortValue(model, opts.ReasoningEffort)
+			}
+			// The level rides in configuration_update items, so the request's
+			// own effort stays fixed and the cached prefix survives a change.
+			if configurationUpdateEffort != "" {
+				effort = configurationUpdateRequestEffort
 			}
 			summary := opts.ReasoningSummary
 			if summary == "" {
@@ -1250,8 +1290,19 @@ func convertResponsesTools(tools []ai.Tool, compat responsesCompat, toolSearchRe
 // (port of convertResponsesMessages). It errors when an assistant thinking
 // block carries an unparseable thinkingSignature (pi's JSON.parse throws and
 // fails the stream).
-func responsesInput(model *ai.Model, req ai.TranscriptContext) ([]any, error) {
+//
+// configurationUpdateEffort is the effort of the reply being generated, or ""
+// to send none. When set, the thinking level travels as configuration_update
+// items instead of a changing reasoning.effort, which would invalidate the
+// prompt cache: one goes before every earlier reply of this model with the level
+// recorded on it (providerThinkingLevel), and one with this effort goes at the
+// end, so earlier input never changes. OpenAI documents the item before user
+// messages only; pi verified it after tool results on gpt-6-luna (pi 60ac3bcc).
+func responsesInput(model *ai.Model, req ai.TranscriptContext, configurationUpdateEffort string) ([]any, error) {
 	var items []any
+	configurationUpdate := func(effort string) map[string]any {
+		return map[string]any{"type": "configuration_update", "reasoning": map[string]any{"effort": effort}}
+	}
 
 	compat := getResponsesCompat(model)
 	grammarProps, err := grammarToolInputProperties(ai.GetDeclaredTools(req.Messages), compat.SupportsOpenAIGrammarTools)
@@ -1270,29 +1321,57 @@ func responsesInput(model *ai.Model, req ai.TranscriptContext) ([]any, error) {
 	// pi.
 	normalized := ai.ResolveTranscript(req, compat.SupportsMidConvoSystemMessages)
 	transformed := transformMessages(normalized.Messages, model, buildResponsesToolCallIDNormalizer(model, normalized.Messages))
-	transcriptTools := ai.ResolveTranscriptTools(normalized.Messages, compat.SupportsAdditionalTools || compat.SupportsToolSearch)
+	toolSupport := getResponsesToolSupport(compat)
+	transcriptTools := ai.ResolveTranscriptTools(normalized.Messages, toolSupport)
+	toolChanges := &responsesToolChanges{support: toolSupport, compat: compat, instructionRole: instructionRole}
 	imageInput := modelSupportsImages(model)
 
 	msgIndex := 0
+	systemIndex := 0
 	for sourceIndex, m := range transformed {
 		sm, isSystem := asSystemMsg(m)
 		// The leading system message is the prompt; it does not count toward
 		// the msg_pi_<index> fallback ids or the tool_search call_id seeds.
 		isLeadingSystemMessage := sourceIndex == 0 && isSystem
 		if isSystem {
-			var text string
+			// transformMessages keeps system messages in order, so their
+			// position matches the transcript (pi caa6967b).
+			anchorsToolChanges := systemIndex >= transcriptTools.FoldedSystemMessages
+			systemIndex++
+			if anchorsToolChanges {
+				items, err = toolChanges.appendSystemToolAdditions(items, sm.ToolsAdded, fmt.Sprintf("system:%d", msgIndex))
+				if err != nil {
+					return nil, err
+				}
+			}
+			var parts []string
 			if isLeadingSystemMessage {
-				text = ai.GetSystemMessageText(sm)
+				parts = append(parts, ai.GetSystemMessageText(sm))
 			} else {
-				if transcriptTools.AnchorsAdditions {
-					items, err = appendSystemToolAdditions(items, sm.ToolsAdded, fmt.Sprintf("system:%d", msgIndex), compat)
-					if err != nil {
-						return nil, err
+				parts = append(parts, ai.RenderSystemMessageUpdate(sm))
+			}
+			if anchorsToolChanges {
+				// A redefinition is a removal plus an addition of the same name;
+				// only true removals are announced.
+				added := map[string]bool{}
+				for _, tool := range sm.ToolsAdded {
+					added[tool.Name] = true
+				}
+				var removed []string
+				for _, tool := range sm.ToolsRemoved {
+					if !added[tool.Name] {
+						removed = append(removed, tool.Name)
 					}
 				}
-				text = ai.RenderSystemMessageUpdate(sm)
+				if len(removed) > 0 {
+					parts = append(parts, renderToolRemovalNotice(removed))
+				}
+				for _, name := range removed {
+					toolChanges.markUnavailable(name)
+				}
 			}
-			if text != "" {
+			parts = slices.DeleteFunc(parts, func(part string) bool { return part == "" })
+			if text := strings.Join(parts, "\n\n"); text != "" {
 				items = append(items, map[string]any{"role": instructionRole, "content": sanitizeSurrogates(text)})
 			}
 		} else if um, ok := asUserMsg(m); ok {
@@ -1407,6 +1486,9 @@ func responsesInput(model *ai.Model, req ai.TranscriptContext) ([]any, error) {
 			if len(output) == 0 {
 				continue
 			}
+			if configurationUpdateEffort != "" && isSameModel && am.ProviderThinkingLevel != "" {
+				items = append(items, configurationUpdate(am.ProviderThinkingLevel))
+			}
 			items = append(items, output...)
 		} else if tr, ok := asToolResultMsg(m); ok {
 			// pi takes the raw first split segment (shared :229); any
@@ -1423,7 +1505,8 @@ func responsesInput(model *ai.Model, req ai.TranscriptContext) ([]any, error) {
 				}
 			}
 			textResult := strings.Join(texts, "\n")
-			hasText := len(textResult) > 0
+			// Whitespace-only output counts as empty (pi 4dd2b149, #8720).
+			hasText := jstext.Trim(textResult) != ""
 
 			var outputVal any
 			if hasImages && imageInput {
@@ -1459,28 +1542,106 @@ func responsesInput(model *ai.Model, req ai.TranscriptContext) ([]any, error) {
 			msgIndex++
 		}
 	}
+	if configurationUpdateEffort != "" {
+		items = append(items, configurationUpdate(configurationUpdateEffort))
+	}
 	return items, nil
 }
 
-// appendSystemToolAdditions appends the tools a later system message adds to
-// items, at that message; callers invoke it only when the request anchors
-// additions (port of the convertResponsesMessages closure of the same name). A
-// model that accepts additional_tools gets them inline in one developer item;
-// otherwise a model with client tool search gets a completed tool_search_call
-// and its tool_search_output, whose call_id hashes seed ("system:<msgIndex>")
-// with the tool names.
-func appendSystemToolAdditions(items []any, tools []ai.Tool, seed string, compat responsesCompat) ([]any, error) {
+// getResponsesToolSupport is how a Responses transport expresses tool changes
+// (pi caa6967b, #10940).
+//
+// additional_tools items accumulate: a later item adds tools and replaces
+// same-name definitions from earlier items, but it cannot replace a top-level
+// tool and cannot remove any tool (verified with strict schemas on the OpenAI,
+// Codex and Copilot backends, October 2026). Like Codex, every tool is
+// therefore declared in additional_tools items, starting with one at the head of
+// the input, and removals are announced as text. Synthetic tool search can only
+// add tools. Without mid-conversation system messages there is nothing to
+// anchor.
+func getResponsesToolSupport(compat responsesCompat) ai.TranscriptToolSupport {
+	if compat.SupportsMidConvoSystemMessages && compat.SupportsAdditionalTools {
+		return ai.ToolSupportChanges
+	}
+	if compat.SupportsToolSearch {
+		return ai.ToolSupportAdditions
+	}
+	return ai.ToolSupportNone
+}
+
+// renderIncrementalToolsNotice precedes every additional_tools item after the
+// first. Without it, models read the latest item as the complete tool set once
+// a removal was announced; Codex precedes its incremental tool batches with the
+// same guidance. Restating the tools that are still unavailable keeps smaller
+// models (gpt-5.6-luna, gpt-6-luna) from calling them again after later loads
+// (pi caa6967b, verified October 2026).
+func renderIncrementalToolsNotice(unavailable []string) string {
+	notice := "This is an incremental tools update. Previously declared tools remain available unless explicitly marked unavailable. A tool declared again here is available again, and its latest definition replaces the earlier one."
+	if len(unavailable) == 0 {
+		return notice
+	}
+	return notice + "\nStill unavailable: " + strings.Join(unavailable, ", ") + "."
+}
+
+func renderToolRemovalNotice(names []string) string {
+	lines := make([]string, len(names))
+	for i, name := range names {
+		lines[i] = "- " + name
+	}
+	return "The following tools are no longer available. Do not call them:\n" + strings.Join(lines, "\n")
+}
+
+// responsesToolChanges is the state convertResponsesMessages keeps across the
+// system messages that anchor tool changes.
+type responsesToolChanges struct {
+	support         ai.TranscriptToolSupport
+	compat          responsesCompat
+	instructionRole string
+	// declaredAdditionalTools is whether an additional_tools item went out.
+	declaredAdditionalTools bool
+	// unavailable are the tools announced as removed and not declared again
+	// since, in the order a JS Set keeps them.
+	unavailable []string
+}
+
+func (c *responsesToolChanges) markAvailable(name string) {
+	c.unavailable = slices.DeleteFunc(c.unavailable, func(n string) bool { return n == name })
+}
+
+// markUnavailable records an announced removal. It runs after the message's
+// additions, whose notice precedes the removal notice (pi 530015d9).
+func (c *responsesToolChanges) markUnavailable(name string) {
+	c.markAvailable(name)
+	c.unavailable = append(c.unavailable, name)
+}
+
+// appendSystemToolAdditions appends the tools a system message adds to items,
+// at that message (port of the convertResponsesMessages closure of the same
+// name); callers invoke it only for messages that anchor tool changes. With
+// ToolSupportChanges they go inline in one developer additional_tools item,
+// after an incremental tools notice for every item but the first; with
+// ToolSupportAdditions a completed tool_search_call and its tool_search_output,
+// whose call_id hashes seed ("system:<msgIndex>") with the tool names.
+func (c *responsesToolChanges) appendSystemToolAdditions(items []any, tools []ai.Tool, seed string) ([]any, error) {
+	for _, tool := range tools {
+		c.markAvailable(tool.Name)
+	}
 	if len(tools) == 0 {
 		return items, nil
 	}
-	if compat.SupportsAdditionalTools {
+	compat := c.compat
+	if c.support == ai.ToolSupportChanges {
+		if c.declaredAdditionalTools {
+			items = append(items, map[string]any{"role": c.instructionRole, "content": renderIncrementalToolsNotice(c.unavailable)})
+		}
+		c.declaredAdditionalTools = true
 		additional, err := convertResponsesTools(tools, compat, false)
 		if err != nil {
 			return nil, err
 		}
 		return append(items, map[string]any{"type": "additional_tools", "role": "developer", "tools": additional}), nil
 	}
-	if !compat.SupportsToolSearch {
+	if c.support != ai.ToolSupportAdditions {
 		return items, nil
 	}
 	names := make([]string, len(tools))
@@ -1605,13 +1766,6 @@ func joinPartsText(parts []responsesContentPart, sep string) string {
 		}
 	}
 	return strings.Join(texts, sep)
-}
-
-func orEmptyJSON(s string) string {
-	if s == "" {
-		return "{}"
-	}
-	return s
 }
 
 // errorEventMessage is the error pi throws for an `error` event:

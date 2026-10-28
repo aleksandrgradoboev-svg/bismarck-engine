@@ -78,11 +78,10 @@ func TestOpenAICompletionsHeaderStates(t *testing.T) {
 // pi allows because attribution sits at the bottom of the same merged object
 // (sdk.ts mergeProviderAttributionHeaders).
 func TestOpenAICompletionsMarkerSuppressesAttribution(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "1")
 	model := openAITestModel()
 	model.Provider = "openrouter"
 	h := captureOpenAIHeaders(t, model, ai.StreamOptions{
-		ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "k", Headers: ai.ProviderHeaders{"HTTP-Referer": nil}},
+		ProviderRequestOptions: attributedOptions(ai.ProviderHeaders{"HTTP-Referer": nil}),
 	})
 	if _, ok := h["Http-Referer"]; ok {
 		t.Fatalf("attribution default must be suppressible, got %q", h.Get("HTTP-Referer"))
@@ -195,7 +194,6 @@ func TestAnthropicCloudflareAIGatewayTakesApiKeyBranch(t *testing.T) {
 // providerHeadersToRecord: a marker cancels earlier ProviderHeaders sources but
 // cannot unset a header the adapter owns.
 func TestGoogleHeaderStates(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "1")
 	var got http.Header
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r.Header.Clone()
@@ -224,9 +222,9 @@ func TestGoogleHeaderStates(t *testing.T) {
 		t.Fatalf("a marker must cancel the model header before the record is built, got %q", got.Get("X-Model"))
 	}
 	// net/http supplies its own User-Agent once ours is gone, exactly as fetch
-	// does for pi; what must not survive is the attribution value.
-	if got := got.Get("User-Agent"); got == "pi-coding-agent" {
-		t.Fatal("a marker must cancel the attribution default")
+	// does for pi; what must not survive is the identity's value.
+	if got := got.Get("User-Agent"); got == ai.FormatUserAgent(nil) {
+		t.Fatal("a marker must cancel the identity's User-Agent")
 	}
 	if got.Get("X-Empty") != "" {
 		t.Fatalf("X-Empty = %q, want an empty value", got.Get("X-Empty"))
@@ -268,8 +266,10 @@ func TestPiMessagesHeaderStates(t *testing.T) {
 	if final.StopReason == ai.StopError {
 		t.Fatalf("stream failed: %s", final.ErrorMessage)
 	}
-	if got.Get("authorization") != "Bearer test-key" {
-		t.Fatalf("authorization = %q; a marker must not unset the adapter's own header", got.Get("authorization"))
+	// Since adc5fa9f the fixed headers are part of the record, so a marker
+	// deletes the adapter's own header too.
+	if values, ok := got["Authorization"]; ok {
+		t.Fatalf("authorization = %q; the marker must delete it", values)
 	}
 	if _, ok := got["X-Custom"]; ok {
 		t.Fatalf("a marker must not be sent as a header, got %q", got.Get("x-custom"))
@@ -320,28 +320,28 @@ func TestPiMessagesCaseVariantMarkerDeletesWithinSource(t *testing.T) {
 	}
 }
 
-// pi-messages hands fetch `{authorization, accept, "content-type", ...record}`.
-// A record entry spelled exactly like a fixed header replaces it in the JS
-// object; one spelled differently is a second key, and fetch's Headers.append
-// joins the two, fixed header first, after trimming each value. Every want is
-// what node's fetch put on the wire for the same record (a328aa89a's
-// providerHeadersToRecord, parsed by node's http server — which also trims the
-// trailing space undici sends after an empty joined value).
-func TestPiMessagesRecordJoinsCaseVariantFixedHeaders(t *testing.T) {
+// pi-messages hands fetch one record since adc5fa9f:
+// providerHeadersToRecord(identity headers, {authorization, accept,
+// "content-type"}, options.headers), folded case-insensitively. A consumer
+// entry of any spelling replaces the fixed header — before, a differently
+// spelled one was a second key that fetch joined onto it — and its value is
+// still trimmed by Headers.append.
+func TestPiMessagesRecordReplacesFixedHeadersOfAnySpelling(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		headers ai.ProviderHeaders
 		header  string
 		want    string
 	}{
-		{"case-variant authorization joins", ai.ProviderHeaders{"Authorization": strPtr("x")}, "authorization", "Bearer test-key, x"},
-		{"upper-case authorization joins", ai.ProviderHeaders{"AUTHORIZATION": strPtr("x")}, "authorization", "Bearer test-key, x"},
+		{"case-variant authorization replaces", ai.ProviderHeaders{"Authorization": strPtr("x")}, "authorization", "x"},
+		{"upper-case authorization replaces", ai.ProviderHeaders{"AUTHORIZATION": strPtr("x")}, "authorization", "x"},
 		{"exact spelling replaces", ai.ProviderHeaders{"authorization": strPtr("x")}, "authorization", "x"},
-		{"accept joins", ai.ProviderHeaders{"Accept": strPtr("application/json")}, "accept", "text/event-stream, application/json"},
-		{"content-type joins", ai.ProviderHeaders{"Content-Type": strPtr("text/plain")}, "content-type", "application/json, text/plain"},
-		{"each joined value is trimmed", ai.ProviderHeaders{"Authorization": strPtr("  x  ")}, "authorization", "Bearer test-key, x"},
-		{"each joined value is tab-trimmed", ai.ProviderHeaders{"Authorization": strPtr("\tx\t")}, "authorization", "Bearer test-key, x"},
-		{"an empty value still joins", ai.ProviderHeaders{"Authorization": strPtr("")}, "authorization", "Bearer test-key,"},
+		{"accept replaces", ai.ProviderHeaders{"Accept": strPtr("application/json")}, "accept", "application/json"},
+		{"content-type replaces", ai.ProviderHeaders{"Content-Type": strPtr("text/plain")}, "content-type", "text/plain"},
+		{"the value is trimmed", ai.ProviderHeaders{"Authorization": strPtr("  x  ")}, "authorization", "x"},
+		{"the value is tab-trimmed", ai.ProviderHeaders{"Authorization": strPtr("\tx\t")}, "authorization", "x"},
+		{"an empty value replaces", ai.ProviderHeaders{"Authorization": strPtr("")}, "authorization", ""},
+		{"the identity's User-Agent is replaced", ai.ProviderHeaders{"user-agent": strPtr("acme")}, "user-agent", "acme"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := capturePiMessagesHeaders(t, tc.headers)

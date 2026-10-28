@@ -14,25 +14,30 @@ import (
 // ProviderRequestOptions, and each provider's StreamSimple copies
 // StreamOptions whole (see simple_options.go).
 
-// tracedContext delegates to the shared noop context but is a pointer type,
-// so identity assertions below mean "the caller's own context arrived", the
-// way pi's `toBe(telemetryContext)` does.
-type tracedContext struct{}
+// tracedSpan delegates to the shared noop span but is a pointer type, so
+// identity assertions below mean "the caller's own span arrived", the way
+// pi's `toBe(telemetry)` does. Being no NoopSpan, it also sends the Models
+// paths through the request observer (telemetry.go).
+type tracedSpan struct{}
 
-func (*tracedContext) StartSpan(options telemetry.SpanOptions, callback func(telemetry.Span) error) error {
-	return telemetry.NoopContext.StartSpan(options, callback)
+func (*tracedSpan) StartSpan(options telemetry.SpanOptions, callback func(telemetry.Span) error) error {
+	return telemetry.NoopSpan.StartSpan(options, callback)
 }
+func (*tracedSpan) AddLink(telemetry.SpanLink)                {}
+func (*tracedSpan) AddEvent(string, telemetry.SpanAttributes) {}
+func (*tracedSpan) SetAttributes(telemetry.SpanAttributes)    {}
+func (*tracedSpan) SetStatus(telemetry.SpanStatus)            {}
 
-// TestTelemetryContextSurvivesDispatch mirrors pi "survives provider and
-// Models stream/deferred dispatch": a TelemetryContext set on the caller's
+// TestTelemetrySurvivesDispatch mirrors pi "survives provider and
+// Models stream/deferred dispatch": a Telemetry span set on the caller's
 // request options must reach the provider api on all eight dispatch paths —
 // provider-direct and Models Stream/StreamSimple/FetchDeferred/CancelDeferred.
 // The Models paths copy the options whole (applyAuth's `ro = *opts`), so like
 // TestModelsFetchDeferredKeepsTheCallersOwnOptions this guards against a
 // future rebuild that hand-copies fields and silently drops one.
-func TestTelemetryContextSurvivesDispatch(t *testing.T) {
-	telemetryContext := &tracedContext{}
-	var observed []telemetry.Context
+func TestTelemetrySurvivesDispatch(t *testing.T) {
+	parent := &tracedSpan{}
+	var observed []telemetry.Span
 	done := func(model *Model) *AssistantMessageEventStream {
 		s := NewAssistantMessageEventStream()
 		s.Push(AssistantMessageEvent{
@@ -48,19 +53,19 @@ func TestTelemetryContextSurvivesDispatch(t *testing.T) {
 		Models: []*Model{{Provider: "telemetry-provider", ID: "model", Api: "telemetry-test"}},
 		API: ptrStreams(ProviderStreams{
 			Stream: func(_ context.Context, model *Model, _ TranscriptContext, opts *StreamOptions) *AssistantMessageEventStream {
-				observed = append(observed, opts.TelemetryContext)
+				observed = append(observed, opts.Telemetry)
 				return done(model)
 			},
 			StreamSimple: func(_ context.Context, model *Model, _ TranscriptContext, opts *SimpleStreamOptions) *AssistantMessageEventStream {
-				observed = append(observed, opts.TelemetryContext)
+				observed = append(observed, opts.Telemetry)
 				return done(model)
 			},
 			FetchDeferred: func(_ context.Context, model *Model, _ DeferredHandle, opts *DeferredFetchOptions) *AssistantMessageEventStream {
-				observed = append(observed, opts.TelemetryContext)
+				observed = append(observed, opts.Telemetry)
 				return done(model)
 			},
 			CancelDeferred: func(_ context.Context, _ *Model, _ DeferredHandle, opts *DeferredCancelOptions) error {
-				observed = append(observed, opts.TelemetryContext)
+				observed = append(observed, opts.Telemetry)
 				return nil
 			},
 		}),
@@ -69,7 +74,7 @@ func TestTelemetryContextSurvivesDispatch(t *testing.T) {
 	ctx := context.Background()
 	model := &Model{Provider: "telemetry-provider", ID: "model", Api: "telemetry-test"}
 	handle := DeferredHandle{Provider: model.Provider, ModelID: model.ID, Api: model.Api, ID: "response"}
-	request := ProviderRequestOptions{TelemetryContext: telemetryContext}
+	request := ProviderRequestOptions{Telemetry: parent}
 
 	p.Stream(ctx, model, TranscriptContext{}, &StreamOptions{ProviderRequestOptions: request}).Result()
 	p.StreamSimple(ctx, model, TranscriptContext{}, &SimpleStreamOptions{StreamOptions: StreamOptions{ProviderRequestOptions: request}}).Result()
@@ -92,8 +97,8 @@ func TestTelemetryContextSurvivesDispatch(t *testing.T) {
 		t.Fatalf("observed %d dispatches, want all 8 to reach the provider api", len(observed))
 	}
 	for i, got := range observed {
-		if got != telemetry.Context(telemetryContext) {
-			t.Errorf("dispatch %d saw telemetry context %#v, want the caller's own", i, got)
+		if got != telemetry.Span(parent) {
+			t.Errorf("dispatch %d saw telemetry span %#v, want the caller's own", i, got)
 		}
 	}
 }

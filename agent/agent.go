@@ -108,6 +108,11 @@ type AgentOptions struct {
 	// Metadata is optional request metadata forwarded to providers.
 	Metadata      map[string]any
 	ToolExecution ToolExecutionMode
+	// Identity is how requests identify the app to providers, merged field by
+	// field over DefaultAgentIdentity (pi AgentOptions.identity, upstream
+	// adc5fa9f). Set an Attribution to attribute requests; NoAttribution sends
+	// none even over a Models default.
+	Identity *ai.ClientIdentity
 }
 
 type activeRun struct {
@@ -160,6 +165,9 @@ type Agent struct {
 	Headers                   ai.ProviderHeaders
 	Metadata                  map[string]any
 	ToolExecution             ToolExecutionMode
+	// Identity is the request identity forwarded to the stream function,
+	// over DefaultAgentIdentity.
+	Identity *ai.ClientIdentity
 
 	// toolLock is the loop's ToolLock (see ToolLock).
 	toolLock sync.Mutex
@@ -225,6 +233,7 @@ func NewAgent(opts AgentOptions) *Agent {
 		Headers:                   opts.Headers,
 		Metadata:                  opts.Metadata,
 		ToolExecution:             opts.ToolExecution,
+		Identity:                  opts.Identity,
 	}
 	if a.ConvertToLlm == nil {
 		a.ConvertToLlm = defaultConvertToLlm
@@ -566,6 +575,7 @@ func (a *Agent) loopConfig(skipInitialSteeringPoll bool) AgentLoopConfig {
 		CacheRetention:            a.CacheRetention,
 		Headers:                   a.Headers,
 		Metadata:                  a.Metadata,
+		Identity:                  a.Identity,
 		ToolExecution:             a.ToolExecution,
 		ToolLock:                  &a.toolLock,
 		PrepareToolResultMessage:  a.PrepareToolResultMessage,

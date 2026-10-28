@@ -1,0 +1,1513 @@
+{
+	"sha": "59ca40cf",
+	"patterns": {
+		"NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN": {
+			"source": "GoUsageLimitError|FreeUsageLimitError|Monthly usage limit reached|available balance|insufficient_quota|out of budget|quota exceeded|billing|subscription_sharing_usage_limit_exceeded|subscription_sharing_workplace_individual_usage_limit_exceeded",
+			"flags": "i"
+		},
+		"RETRYABLE_PROVIDER_ERROR_PATTERN": {
+			"source": "overloaded|server_busy|servers are currently busy|currently experiencing high demand|model is at capacity|rate.?limit|too many requests|(?<![a-z0-9])(?:429|500|502|503|504|520|524)(?![a-z0-9])|service.?(?:is.?)?(?:temporarily.?)?unavailable|server.?error|internal.?error|provider.?returned.?(?:an.?)?error|exceeded request buffer limit while retrying upstream|unable to forward upstream|upstream.?request.?failed|upstream_stream_read_error|stream was interrupted|http\\/?2 stream failed|network.?error|connection.?error|connection.?refused|connection.?lost|other side closed|fetch failed|request to \\S+ failed, reason:|getaddrinfo|ENOTFOUND|EAI_AGAIN|upstream.?connect|reset before headers|socket hang up|socket connection was closed|timed? out|timeout|terminated|websocket.?closed|websocket.?error|ended without|stream ended before message_stop|stream ended before a terminal response event|http2 request did not get a response|stream disconnected before completion|pending stream has been canceled|retry delay|you can retry your request|try your request again|please retry your request|ResourceExhausted|subscription_sharing_usage_unavailable|subscription_sharing_user_unavailable",
+			"flags": "i"
+		}
+	},
+	"rows": [
+		{
+			"covers": "pi: OpenAI explicit retry guidance",
+			"stopReason": "error",
+			"errorMessage": "An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists. Please include the request ID req_******** in your message.",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: Bedrock explicit retry guidance",
+			"stopReason": "error",
+			"errorMessage": "{\"message\":\"The system encountered an unexpected error during processing. Try your request again.\"}",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: NVIDIA NIM ResourceExhausted",
+			"stopReason": "error",
+			"errorMessage": "ResourceExhausted: Worker local total request limit reached (288/48)",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: Bun fetch socket drop",
+			"stopReason": "error",
+			"errorMessage": "The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: upstream request buffer exhaustion",
+			"stopReason": "error",
+			"errorMessage": "Error: exceeded request buffer limit while retrying upstream",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: wrapped DNS lookup failure",
+			"stopReason": "error",
+			"errorMessage": "The pending stream has been canceled (caused by: getaddrinfo ENOTFOUND bedrock-runtime.us-east-1.amazonaws.com)",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: DNS ENOTFOUND",
+			"stopReason": "error",
+			"errorMessage": "connect ENOTFOUND api.example.com",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: DNS EAI_AGAIN",
+			"stopReason": "error",
+			"errorMessage": "EAI_AGAIN api.example.com",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: DNS getaddrinfo",
+			"stopReason": "error",
+			"errorMessage": "getaddrinfo failed for api.example.com",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: OpenAI Responses early EOF",
+			"stopReason": "error",
+			"errorMessage": "OpenAI Responses stream ended before a terminal response event",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: limit wins over a retryable status",
+			"stopReason": "error",
+			"errorMessage": "429 quota exceeded",
+			"limitPattern": true,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "pi: overloaded_error",
+			"stopReason": "error",
+			"errorMessage": "overloaded_error",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: Cloudflare 520 (#9627)",
+			"stopReason": "error",
+			"errorMessage": "520 status code (no body)",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: Azure peak load (#9669)",
+			"stopReason": "error",
+			"errorMessage": "The system is currently experiencing high demand and cannot process your request. Your request exceeds the maximum usage size allowed during peak load. For improved capacity reliability, consider switching to Provisioned Throughput.",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: Cloudflare 524",
+			"stopReason": "error",
+			"errorMessage": "524 status code (no body)",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: not an error",
+			"stopReason": "stop",
+			"retryable": false
+		},
+		{
+			"covers": "pi: retryAssistantCall non-retryable",
+			"stopReason": "error",
+			"errorMessage": "insufficient_quota",
+			"limitPattern": true,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "pi: retryAssistantCall transient",
+			"stopReason": "error",
+			"errorMessage": "terminated",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: ChatGPT subscription usage limit",
+			"stopReason": "error",
+			"errorMessage": "OpenAI API error (429): {\"code\":\"subscription_sharing_usage_limit_exceeded\",\"message\":\"Usage limit reached.\"}",
+			"limitPattern": true,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "pi: temporary ChatGPT usage error",
+			"stopReason": "error",
+			"errorMessage": "subscription_sharing_usage_unavailable: Usage cannot be checked.",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: temporary ChatGPT user error",
+			"stopReason": "error",
+			"errorMessage": "subscription_sharing_user_unavailable: User cannot be loaded.",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: HTTP/2 pending stream cancellation (#10379)",
+			"stopReason": "error",
+			"errorMessage": "The pending stream has been canceled",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: HTTP/2 pending stream cancellation, wrapped (#10379)",
+			"stopReason": "error",
+			"errorMessage": "The pending stream has been canceled (caused by: socket closed)",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: service temporarily unavailable (#10965)",
+			"stopReason": "error",
+			"errorMessage": "The service is temporarily unavailable. Please retry later.",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: Bedrock ServiceUnavailableException",
+			"stopReason": "error",
+			"errorMessage": "Service unavailable: The service is temporarily unavailable.",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: node-fetch failure, empty reason (#10996)",
+			"stopReason": "error",
+			"errorMessage": "request to https://oauth2.googleapis.com/token failed, reason:",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: node-fetch failure (#10996)",
+			"stopReason": "error",
+			"errorMessage": "request to https://oauth2.googleapis.com/token failed, reason: connect ECONNREFUSED 127.0.0.1:9",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: gateway forward failure (#10920)",
+			"stopReason": "error",
+			"errorMessage": "unknown: Unable to forward upstream stream",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: gateway upstream request failure (#10920)",
+			"stopReason": "error",
+			"errorMessage": "upstream_error: Upstream request failed",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: gateway upstream stream read error (#10920)",
+			"stopReason": "error",
+			"errorMessage": "upstream_stream_read_error: Upstream response stream was interrupted",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: gateway HTTP/2 stream failure (#10920)",
+			"stopReason": "error",
+			"errorMessage": "Upstream HTTP/2 stream failed",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pi: ChatGPT Business workspace usage limit",
+			"stopReason": "error",
+			"errorMessage": "OpenAI API error (429): {\"code\":\"subscription_sharing_workplace_individual_usage_limit_exceeded\",\"message\":\"Usage limit reached.\"}",
+			"limitPattern": true,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "pi: status code inside a request id (#11057)",
+			"stopReason": "error",
+			"errorMessage": "401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011CU503xyz\"}",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "pi: status code inside a byte count (#11057)",
+			"stopReason": "error",
+			"errorMessage": "400 image exceeds 5 MB maximum: 5316784 bytes > 5242880 bytes",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "guard: stop",
+			"stopReason": "stop",
+			"errorMessage": "overloaded",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "guard: length",
+			"stopReason": "length",
+			"errorMessage": "overloaded",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "guard: toolUse",
+			"stopReason": "toolUse",
+			"errorMessage": "overloaded",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "guard: aborted",
+			"stopReason": "aborted",
+			"errorMessage": "overloaded",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "guard: empty error text",
+			"stopReason": "error",
+			"errorMessage": "",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "guard: no error text",
+			"stopReason": "error",
+			"retryable": false
+		},
+		{
+			"covers": "overloaded",
+			"stopReason": "error",
+			"errorMessage": "Overloaded",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "server_busy",
+			"stopReason": "error",
+			"errorMessage": "SERVER_BUSY",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "servers are currently busy",
+			"stopReason": "error",
+			"errorMessage": "Servers Are Currently Busy",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "currently experiencing high demand",
+			"stopReason": "error",
+			"errorMessage": "Currently Experiencing High Demand",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "model is at capacity",
+			"stopReason": "error",
+			"errorMessage": "Selected model is at capacity",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "rate.?limit",
+			"stopReason": "error",
+			"errorMessage": "rate_limit_error",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "too many requests",
+			"stopReason": "error",
+			"errorMessage": "Too Many Requests",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "status codes: 429",
+			"stopReason": "error",
+			"errorMessage": "HTTP 429",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "status codes: 500",
+			"stopReason": "error",
+			"errorMessage": "status 500",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "status codes: 502",
+			"stopReason": "error",
+			"errorMessage": "status 502",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "status codes: 503",
+			"stopReason": "error",
+			"errorMessage": "status 503",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "status codes: 504",
+			"stopReason": "error",
+			"errorMessage": "status 504",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "status codes: 520",
+			"stopReason": "error",
+			"errorMessage": "status 520",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "status codes: 524",
+			"stopReason": "error",
+			"errorMessage": "status 524",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "status codes: at the start",
+			"stopReason": "error",
+			"errorMessage": "429",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "status codes: in parentheses",
+			"stopReason": "error",
+			"errorMessage": "(503)",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "status codes: after a line break",
+			"stopReason": "error",
+			"errorMessage": "line1\n502",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "service unavailable",
+			"stopReason": "error",
+			"errorMessage": "Service Unavailable",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "service unavailable: is",
+			"stopReason": "error",
+			"errorMessage": "service is unavailable",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "service unavailable: temporarily",
+			"stopReason": "error",
+			"errorMessage": "Service temporarily unavailable",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "server.?error",
+			"stopReason": "error",
+			"errorMessage": "server_error",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "internal.?error",
+			"stopReason": "error",
+			"errorMessage": "InternalError",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "provider.?returned.?(?:an.?)?error",
+			"stopReason": "error",
+			"errorMessage": "Provider returned error",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "provider.?returned.?(?:an.?)?error: an",
+			"stopReason": "error",
+			"errorMessage": "The upstream provider returned an error",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "unable to forward upstream",
+			"stopReason": "error",
+			"errorMessage": "Unable To Forward Upstream",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "upstream.?request.?failed",
+			"stopReason": "error",
+			"errorMessage": "upstream request failed",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "upstream_stream_read_error",
+			"stopReason": "error",
+			"errorMessage": "UPSTREAM_STREAM_READ_ERROR",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "stream was interrupted",
+			"stopReason": "error",
+			"errorMessage": "Stream Was Interrupted",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "http/?2 stream failed",
+			"stopReason": "error",
+			"errorMessage": "http2 stream failed",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "http/?2 stream failed: slash",
+			"stopReason": "error",
+			"errorMessage": "HTTP/2 Stream Failed",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "network.?error",
+			"stopReason": "error",
+			"errorMessage": "NetworkError when attempting to fetch resource.",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "connection.?error",
+			"stopReason": "error",
+			"errorMessage": "Connection error.",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "connection.?refused",
+			"stopReason": "error",
+			"errorMessage": "connection refused",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "connection.?lost",
+			"stopReason": "error",
+			"errorMessage": "Connection lost",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "other side closed",
+			"stopReason": "error",
+			"errorMessage": "SocketError: other side closed",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "fetch failed",
+			"stopReason": "error",
+			"errorMessage": "TypeError: fetch failed",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "request to non-space failed, reason:",
+			"stopReason": "error",
+			"errorMessage": "Request to x failed, reason:",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "getaddrinfo",
+			"stopReason": "error",
+			"errorMessage": "GETADDRINFO",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "ENOTFOUND",
+			"stopReason": "error",
+			"errorMessage": "enotfound",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "EAI_AGAIN",
+			"stopReason": "error",
+			"errorMessage": "eai_again",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "upstream.?connect",
+			"stopReason": "error",
+			"errorMessage": "upstream connect error",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "reset before headers",
+			"stopReason": "error",
+			"errorMessage": "reset before headers",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "socket hang up",
+			"stopReason": "error",
+			"errorMessage": "Socket Hang Up",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "socket connection was closed",
+			"stopReason": "error",
+			"errorMessage": "socket connection was closed",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "timed? out",
+			"stopReason": "error",
+			"errorMessage": "Request timed out.",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "timed? out",
+			"stopReason": "error",
+			"errorMessage": "time out",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "timeout",
+			"stopReason": "error",
+			"errorMessage": "Request timeout",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "terminated",
+			"stopReason": "error",
+			"errorMessage": "Terminated",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "websocket.?closed",
+			"stopReason": "error",
+			"errorMessage": "WebSocket closed",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "websocket.?error",
+			"stopReason": "error",
+			"errorMessage": "WebSocket error",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "ended without",
+			"stopReason": "error",
+			"errorMessage": "stream ended without message_stop",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "stream ended before message_stop",
+			"stopReason": "error",
+			"errorMessage": "Anthropic stream ended before message_stop",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "http2 request did not get a response",
+			"stopReason": "error",
+			"errorMessage": "http2 request did not get a response",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "stream disconnected before completion",
+			"stopReason": "error",
+			"errorMessage": "Stream disconnected before completion: stream closed before response.completed",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "pending stream has been canceled",
+			"stopReason": "error",
+			"errorMessage": "PENDING STREAM HAS BEEN CANCELED",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "retry delay",
+			"stopReason": "error",
+			"errorMessage": "Retry delay 120000ms exceeds maxRetryDelayMs",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "you can retry your request",
+			"stopReason": "error",
+			"errorMessage": "the model is busy; you can retry your request",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "try your request again",
+			"stopReason": "error",
+			"errorMessage": "please try your request again shortly",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "please retry your request",
+			"stopReason": "error",
+			"errorMessage": "transient failure, please retry your request",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "ResourceExhausted",
+			"stopReason": "error",
+			"errorMessage": "resourceexhausted",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "subscription_sharing_usage_unavailable",
+			"stopReason": "error",
+			"errorMessage": "SUBSCRIPTION_SHARING_USAGE_UNAVAILABLE",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "subscription_sharing_user_unavailable",
+			"stopReason": "error",
+			"errorMessage": "Subscription_Sharing_User_Unavailable",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "GoUsageLimitError",
+			"stopReason": "error",
+			"errorMessage": "GoUsageLimitError: 429",
+			"limitPattern": true,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "FreeUsageLimitError",
+			"stopReason": "error",
+			"errorMessage": "freeusagelimiterror 503",
+			"limitPattern": true,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "Monthly usage limit reached",
+			"stopReason": "error",
+			"errorMessage": "Monthly usage limit reached (429)",
+			"limitPattern": true,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "available balance",
+			"stopReason": "error",
+			"errorMessage": "Enable Available Balance usage: 429",
+			"limitPattern": true,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "insufficient_quota",
+			"stopReason": "error",
+			"errorMessage": "insufficient_quota (429)",
+			"limitPattern": true,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "out of budget",
+			"stopReason": "error",
+			"errorMessage": "out of budget 500",
+			"limitPattern": true,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "quota exceeded",
+			"stopReason": "error",
+			"errorMessage": "Quota Exceeded: 429",
+			"limitPattern": true,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "billing",
+			"stopReason": "error",
+			"errorMessage": "BILLING 502",
+			"limitPattern": true,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "subscription_sharing_usage_limit_exceeded",
+			"stopReason": "error",
+			"errorMessage": "Subscription_Sharing_Usage_Limit_Exceeded (429)",
+			"limitPattern": true,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "subscription_sharing_workplace_individual_usage_limit_exceeded",
+			"stopReason": "error",
+			"errorMessage": "SUBSCRIPTION_SHARING_WORKPLACE_INDIVIDUAL_USAGE_LIMIT_EXCEEDED 503",
+			"limitPattern": true,
+			"retryablePattern": true,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss limit",
+			"stopReason": "error",
+			"errorMessage": "GoUsageLimit 429",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "near-miss limit",
+			"stopReason": "error",
+			"errorMessage": "Monthly usage limit 503",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "near-miss limit",
+			"stopReason": "error",
+			"errorMessage": "available-balance 429",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "near-miss limit",
+			"stopReason": "error",
+			"errorMessage": "insufficient quota 429",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "near-miss limit",
+			"stopReason": "error",
+			"errorMessage": "out-of-budget 500",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "near-miss limit",
+			"stopReason": "error",
+			"errorMessage": "quota exceed 429",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "near-miss limit",
+			"stopReason": "error",
+			"errorMessage": "bill 502",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "near-miss limit",
+			"stopReason": "error",
+			"errorMessage": "subscription sharing usage limit exceeded 429",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "model refused to answer",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "status 501",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "status 505",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "status 521",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "42 9",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "status 5200",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "too many request",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "service not available",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "subscription_sharing_usage unavailable",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "server-side error",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "provider returned an error",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "ECONNREFUSED 127.0.0.1:443",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "RESOURCE_EXHAUSTED",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "resource exhausted",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "timd out",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "timedout",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "ETIMEDOUT",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "line1\n520 status code (no body)",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "dot",
+			"stopReason": "error",
+			"errorMessage": "rate-limit",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "dot",
+			"stopReason": "error",
+			"errorMessage": "ratelimit",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "dot",
+			"stopReason": "error",
+			"errorMessage": "rate  limit",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "dot",
+			"stopReason": "error",
+			"errorMessage": "rate\tlimit",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "dot",
+			"stopReason": "error",
+			"errorMessage": "rate\u0000limit",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "dot",
+			"stopReason": "error",
+			"errorMessage": "ratelimit",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "dot",
+			"stopReason": "error",
+			"errorMessage": "rateélimit",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "dot",
+			"stopReason": "error",
+			"errorMessage": "rate﻿limit",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "dot",
+			"stopReason": "error",
+			"errorMessage": "rate�limit",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "dot",
+			"stopReason": "error",
+			"errorMessage": "rate\nlimit",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "dot: JS excludes CR",
+			"stopReason": "error",
+			"errorMessage": "rate\rlimit",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "dot: JS excludes U+2028",
+			"stopReason": "error",
+			"errorMessage": "rate limit",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "dot: JS excludes U+2029",
+			"stopReason": "error",
+			"errorMessage": "rate limit",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "dot: astral is two code units",
+			"stopReason": "error",
+			"errorMessage": "rate😀limit",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "dot: astral is two code units",
+			"stopReason": "error",
+			"errorMessage": "rate𐀀limit",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "dot: JS excludes CR",
+			"stopReason": "error",
+			"errorMessage": "websocket\rclosed",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "dot: JS excludes U+2028",
+			"stopReason": "error",
+			"errorMessage": "provider returned error",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "dot: astral is two code units",
+			"stopReason": "error",
+			"errorMessage": "Service😀Unavailable",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss: status code after a letter",
+			"stopReason": "error",
+			"errorMessage": "a429",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss: status code before a letter",
+			"stopReason": "error",
+			"errorMessage": "429b",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss: status code after a digit",
+			"stopReason": "error",
+			"errorMessage": "1500",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss: status code before a digit",
+			"stopReason": "error",
+			"errorMessage": "5034",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss: status code after an uppercase letter",
+			"stopReason": "error",
+			"errorMessage": "X503",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "unable to forward",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "upstream failed",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "http/3 stream failed",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "stream disconnected",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "request to  failed, reason:",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "request to x failed",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "near-miss",
+			"stopReason": "error",
+			"errorMessage": "service is temporarily not available",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "non-space: NEL",
+			"stopReason": "error",
+			"errorMessage": "request to ab failed, reason:",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "non-space: astral",
+			"stopReason": "error",
+			"errorMessage": "request to 😀 failed, reason:",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "non-space: ZERO WIDTH SPACE",
+			"stopReason": "error",
+			"errorMessage": "request to a​b failed, reason:",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "non-space: JS excludes VT",
+			"stopReason": "error",
+			"errorMessage": "request to a\u000bb failed, reason:",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "non-space: JS excludes U+00A0",
+			"stopReason": "error",
+			"errorMessage": "request to a b failed, reason:",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "non-space: JS excludes U+FEFF",
+			"stopReason": "error",
+			"errorMessage": "request to a﻿b failed, reason:",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "non-space: JS excludes U+3000",
+			"stopReason": "error",
+			"errorMessage": "request to a　b failed, reason:",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "non-space: JS excludes U+2028",
+			"stopReason": "error",
+			"errorMessage": "request to a b failed, reason:",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "lookaround: U+212A is not a letter",
+			"stopReason": "error",
+			"errorMessage": "K429",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "lookaround: U+017F is not a letter",
+			"stopReason": "error",
+			"errorMessage": "503ſ",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "lookaround: astral before",
+			"stopReason": "error",
+			"errorMessage": "😀504",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "lookaround: astral after",
+			"stopReason": "error",
+			"errorMessage": "504😀",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "lookaround: non-ASCII letters",
+			"stopReason": "error",
+			"errorMessage": "é520é",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "fold: U+212A is not k",
+			"stopReason": "error",
+			"errorMessage": "socKet hang up",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "fold: U+017F is not s",
+			"stopReason": "error",
+			"errorMessage": "ſocket hang up",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "fold: U+212A is not k",
+			"stopReason": "error",
+			"errorMessage": "networK error",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "fold: U+017F is not s",
+			"stopReason": "error",
+			"errorMessage": "too many requeſts",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "fold: U+017F is not s in a limit",
+			"stopReason": "error",
+			"errorMessage": "inſufficient_quota 429",
+			"limitPattern": false,
+			"retryablePattern": true,
+			"retryable": true
+		},
+		{
+			"covers": "fold: U+0131 is not i",
+			"stopReason": "error",
+			"errorMessage": "tımeout",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		},
+		{
+			"covers": "fold: U+0130 is not I",
+			"stopReason": "error",
+			"errorMessage": "TİMEOUT",
+			"limitPattern": false,
+			"retryablePattern": false,
+			"retryable": false
+		}
+	]
+}

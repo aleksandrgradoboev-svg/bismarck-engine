@@ -21,9 +21,11 @@ import (
 // where a bare @earendil-works/pi-ai consumer sent nothing, because pi only ever
 // set the header from the coding-agent layer (core/provider-attribution.ts).
 //
-// The Go port has no such gap to close: it homes pi's coding-agent attribution
-// in ai/providers/attribution.go, so ai.Stream* has always emitted the header
-// for opencode models whenever SessionID is set. The port's delta for
+// The Go port has no such gap to close: it has always emitted the header from
+// the adapters (ai/providers/attribution.go) for opencode models whenever
+// SessionID is set — behind its PI_TELEMETRY gate until pi made attribution a
+// request identity (adc5fa9f), ungated since, as the header is routing, not
+// attribution. The port's delta for
 // 561a2e066 is therefore EMPTY, and these assertions — pi's own, values
 // included — are what says so rather than a category argument.
 //
@@ -37,9 +39,11 @@ import (
 // Where pi's two paths disagree the port necessarily matches one and not the
 // other, because one Go function stands in for both. Those cells are tracked
 // as Scope queue entry 15 and never asserted here, because a green test
-// carrying the port's own value would immunise them. Today they are the three
-// bare-SDK cells: the port also sends x-opencode-client, also honours the
-// opencode.ai host gate, and puts the session header below model.Headers. A
+// carrying the port's own value would immunise them. Today they are the two
+// bare-SDK cells: the port also honours the opencode.ai host gate, and puts
+// the session header below model.Headers. (A third, x-opencode-client sent
+// with it, closed with adc5fa9f: it is the identity's attribution now, sent
+// only when the request's identity attributes.) A
 // cell that closes joins the assertions below (upstream a328aa89a closed a
 // fourth, google's case-variant deletion marker); one that opens is named here.
 
@@ -84,7 +88,6 @@ func opencodeOptions(sessionID string, retention ai.CacheRetention, headers ai.P
 // header is independent of cacheRetention, which gates only the separate
 // prompt-cache and session-affinity headers.
 func TestOpenCodeSessionHeaderWithoutCacheRetention(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "1") // attribution is opt-in in bismarck-engine
 	for _, adapter := range opencodeAdapters() {
 		for _, provider := range adapter.providers {
 			t.Run(string(adapter.api)+"/"+string(provider), func(t *testing.T) {
@@ -103,7 +106,6 @@ func TestOpenCodeSessionHeaderWithoutCacheRetention(t *testing.T) {
 // test runs both entry points because pi's wrapper really does wrap two
 // functions; one case here records that the port cannot diverge between them.
 func TestOpenCodeSessionHeaderOnStreamSimple(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "1") // attribution is opt-in in bismarck-engine
 	h := captureOpenAISimpleHeaders(t, opencodeModel(ai.APIOpenAICompletions, "opencode"),
 		opencodeOptions("conversation-1", ai.CacheNone, nil))
 	if got := h.Get("x-opencode-session"); got != "conversation-1" {

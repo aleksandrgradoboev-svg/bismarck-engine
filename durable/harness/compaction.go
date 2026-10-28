@@ -307,7 +307,7 @@ func summarizeCompaction(ctx context.Context, task *compactionTask, rt *TaskRunt
 	stream.CacheRetention = "none"
 	maxTokens := request.MaxTokens
 	stream.MaxTokens = &maxTokens
-	stream.TelemetryContext = telemetry.SpanFrom(ctx)
+	stream.Telemetry = telemetry.SpanFrom(ctx)
 	message := rt.Models().CompleteSimple(ctx, model, ai.Context{Messages: messages}, options)
 	// An abort mark or close: the abort invocation or the reopened task
 	// handles the committed state.

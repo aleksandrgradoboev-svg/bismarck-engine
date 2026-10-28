@@ -328,6 +328,7 @@ func streamAssistantResponse(ctx context.Context, agentCtx *AgentContext, config
 				TimeoutMs:       config.TimeoutMs,
 				HTTPClient:      config.HTTPClient,
 				Headers:         config.Headers,
+				Identity:        ai.MergeClientIdentity(&DefaultAgentIdentity, config.Identity),
 			},
 			OnProviderStreamEvent:     config.OnProviderStreamEvent,
 			Transport:                 config.Transport,
@@ -1096,3 +1097,15 @@ func emitToolResultMessage(trm ai.ToolResultMessage, emit EventSink) {
 	mustEmit(emit, AgentEvent{Type: EvMessageStart, Message: trm})
 	mustEmit(emit, AgentEvent{Type: EvMessageEnd, Message: trm})
 }
+
+// DefaultAgentIdentity is the request identity of agent loops, which
+// AgentLoopConfig.Identity overrides field by field (pi DEFAULT_AGENT_IDENTITY,
+// upstream adc5fa9f, 04a93bad).
+//
+// DIVERGENCE (bismarck-engine): pi's default attributes requests to pi
+// (`{ attribution: PI_ATTRIBUTION }`); here it is pi-ai's defaults, with no
+// attribution. A product embedding the engine does not announce itself to
+// model providers as pi unless its owner asks: it sets
+// AgentOptions.Identity, and cmd/pi does so from PI_TELEMETRY
+// (coding.ClientIdentity).
+var DefaultAgentIdentity = ai.ClientIdentity{}

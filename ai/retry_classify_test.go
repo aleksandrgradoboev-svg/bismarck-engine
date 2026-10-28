@@ -8,7 +8,7 @@ import (
 
 // retryClassifyCaptureFile is written by testdata/retry-classify/capture.mts,
 // which runs upstream's own packages/ai/src/utils/retry.ts under node.
-const retryClassifyCaptureFile = "testdata/retry-classify/classify-06a46693.json"
+const retryClassifyCaptureFile = "testdata/retry-classify/classify-59ca40cf.json"
 
 type capturedPattern struct {
 	Source string `json:"source"`
@@ -255,5 +255,46 @@ func TestIsRetryableAssistantError(t *testing.T) {
 				t.Errorf("IsRetryableAssistantError(%q) = %v, want %v", tc.msg.ErrorMessage, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestTranslateProviderErrorAlternativeRefusesUntaughtSyntax: a new upstream
+// alternative with syntax the translation was not taught must stop the build
+// of the pattern, not compile to RE2 that matches differently. Beyond pi.
+func TestTranslateProviderErrorAlternativeRefusesUntaughtSyntax(t *testing.T) {
+	for _, pattern := range []string{
+		`a|b`,                    // "|" outside a group
+		`(a)`,                    // capturing group
+		`(?:a`,                   // unclosed group
+		`a)`,                     // unbalanced ")"
+		`\s`,                     // escape other than \S
+		`\d+`,                    // escape other than \S
+		`[ab]`,                   // class
+		`^a`, `a$`, `a*`, `a{2}`, // anchors and other quantifiers
+		`x(?<![a-z0-9])429`,        // lookbehind away from the start
+		`429(?![a-z0-9])x`,         // lookahead away from the end
+		`(?<![a-z])429`,            // a lookaround it was not taught
+		`a\S.b`, `a\S+.b`, `a.\Sb`, // "." beside \S
+		"a." + string(rune(0xe9)), // "." beside a non-ASCII character
+		string(rune(0xe9)) + ".?a",
+	} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("translateProviderErrorAlternative(%q) did not panic", pattern)
+				}
+			}()
+			translateProviderErrorAlternative(pattern)
+		}()
+	}
+	for pattern, want := range map[string]string{
+		`Rate.?Limit`:                          "rate" + jsDot + "?limit",
+		`(?<![a-z0-9])(?:429|500)(?![a-z0-9])`: re2NotAfterAlnum + "(?:429|500)" + re2NotBeforeAlnum,
+		`request to \S+ failed`:                "request to " + jsNonSpace + "+ failed",
+		"caf" + string(rune(0xc9)):             "caf" + string(rune(0xc9)), // non-ASCII bytes pass through unlowered
+	} {
+		if got := translateProviderErrorAlternative(pattern); got != want {
+			t.Errorf("translateProviderErrorAlternative(%q) = %q, want %q", pattern, got, want)
+		}
 	}
 }

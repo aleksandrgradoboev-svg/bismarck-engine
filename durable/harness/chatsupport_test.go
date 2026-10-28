@@ -31,6 +31,8 @@ type chatSetup struct {
 	now      func() time.Time
 	// telemetry is the Harness's adapter, nil for none.
 	telemetry telemetry.Context
+	// identity is Options.Identity.
+	identity *ai.ClientIdentity
 }
 
 func newChatSetup(t *testing.T) *chatSetup {
@@ -101,6 +103,7 @@ func (c *chatSetup) options() Options {
 		},
 		OnReport:  c.reports.add,
 		Telemetry: c.telemetry,
+		Identity:  c.identity,
 	}
 }
 

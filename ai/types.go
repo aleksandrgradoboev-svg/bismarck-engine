@@ -296,6 +296,11 @@ type ToolCall struct {
 	// Plain string like ThoughtSignature: pi's guard is `!== undefined`, so a
 	// provider-sent empty string would replay there and is dropped here.
 	Namespace string `json:"namespace,omitempty"`
+	// ArgumentsError is set when the model's complete arguments text was not
+	// a valid JSON object; Arguments is then {}. It describes the problem and
+	// includes the text the model sent, and tool argument validation fails
+	// with it (pi 87f9a364, #10897).
+	ArgumentsError string `json:"argumentsError,omitempty"`
 }
 
 func (ToolCall) contentType() string { return "toolCall" }
@@ -319,12 +324,15 @@ func (t ToolCall) MarshalJSON() ([]byte, error) {
 		Arguments        any    `json:"arguments"`
 		ThoughtSignature string `json:"thoughtSignature,omitempty"`
 		Namespace        string `json:"namespace,omitempty"`
+		// Last: pi's Object.assign adds it to the finished block.
+		ArgumentsError string `json:"argumentsError,omitempty"`
 	}{
 		ID:               t.ID,
 		Name:             t.Name,
 		Arguments:        t.OrderedArguments(),
 		ThoughtSignature: t.ThoughtSignature,
 		Namespace:        t.Namespace,
+		ArgumentsError:   t.ArgumentsError,
 	})
 }
 
@@ -338,11 +346,12 @@ func (t *ToolCall) UnmarshalJSON(data []byte) error {
 		Arguments        json.RawMessage `json:"arguments"`
 		ThoughtSignature string          `json:"thoughtSignature,omitempty"`
 		Namespace        string          `json:"namespace,omitempty"`
+		ArgumentsError   string          `json:"argumentsError,omitempty"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	*t = ToolCall{ID: raw.ID, Name: raw.Name, ThoughtSignature: raw.ThoughtSignature, Namespace: raw.Namespace}
+	*t = ToolCall{ID: raw.ID, Name: raw.Name, ThoughtSignature: raw.ThoughtSignature, Namespace: raw.Namespace, ArgumentsError: raw.ArgumentsError}
 	if len(raw.Arguments) == 0 {
 		return nil
 	}
@@ -465,11 +474,62 @@ func (cl *ContentList) UnmarshalJSON(data []byte) error {
 
 // CostBreakdown holds the per-bucket dollar cost of a request.
 type CostBreakdown struct {
+	// Input, Output, CacheRead and CacheWrite are catalog-derived.
 	Input      float64 `json:"input"`
 	Output     float64 `json:"output"`
 	CacheRead  float64 `json:"cacheRead"`
 	CacheWrite float64 `json:"cacheWrite"`
-	Total      float64 `json:"total"`
+	// Total is the best available total: the provider-reported billed cost
+	// where supported, otherwise the catalog estimate.
+	Total float64 `json:"total"`
+	// TotalFromProvider is whether Total is the billed cost the provider
+	// reported (pi 7c22a93d): CalculateCost sets it false, a provider's report
+	// true, and a usage nobody priced leaves it absent, which also means false.
+	TotalFromProvider OptionalBool `json:"totalFromProvider,omitempty"`
+}
+
+// OptionalBool is a JavaScript optional boolean held by value, so a struct
+// carrying one stays comparable with ==: the zero value is absent (omitted
+// with omitempty), and False and True marshal as false and true.
+type OptionalBool int8
+
+const (
+	Absent OptionalBool = iota
+	False
+	True
+)
+
+// OptionalBoolOf is the present form of b.
+func OptionalBoolOf(b bool) OptionalBool {
+	if b {
+		return True
+	}
+	return False
+}
+
+// IsTrue reports whether the value is present and true.
+func (b OptionalBool) IsTrue() bool { return b == True }
+
+func (b OptionalBool) MarshalJSON() ([]byte, error) {
+	switch b {
+	case True:
+		return []byte("true"), nil
+	case False:
+		return []byte("false"), nil
+	}
+	return []byte("null"), nil
+}
+
+func (b *OptionalBool) UnmarshalJSON(data []byte) error {
+	switch string(data) {
+	case "true":
+		*b = True
+	case "false":
+		*b = False
+	default:
+		*b = Absent
+	}
+	return nil
 }
 
 // Usage holds token counts and cost for a request.
@@ -851,8 +911,9 @@ type AssistantMessage struct {
 	Api      Api         `json:"api"`
 	Provider ProviderId  `json:"provider"`
 	Model    string      `json:"model"`
-	// ResponseModel is the concrete model the provider reported when it differs
-	// from the requested Model, which stays the requested id.
+	// ResponseModel is the concrete model the provider reported, when reported;
+	// it may equal the requested Model, which stays the requested id (pi
+	// 14c81184: a pi-messages backend forwards its own).
 	ResponseModel string `json:"responseModel,omitempty"`
 	// ResponseID is the provider's own response/message identifier, when its API
 	// exposes one.
@@ -1300,14 +1361,18 @@ type HTTPDoer interface {
 // <TModel>) so image requests can hand back an ImageModel. One Model struct
 // serves every model type here, so the callbacks name *Model directly.
 type ProviderRequestOptions struct {
-	// TelemetryContext is the explicit parent context for telemetry produced
-	// by this logical request (pi telemetryContext, upstream 04d6447f7).
-	// Latent for now, like Env once was: no ported code starts spans yet, so
-	// the field rides the options through dispatch untouched until a caller
-	// wires in a consumer. Nil is pi's absent value — callers that trace fall
-	// back to telemetry.NoopContext themselves.
-	TelemetryContext telemetry.Context
-	APIKey           string
+	// Telemetry is the explicit parent span for telemetry produced by this
+	// logical request (pi `telemetry`, renamed from telemetryContext by
+	// upstream 2ec55d80). Models requests start their pi.ai.request or
+	// pi.ai.poll span under it (telemetry.go); provider-direct calls carry it
+	// through untouched. Nil is pi's absent value: no span is started.
+	Telemetry telemetry.Span
+	// Identity is how the request identifies the calling app: User-Agent and
+	// provider attribution headers (pi `identity`, upstream adc5fa9f). Nil,
+	// and absent fields, use pi-ai's defaults: a detailed User-Agent and no
+	// attribution.
+	Identity *ClientIdentity
+	APIKey   string
 	// OnPayload inspects or replaces a provider payload before it is sent.
 	// Returning a nil payload keeps it unchanged.
 	OnPayload func(payload any, model *Model) (any, error)

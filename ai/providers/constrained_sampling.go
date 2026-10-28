@@ -227,7 +227,7 @@ type grammarSampling struct {
 // alongside it on every call.
 type grammarInputBuffer struct {
 	property string
-	input    string
+	input    strings.Builder
 	started  bool
 	closed   bool
 }
@@ -236,39 +236,56 @@ func newGrammarInputBuffer(property string) *grammarInputBuffer {
 	return &grammarInputBuffer{property: property}
 }
 
-// append advances the buffer to nextInput, which must extend the input seen so
-// far, and returns the JSON delta to emit. ok is false when there is nothing to
-// emit (pi returns undefined). final closes the synthesized JSON object.
-func (b *grammarInputBuffer) append(nextInput string, final bool) (delta string, ok bool, err error) {
+// Input is the raw input streamed so far.
+func (b *grammarInputBuffer) Input() string { return b.input.String() }
+
+// appendDelta is pi's appendGrammarToolInputJsonDelta (f715a15c): it appends
+// inputDelta to the input and returns the matching piece of the JSON arguments
+// text; ok is false for an empty delta (pi returns undefined). It costs time
+// linear in the delta, never in the input so far.
+func (b *grammarInputBuffer) appendDelta(inputDelta string) (delta string, ok bool, err error) {
 	if b.closed {
-		if final && nextInput == b.input {
+		return "", false, fmt.Errorf("grammar tool input for property %s changed after it was closed", quoteRaw(b.property))
+	}
+	if inputDelta == "" {
+		return "", false, nil
+	}
+	b.input.WriteString(inputDelta)
+	return b.jsonStart() + jsEscape(inputDelta), true, nil
+}
+
+// close is pi's closeGrammarToolInputJson: it closes the input and returns the
+// rest of its JSON arguments text. finalInput, when hasFinal, is the complete
+// input the provider sent, which must continue the input streamed so far.
+// Closing again returns ok false when there is no final input or it is the
+// same one.
+func (b *grammarInputBuffer) close(finalInput string, hasFinal bool) (delta string, ok bool, err error) {
+	input := b.input.String()
+	if b.closed {
+		if !hasFinal || finalInput == input {
 			return "", false, nil
 		}
 		return "", false, fmt.Errorf("grammar tool input for property %s changed after it was closed", quoteRaw(b.property))
 	}
-	if !strings.HasPrefix(nextInput, b.input) {
+	if hasFinal && !strings.HasPrefix(finalInput, input) {
 		return "", false, fmt.Errorf("grammar tool input for property %s changed non-monotonically", quoteRaw(b.property))
 	}
+	rest := ""
+	if hasFinal {
+		rest = finalInput[len(input):]
+		b.input.WriteString(rest)
+	}
+	b.closed = true
+	return b.jsonStart() + jsEscape(rest) + `"}`, true, nil
+}
 
-	inputDelta := nextInput[len(b.input):]
-	if !final && inputDelta == "" {
-		return "", false, nil
+// jsonStart is the opening of the JSON arguments text, once.
+func (b *grammarInputBuffer) jsonStart() string {
+	if b.started {
+		return ""
 	}
-
-	var sb strings.Builder
-	if !b.started {
-		sb.WriteByte('{')
-		sb.WriteString(jsQuote(b.property))
-		sb.WriteString(`:"`)
-		b.started = true
-	}
-	sb.WriteString(jsEscape(inputDelta))
-	b.input = nextInput
-	if final {
-		sb.WriteString(`"}`)
-		b.closed = true
-	}
-	return sb.String(), true, nil
+	b.started = true
+	return "{" + jsQuote(b.property) + `:"`
 }
 
 // grammarToolInput extracts the raw grammar input from a replayed tool call's
@@ -304,6 +321,35 @@ func inferGrammarInputProperty(tool ai.Tool) (string, error) {
 		return "", fmt.Errorf("grammar constrained sampling property %s must have type string", inputProperty)
 	}
 	return inputProperty, nil
+}
+
+// prefersJSONSchemaStrictSampling reports whether a tool asks for strict
+// JSON-schema sampling only when possible (`strict: "prefer"`). pi d4d53612
+// inlines it, 842c7317 names it here.
+func prefersJSONSchemaStrictSampling(tool ai.Tool) bool {
+	config := tool.ConstrainedSampling
+	return config != nil && config.Type == ai.ConstrainedSamplingJSONSchema && config.Strict == ai.ConstrainedSamplingPrefer
+}
+
+// strictToolLimitErrorMessages are the messages Claude rejects a request with
+// when its strict tools exceed the provider's limits. Observed limits: 20
+// strict tools, and 16 optional or union-typed parameters across all strict
+// tools (pi d4d53612, shared since 842c7317).
+var strictToolLimitErrorMessages = []string{
+	"The compiled grammar is too large",
+	"Too many strict tools (",
+	"Schemas contains too many parameters with union types (",
+}
+
+// isStrictToolLimitErrorMessage reports whether a provider error message says
+// the request's strict tools exceed the provider's limits.
+func isStrictToolLimitErrorMessage(message string) bool {
+	for _, limit := range strictToolLimitErrorMessages {
+		if strings.Contains(message, limit) {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveJSONSchemaStrictSampling reports whether a tool should be sent with

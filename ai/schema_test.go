@@ -452,6 +452,23 @@ func TestKeywordRoundTrip(t *testing.T) {
 	}
 }
 
+// The tuple form of items (an array of schemas), which the typed field cannot
+// hold, travels as written; it used to be dropped.
+func TestItemsTupleFormRoundTrips(t *testing.T) {
+	src := `{"type":"array","items":[{"type":"string"},{"const":1}]}`
+	var s Schema
+	if err := json.Unmarshal([]byte(src), &s); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != src {
+		t.Fatalf("round trip = %s, want %s", raw, src)
+	}
+}
+
 // TestSchemaCloneNoAliasing: Clone promises that nothing reachable from the
 // copy aliases the receiver. The fixture must populate every reference-typed
 // field (pointer/map/slice/any) with a non-zero value — the test fails on any
@@ -577,5 +594,16 @@ func TestSchemaRoundTripPreservesOrder(t *testing.T) {
 	raw2, _ := json.Marshal(&back)
 	if string(raw) != string(raw2) {
 		t.Fatalf("round-trip changed schema:\n %s\n %s", raw, raw2)
+	}
+}
+
+// pi's validation.test.ts case for #10897: malformed arguments text is
+// reported, instead of the empty arguments it left being validated.
+func TestValidateToolArgumentsReportsMalformedArguments(t *testing.T) {
+	tool := Tool{Name: "echo", Description: "Echo tool", Parameters: Object(Prop("value", String()))}
+	toolCall := ToolCall{ID: "tool-1", Name: "echo", Arguments: map[string]any{}, ArgumentsError: "Unexpected token"}
+	_, err := ValidateToolArguments(tool, toolCall)
+	if err == nil || err.Error() != `Invalid arguments for tool "echo": Unexpected token` {
+		t.Fatalf("err = %v", err)
 	}
 }

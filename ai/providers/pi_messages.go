@@ -49,6 +49,13 @@ type PiMessagesOptions struct {
 // of PiMessagesEvent.
 type piMessagesEvent struct {
 	Type string
+	// primitive is a truthy frame that is a number, string or boolean, as
+	// String() writes it; pi's `"contentIndex" in event` throws a TypeError on
+	// it (since 89c921d8). Empty for an object or an array.
+	primitive string
+	// typeRaw is the raw `type` member, nil when absent, which the contentIndex
+	// check reads with `event.type.endsWith`.
+	typeRaw json.RawMessage
 	// contentIndex is the raw value the converter looks blocks up by (see
 	// piMessagesConverter.ref); nil when absent.
 	contentIndex json.RawMessage
@@ -76,7 +83,11 @@ type piMessagesEvent struct {
 	// only copies it when the field is present: an absent one leaves the
 	// message's own level standing rather than blanking it.
 	ProviderThinkingLevel *string
-	ErrorMessage          string
+	// ResponseModel is the concrete model the upstream provider reported,
+	// which the terminal events carry since pi 14c81184; a pointer for the
+	// same reason as ProviderThinkingLevel.
+	ResponseModel *string
+	ErrorMessage  string
 	// Rewrite is the details of the pi_messages_rewrite diagnostic, nil when
 	// the event carries no rewrite (see piMessagesRewriteDetails).
 	Rewrite ai.OrderedObject
@@ -89,7 +100,7 @@ type piMessagesEvent struct {
 // string, bool or int reads as absent unless it is that type (a count accepts
 // any finite number: the 10.0 a non-JavaScript backend writes is 10).
 func piMessagesEventOf(o rawObject) piMessagesEvent {
-	ev := piMessagesEvent{contentIndex: o["contentIndex"], delta: o["delta"], toolCall: o["toolCall"]}
+	ev := piMessagesEvent{typeRaw: o["type"], contentIndex: o["contentIndex"], delta: o["delta"], toolCall: o["toolCall"]}
 	ev.Type, _ = rawString(o["type"])
 	ev.Delta, _ = rawString(o["delta"])
 	ev.Content, _ = rawString(o["content"])
@@ -104,6 +115,9 @@ func piMessagesEventOf(o rawObject) piMessagesEvent {
 	ev.ResponseID, _ = rawString(o["responseId"])
 	if level, ok := rawString(o["providerThinkingLevel"]); ok {
 		ev.ProviderThinkingLevel = &level
+	}
+	if responseModel, ok := rawString(o["responseModel"]); ok {
+		ev.ResponseModel = &responseModel
 	}
 	ev.ErrorMessage, _ = rawString(o["errorMessage"])
 	ev.Rewrite = piMessagesRewriteDetails(o["rewrite"])
@@ -308,8 +322,9 @@ type piMessagesConverter struct {
 	named map[string]ai.Content
 	// holes counts the unset slots in the content (see start).
 	holes int
-	// toolJSON is pi's toolJson Map of each tool call's streamed arguments.
-	toolJSON map[piMessagesMapKey]string
+	// toolArguments is pi's toolArguments Map (f715a15c) of each tool call's
+	// streamed arguments.
+	toolArguments map[piMessagesMapKey]*ToolCallArgumentsStream
 	// events counts the converted events, which gives an object or array key
 	// the identity of the event that carried it.
 	events int
@@ -327,8 +342,8 @@ func newPiMessagesConverter(model *ai.Model) *piMessagesConverter {
 			StopReason: ai.StopPending,
 			Timestamp:  nowMillis(),
 		},
-		named:    map[string]ai.Content{},
-		toolJSON: map[piMessagesMapKey]string{},
+		named:         map[string]ai.Content{},
+		toolArguments: map[piMessagesMapKey]*ToolCallArgumentsStream{},
 	}
 }
 
@@ -512,6 +527,39 @@ func assignPiMessagesToolCall(block ai.Content, raw json.RawMessage) ai.Content 
 // types cannot hold; the port leaves the block as it is.
 func (c *piMessagesConverter) convert(ev piMessagesEvent) (ai.AssistantMessageEvent, error) {
 	c.events++
+	if ev.primitive != "" {
+		return ai.AssistantMessageEvent{}, fmt.Errorf("Cannot use 'in' operator to search for 'contentIndex' in %s", ev.primitive)
+	}
+	if ev.contentIndex != nil {
+		// The index comes from the wire and keys the content array: a huge one
+		// would make a sparse array of billions of holes, and __proto__ would
+		// reach Array.prototype in pi. A start adds the next block; any other
+		// event needs an existing one (pi 89c921d8).
+		// `event.type.endsWith("_start")` throws on a type that is not a
+		// string, with V8's TypeError for what it is.
+		switch jsonValueKind(ev.typeRaw) {
+		case '"':
+		case 0:
+			return ai.AssistantMessageEvent{}, errors.New("Cannot read properties of undefined (reading 'endsWith')")
+		case 'n':
+			return ai.AssistantMessageEvent{}, errors.New("Cannot read properties of null (reading 'endsWith')")
+		default:
+			return ai.AssistantMessageEvent{}, errors.New("event.type.endsWith is not a function")
+		}
+		limit := len(c.partial.Content) - 1
+		if strings.HasSuffix(ev.Type, "_start") {
+			limit = len(c.partial.Content)
+		}
+		value, _ := ai.DecodeOrderedValue(ev.contentIndex)
+		index, isNumber := value.(float64)
+		if !isNumber || index != math.Trunc(index) || index < 0 || index > float64(limit) {
+			shown, err := jstext.Stringify(value)
+			if err != nil {
+				shown = string(ev.contentIndex)
+			}
+			return ai.AssistantMessageEvent{}, fmt.Errorf("Invalid contentIndex %s in pi-messages %s event", shown, ev.Type)
+		}
+	}
 	switch ev.Type {
 	case "done":
 		c.partial.StopReason = ev.Reason
@@ -519,6 +567,9 @@ func (c *piMessagesConverter) convert(ev piMessagesEvent) (ai.AssistantMessageEv
 			c.partial.Usage = *ev.Usage
 		}
 		c.partial.ResponseID = ev.ResponseID
+		if ev.ResponseModel != nil {
+			c.partial.ResponseModel = *ev.ResponseModel
+		}
 		if ev.ProviderThinkingLevel != nil {
 			c.partial.ProviderThinkingLevel = *ev.ProviderThinkingLevel
 		}
@@ -531,6 +582,9 @@ func (c *piMessagesConverter) convert(ev piMessagesEvent) (ai.AssistantMessageEv
 		}
 		c.partial.ErrorMessage = ev.ErrorMessage
 		c.partial.ResponseID = ev.ResponseID
+		if ev.ResponseModel != nil {
+			c.partial.ResponseModel = *ev.ResponseModel
+		}
 		if ev.ProviderThinkingLevel != nil {
 			c.partial.ProviderThinkingLevel = *ev.ProviderThinkingLevel
 		}
@@ -620,29 +674,40 @@ func (c *piMessagesConverter) convert(ev piMessagesEvent) (ai.AssistantMessageEv
 		if err := c.start(r, ai.ToolCall{ID: ev.ID, Name: ev.ToolName, Arguments: map[string]any{}}); err != nil {
 			return ai.AssistantMessageEvent{}, err
 		}
-		c.toolJSON[c.mapKey(ev.contentIndex)] = ""
+		c.toolArguments[c.mapKey(ev.contentIndex)] = NewToolCallArgumentsStream()
 		return ai.AssistantMessageEvent{Type: ai.EventToolCallStart, ContentIndex: r.pushedIndex(), Partial: c.partial.Clone()}, nil
 	case "toolcall_delta":
-		// pi: the buffer `${toolJson.get(i) ?? ""}${event.delta}` is built and
-		// stored before `partial.content[i].arguments` is set from it.
-		piece, err := rawToString(ev.delta)
-		if err != nil {
-			return ai.AssistantMessageEvent{}, err
-		}
-		key := c.mapKey(ev.contentIndex)
-		j := c.toolJSON[key] + piece
-		c.toolJSON[key] = j
+		// pi f715a15c: a call with streamed arguments appends the delta and
+		// sets the block's arguments from them; a delta for any other index
+		// changes nothing.
 		r, err := c.ref(ev.contentIndex)
 		if err != nil {
 			return ai.AssistantMessageEvent{}, err
 		}
-		block := c.get(r)
-		if block == nil {
-			return ai.AssistantMessageEvent{}, setOnUndefined("arguments")
-		}
-		if tc, ok := block.(ai.ToolCall); ok {
-			tc.Arguments, tc.ArgumentsOrder = parseStreamingJSON(j)
-			c.set(r, tc)
+		if args := c.toolArguments[c.mapKey(ev.contentIndex)]; args != nil {
+			var m map[string]any
+			var order ai.OrderedObject
+			if piece, isString := rawString(ev.delta); isString {
+				m, order = args.Append(piece)
+			} else if ev.delta == nil || jsonValueKind(ev.delta) == 'n' {
+				// The parser reads `delta.length` of undefined or null.
+				piece, _ := rawToString(ev.delta)
+				return ai.AssistantMessageEvent{}, fmt.Errorf("Cannot read properties of %s (reading 'length')", piece)
+			} else {
+				piece, err := rawToString(ev.delta)
+				if err != nil {
+					return ai.AssistantMessageEvent{}, err
+				}
+				m, order = args.appendNonString(piece)
+			}
+			block := c.get(r)
+			if block == nil {
+				return ai.AssistantMessageEvent{}, setOnUndefined("arguments")
+			}
+			if tc, ok := block.(ai.ToolCall); ok {
+				tc.Arguments, tc.ArgumentsOrder = m, order
+				c.set(r, tc)
+			}
 		}
 		return ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: r.pushedIndex(), Delta: ev.Delta, Partial: c.partial.Clone()}, nil
 	case "toolcall_end":
@@ -656,7 +721,7 @@ func (c *piMessagesConverter) convert(ev piMessagesEvent) (ai.AssistantMessageEv
 		}
 		block = assignPiMessagesToolCall(block, ev.toolCall)
 		c.set(r, block)
-		delete(c.toolJSON, c.mapKey(ev.contentIndex))
+		delete(c.toolArguments, c.mapKey(ev.contentIndex))
 		var tc *ai.ToolCall
 		if v, ok := block.(ai.ToolCall); ok {
 			tc = &v
@@ -706,7 +771,38 @@ func decodePiMessagesEvent(data string) (ev piMessagesEvent, yielded bool, err e
 		var v any
 		return piMessagesEvent{}, false, json.Unmarshal([]byte(data), &v)
 	}
-	return piMessagesEvent{}, rawTruthy(json.RawMessage(data)), nil
+	if !rawTruthy(json.RawMessage(data)) {
+		return piMessagesEvent{}, false, nil
+	}
+	return piMessagesEvent{primitive: piMessagesPrimitiveString(data)}, true, nil
+}
+
+// piMessagesPrimitiveString is String() of a truthy JSON primitive — a
+// number, string or true — and "" for an array.
+func piMessagesPrimitiveString(data string) string {
+	value, err := ai.DecodeOrderedValue([]byte(data))
+	if err != nil {
+		return ""
+	}
+	switch v := value.(type) {
+	case string:
+		return v
+	case bool:
+		return "true"
+	case float64:
+		switch {
+		case math.IsInf(v, 1):
+			return "Infinity"
+		case math.IsInf(v, -1):
+			return "-Infinity"
+		}
+		text, err := jstext.Stringify(v)
+		if err != nil {
+			return ""
+		}
+		return text
+	}
+	return ""
 }
 
 // readPiMessagesEvents consumes the SSE body: frames are separated by "\n\n",
@@ -954,22 +1050,21 @@ func StreamPiMessages(ctx context.Context, model *ai.Model, req ai.TranscriptCon
 			fail(err)
 			return
 		}
-		// pi merges only providerHeadersToRecord(options.headers) — no attribution
-		// bundle, no model.headers — after the three fixed headers:
-		// `{authorization, accept, "content-type", ...record}`. The record folds
-		// names case-insensitively, so a marker deletes an earlier spelling of
-		// its name inside the record, but it cannot unset a fixed header, which
-		// is not part of the record. A record entry spelled exactly like a fixed
-		// header replaces it; one spelled differently is a second key that fetch
-		// comma-joins onto it (see applyAsRecord). headerObject carries the merge
-		// order so a consumer map holding two spellings of one name cannot let
-		// Go's map iteration pick the winner.
+		// pi (upstream adc5fa9f) builds ONE record:
+		// providerHeadersToRecord(getIdentityHeaders(model, identity),
+		// {authorization, accept, "content-type"}, options.headers) — no
+		// model.headers. The record folds names case-insensitively, so a
+		// consumer header of any spelling replaces a fixed or identity header
+		// and a marker deletes it. headerObject carries the merge order so a
+		// consumer map holding two spellings of one name cannot let Go's map
+		// iteration pick the winner.
 		o := &headerObject{}
+		mergeIdentityHeaders(o, model, opts.Identity)
+		o.set("authorization", "Bearer "+apiKey)
+		o.set("accept", "text/event-stream")
+		o.set("content-type", "application/json")
 		o.merge(opts.Headers)
-		if err := o.applyAsFetchInit(httpReq.Header,
-			recordEntry{"authorization", "Bearer " + apiKey},
-			recordEntry{"accept", "text/event-stream"},
-			recordEntry{"content-type", "application/json"}); err != nil {
+		if err := o.applyAsFetchInit(httpReq.Header); err != nil {
 			fail(err)
 			return
 		}

@@ -314,7 +314,7 @@ func TestAnthropicBetaOrderAcrossEverySource(t *testing.T) {
 		interleavedThinkingBeta,
 		serverSideFallbackBeta,
 		midConvoOutputConfigBeta, thinkingBindingBeta,
-		"mid-conversation-tool-changes-2026-07-01",
+		inlineToolsBeta,
 	}
 	if got := bodyStrings(t, params, "betas"); !reflect.DeepEqual(got, want) {
 		t.Fatalf("betas = %#v, want %#v", got, want)
@@ -381,9 +381,10 @@ func anthropicMidConvoModel() *ai.Model {
 	return m
 }
 
-// A managed-effort model always sends adaptive thinking with drop_block
-// binding, a literal `output_config.effort:"high"`, both new betas, and NEVER a
-// temperature — regardless of what thinking options the caller passed.
+// A managed-effort model sends adaptive thinking with drop_block binding, a
+// literal `output_config.effort:"low"`, both new betas, and NEVER a
+// temperature — whatever thinking options the caller passed, except disabled
+// thinking on a model that supports it (TestAnthropicOff…).
 func TestAnthropicMidConvoEffortRequestShape(t *testing.T) {
 	opts := apiKeyOptions("test-key")
 	temp := 0.7
@@ -402,10 +403,11 @@ func TestAnthropicMidConvoEffortRequestShape(t *testing.T) {
 	if !reflect.DeepEqual(body["thinking"], wantThinking) {
 		t.Fatalf("thinking = %#v, want %#v", body["thinking"], wantThinking)
 	}
-	// Literal "high", NOT options.effort: the per-turn effort rides in the
-	// trailing system message instead (upstream 64eeb82a4 buildParams).
-	if !reflect.DeepEqual(body["output_config"], map[string]any{"effort": "high"}) {
-		t.Fatalf("output_config = %#v, want {effort: high}", body["output_config"])
+	// A fixed literal, NOT options.effort: the per-turn effort rides in the
+	// trailing system message instead (upstream 64eeb82a4 buildParams). It is
+	// "low" since pi e3bc05e8, under any organization's effort cap.
+	if !reflect.DeepEqual(body["output_config"], map[string]any{"effort": "low"}) {
+		t.Fatalf("output_config = %#v, want {effort: low}", body["output_config"])
 	}
 	if _, present := body["temperature"]; present {
 		t.Fatalf("temperature must be suppressed on managed-effort models, got %#v", body["temperature"])

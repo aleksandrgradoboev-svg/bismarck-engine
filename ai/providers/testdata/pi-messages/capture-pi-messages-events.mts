@@ -33,6 +33,11 @@
 // (which the Go replay's status line carries too; a server's own phrase is
 // capture-pi-messages-status.mts's) and an application/json content type,
 // from the suite model's baseUrl, which the details' url shows.
+//
+// The tool-delta rows (numericToolDeltaExtendsOnlyTheText and the two that
+// follow it, f715a15c's ToolCallArgumentsStream) were added on 2026-10-28 and
+// the capture re-taken at the same 89c921d8, under the same node_modules:
+// every earlier row came out byte for byte as before.
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -246,6 +251,37 @@ const cases: Case[] = [
 			frame('{"type":"toolcall_delta","contentIndex":-0,"delta":",\\"c\\":3}"}') +
 			framed(done),
 	},
+	// A tool call's arguments stream through ToolCallArgumentsStream (f715a15c):
+	// a delta that is not a string adds its String() to the text but not to
+	// the partial arguments (the parser reads its length, which a number lacks),
+	// and the final text, here {"a":1}, is the toolcall_end's to replace...
+	{
+		name: "numericToolDeltaExtendsOnlyTheText",
+		sse:
+			framed(start) +
+			frame('{"type":"toolcall_start","contentIndex":0,"id":"t1","toolName":"read"}') +
+			frame('{"type":"toolcall_delta","contentIndex":0,"delta":"{\\"a\\":"}') +
+			frame('{"type":"toolcall_delta","contentIndex":0,"delta":1}') +
+			frame('{"type":"toolcall_delta","contentIndex":0,"delta":"}"}') +
+			framed(done),
+	},
+	// ...while an absent or null delta throws V8's TypeError reading it.
+	{
+		name: "nullToolDeltaFails",
+		sse:
+			framed(start) +
+			frame('{"type":"toolcall_start","contentIndex":0,"id":"t1","toolName":"read"}') +
+			frame('{"type":"toolcall_delta","contentIndex":0,"delta":null}') +
+			framed(done),
+	},
+	{
+		name: "missingToolDeltaFails",
+		sse:
+			framed(start) +
+			frame('{"type":"toolcall_start","contentIndex":0,"id":"t1","toolName":"read"}') +
+			frame('{"type":"toolcall_delta","contentIndex":0}') +
+			framed(done),
+	},
 	// toolcall_end is Object.assign: the end event's toolCall members replace
 	// the block's, and a member it lacks (here arguments) keeps the value the
 	// deltas built. A null member is assigned as null. An end with no toolCall
@@ -312,6 +348,25 @@ const cases: Case[] = [
 		sse:
 			framed(start) +
 			frame('{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"t1","name":"read","arguments":{}}}') +
+			framed(done),
+	},
+	// The contentIndex check (89c921d8) reads event.type.endsWith before the
+	// index: a type that is not a string throws V8's TypeError, whatever the
+	// index. A fractional index inside the bounds fails Number.isInteger.
+	{
+		name: "numberTypeWithAnIndexFails",
+		sse: framed(start) + frame('{"type":5,"contentIndex":0}') + framed(done),
+	},
+	{ name: "objectTypeWithAnIndexFails", sse: framed(start) + frame('{"type":{},"contentIndex":0}') + framed(done) },
+	{ name: "arrayTypeWithAnIndexFails", sse: framed(start) + frame('{"type":["text_start"],"contentIndex":0}') + framed(done) },
+	{ name: "trueTypeWithAnIndexFails", sse: framed(start) + frame('{"type":true,"contentIndex":0}') + framed(done) },
+	{
+		name: "fractionalIndexInsideTheBoundsFails",
+		sse:
+			framed(start) +
+			frame('{"type":"text_start","contentIndex":0}') +
+			frame('{"type":"text_start","contentIndex":1}') +
+			frame('{"type":"text_delta","contentIndex":0.5,"delta":"x"}') +
 			framed(done),
 	},
 	// The rewrite diagnostic's details are `{ ...rewrite }`: the spread lists
