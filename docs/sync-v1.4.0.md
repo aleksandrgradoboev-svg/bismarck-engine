@@ -38,10 +38,11 @@ tool-call arguments) last. "Not here" marks hunks of the commit that stay out.
 | `73f8de80` | HTTP 413 is request-size overflow for any provider (Copilot "failed to parse request") | `ai/overflow.go` | ported, with pi's Copilot case through the Responses error path; `\s` is JavaScript's and the "i" covers only "API error", so no Unicode fold reaches `\w` (checked against node). pi's coding-agent regression (`regressions/copilot-request-size-overflow`) has its counterpart in the durable harness, whose generation owns overflow compaction here: a Copilot 413 compacts and retries |
 | `4b994d5e` | repair invalid `\u` escapes in tool-call arguments | `ai/providers/partial_json.go` | to port |
 | `87f9a364` | report malformed final tool-call arguments instead of keeping the parsed prefix | `ai/validation.go`, providers | to port; not here: Bedrock, Mistral |
-| `34a8bb38` → `5ab7fe74` | images of error tool results for Anthropic: dropped, then kept again (net: keep, through `transform-messages`) | `ai/providers/anthropic.go`, `transform.go` | to port as the net change; not here: Bedrock |
-| `dc939913` | `off` thinking level on Claude Haiku 5.5 and Opus 5 | `ai/providers/anthropic.go` | to port; catalog half at regeneration |
-| `3bc6eeba` | hold Anthropic system updates past dropped assistant messages | `ai/providers/anthropic.go` | to port |
-| `e3bc05e8` | fixed low top-level effort with Anthropic per-message effort | `ai/providers/anthropic.go` | to port |
+| `34a8bb38` → `5ab7fe74` | images of error tool results for Anthropic: dropped, then kept again (net: keep, through `transform-messages`) | `ai/providers/anthropic.go`, `transform.go` | ported as the net change, with pi's two cases; not here: Bedrock |
+| `dc939913` | `off` thinking level on Claude Haiku 5.5 and Opus 5 | `ai/providers/anthropic.go` | ported, with pi's two request cases; the catalog case (which shipped models support `off`) waits for the catalog regeneration |
+| `3bc6eeba` | hold Anthropic system updates past dropped assistant messages | `ai/providers/anthropic.go` | ported, with pi's case; the engine's own whitespace-only case (`nativeEmptyAssistant`), whose capture at `9e05370b2` held the 400, is asserted again at `e3bc05e8` |
+| `e3bc05e8` | fixed low top-level effort with Anthropic per-message effort | `ai/providers/anthropic.go` | ported. The Anthropic request-body capture is reshot at `e3bc05e8` (`anthropic-native-e3bc05e8.json`); the same node_modules reproduces the old `9e05370b2` capture byte for byte |
+| `b271b0a5`, `d4d53612` (v1.2.0 range) | Anthropic mid-conversation tools defined inline (`inline-tools-2026-09-15`, `tool_definition`); one fallback to non-strict `prefer` tools on the provider's strict tool limits | `ai/providers/anthropic.go`, `ai/transcript.go` | ported with this batch: missed by the v1.2.0 triage (section 6). With `d4d53612`, the abort capture is reshot at `e3bc05e8`: an already-aborted signal now ends before `onPayload`, with undici's message |
 | `63035734` | thinking before text when a completions chunk carries both | `ai/providers/openai.go` | to port |
 | `60ac3bcc` | keep the prompt cache when the thinking level changes on OpenAI GPT-6 (new compat flag) | `ai/providers/openai_responses.go`, `compat.go` | to port |
 | `caa6967b` | keep the prompt cache across tool changes on Responses | `openai_responses.go`, `openai.go`, `ai/transcript.go` | to port; not here: Azure, Codex |
@@ -119,3 +120,10 @@ its own.
 - The groups come from sorting `git log --name-only` by path prefix, then checked by hand against
   the engine's packages; the script is not in the repository yet (task `bismarck-engine-sync`).
 - The next sync starts from `59ca40cf`.
+- **Missed in v1.2.0.** The v1.2.0 range (`5806068c2..06a46693`) has two commits to
+  `anthropic-messages.ts`, `b271b0a5` and `d4d53612`, and its triage lists neither; nothing in the
+  engine or `UPSTREAM.md` had them. They surfaced when the Anthropic capture was reshot at
+  `e3bc05e8` and nine of its bodies differed, and are ported with the Anthropic batch (section 2).
+  The rest of that range is not re-checked yet: a triage by path prefix can drop a core commit, so
+  the v1.2.0 list wants the same check per core file (`git log <range> -- <file>` against the
+  table).

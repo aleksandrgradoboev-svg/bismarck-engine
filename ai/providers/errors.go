@@ -262,6 +262,12 @@ func rawTruthy(raw json.RawMessage) bool {
 // top-level `message`, so makeMessage falls through to JSON.stringify(body) and
 // the result is `${status} {"type":"error",...}`, not the nested message.
 func anthropicSDKErrorMessage(status int, body []byte) string {
+	return anthropicAPIErrorMessage(status, body, true)
+}
+
+// anthropicAPIErrorMessage is anthropicSDKErrorMessage, with the body's text
+// truncated or, for checks that read the whole APIError.message as pi does, not.
+func anthropicAPIErrorMessage(status int, body []byte, truncate bool) string {
 	errText := string(body)
 	var errJSON any
 	// safeJSON: JSON.parse in a try, with no blank check of its own.
@@ -292,6 +298,8 @@ func anthropicSDKErrorMessage(status int, body []byte) string {
 	if msg == "" {
 		return fmt.Sprintf("%d status code (no body)", status)
 	}
-	msg = truncateErrorText(msg, maxProviderErrorBodyChars)
+	if truncate {
+		msg = truncateErrorText(msg, maxProviderErrorBodyChars)
+	}
 	return fmt.Sprintf("%d %s", status, msg)
 }
