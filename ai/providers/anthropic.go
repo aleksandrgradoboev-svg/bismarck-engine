@@ -2161,15 +2161,19 @@ func anthropicClientHeaders(model *ai.Model, opts *AnthropicOptions, oauth bool,
 	if parsed, ok := sdkCustomHeaders("ANTHROPIC_CUSTOM_HEADERS"); ok {
 		o = parsed
 	}
-	o.merge(piUserAgentHeaders())
+	// pi createClient: `mergeHeaders(getIdentityHeaders(model, identity),
+	// {accept, …}, …)` — the identity's User-Agent and attribution come
+	// first, so the provider auth headers, model.Headers and opts.Headers all
+	// override them. OpenCode's session header sits with them (attribution.go).
+	// The OAuth branch sends Claude Code's identity instead of the client's
+	// (pi 04a93bad), so it gets neither: with no "User-Agent" slot, a
+	// consumer header of that spelling lands after claude-cli's and wins.
+	if !oauth {
+		mergeIdentityHeaders(o, model, opts.Identity)
+	}
+	mergeOpenCodeSession(o, model, opts.SessionID)
 	o.set("accept", "application/json")
 	o.set("anthropic-dangerous-direct-browser-access", "true")
-
-	// pi mergeProviderAttributionHeaders (sdk.ts) puts the attribution bundle at
-	// the bottom of the precedence stack: emit session + default attribution
-	// first so the provider auth headers, model.Headers, and opts.Headers all
-	// override them.
-	applyAttributionDefaults(o.set, model, opts.SessionID)
 
 	compat := getAnthropicCompat(model)
 

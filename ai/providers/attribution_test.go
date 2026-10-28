@@ -5,28 +5,35 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/ai"
 )
 
-// Provider attribution header tests. Faithful to pi
-// core/provider-attribution.ts at upstream 83cbfc65 (which removed the Vercel AI
-// Gateway branch). The request-body differential tests do not cover headers, so
-// these assert the exact header names + values land on the outgoing request,
-// across each API/provider pi applies attribution to, plus the precedence rule
-// (consumer opts.Headers override the defaults).
+// Provider attribution on the wire. pi moved attribution from the coding
+// agent (core/provider-attribution.ts) into pi-ai's request identity
+// (upstream adc5fa9f, 04a93bad): these assert that the identity's headers
+// land on the outgoing request for each API, below model.Headers and the
+// consumer's headers. The mapping itself is unit-tested in
+// ai/identity_test.go.
 
 const attrDoneSSE = "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
 
+// piIdentity attributes requests to pi, as pi's agent loop does by default.
+func piIdentity() *ai.ClientIdentity {
+	attribution := ai.PIAttribution
+	return &ai.ClientIdentity{Attribution: &attribution}
+}
+
+func attributedOptions(headers ai.ProviderHeaders) ai.ProviderRequestOptions {
+	return ai.ProviderRequestOptions{APIKey: "k", Headers: headers, Identity: piIdentity()}
+}
+
 // captureOpenAICompletionsHeaders runs the openai-completions provider against a
-// stub server and returns the request headers. The model's Provider drives
-// attribution; BaseURL is overwritten with the test server so the request is
-// actually sent (host-based detection is unit-tested separately below).
+// stub server, attributed to pi, and returns the request headers. The model's
+// Provider drives attribution; BaseURL is the test server.
 func captureOpenAICompletionsHeaders(t *testing.T, provider ai.ProviderId, sessionID string, optsHeaders ai.ProviderHeaders) http.Header {
 	t.Helper()
-	t.Setenv("PI_TELEMETRY", "1")
 	var got http.Header
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r.Header.Clone()
@@ -38,7 +45,7 @@ func captureOpenAICompletionsHeaders(t *testing.T, provider ai.ProviderId, sessi
 		ID: provider + "-test", Api: ai.APIOpenAICompletions, Provider: provider, BaseURL: server.URL,
 		Input: []string{"text"}, MaxTokens: 4096,
 	}
-	opts := &OpenAIOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "k", Headers: optsHeaders}, SessionID: sessionID}}
+	opts := &OpenAIOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: attributedOptions(optsHeaders), SessionID: sessionID}}
 	StreamOpenAICompletions(context.Background(), model, ai.NormalizeContext(ai.Context{Messages: []ai.Message{ai.NewUserText("hi", 1)}}), opts).Result()
 	return got
 }
@@ -76,11 +83,13 @@ func TestAttributionNvidiaNim(t *testing.T) {
 	}
 }
 
-func TestAttributionCloudflare(t *testing.T) {
+// adc5fa9f dropped the Cloudflare branch: Cloudflare requests carry the
+// identity's User-Agent like every other, not "pi-coding-agent".
+func TestAttributionCloudflareSendsTheIdentityUserAgent(t *testing.T) {
 	for _, p := range []ai.ProviderId{"cloudflare-workers-ai", "cloudflare-ai-gateway"} {
 		h := captureOpenAICompletionsHeaders(t, p, "", nil)
-		if got := h.Get("User-Agent"); got != "pi-coding-agent" {
-			t.Fatalf("provider %s: User-Agent = %q, want pi-coding-agent", p, got)
+		if got, want := h.Get("User-Agent"), ai.FormatUserAgent(piIdentity()); got != want {
+			t.Fatalf("provider %s: User-Agent = %q, want %q", p, got, want)
 		}
 	}
 }
@@ -95,14 +104,15 @@ func TestAttributionOpenCodeSessionHeaders(t *testing.T) {
 	}
 }
 
-// pi getSessionHeaders is gated on a sessionId being present.
+// The session header needs a session id; x-opencode-client is attribution
+// now and does not (pi getAttributionHeaders).
 func TestAttributionOpenCodeNoSessionWithoutID(t *testing.T) {
 	h := captureOpenAICompletionsHeaders(t, "opencode", "", nil)
 	if got := h.Get("x-opencode-session"); got != "" {
 		t.Fatalf("x-opencode-session must be absent without a session id, got %q", got)
 	}
-	if got := h.Get("x-opencode-client"); got != "" {
-		t.Fatalf("x-opencode-client must be absent without a session id, got %q", got)
+	if got := h.Get("x-opencode-client"); got != "pi" {
+		t.Fatalf("x-opencode-client = %q, want pi", got)
 	}
 }
 
@@ -116,26 +126,31 @@ func TestAttributionAbsentForUnattributedProvider(t *testing.T) {
 	}
 }
 
-// pi gates the default attribution headers on install telemetry; PI_TELEMETRY=0
-// disables them. Session headers are independent of telemetry (getSessionHeaders
-// is not gated), so they still flow.
-func TestAttributionTelemetryDisabled(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "0")
-	var got http.Header
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r.Header.Clone()
-		w.Header().Set("content-type", "text/event-stream")
-		io.WriteString(w, attrDoneSSE)
-	}))
-	defer server.Close()
-	model := &ai.Model{ID: "or", Api: ai.APIOpenAICompletions, Provider: "openrouter", BaseURL: server.URL, MaxTokens: 4096}
-	opts := &OpenAIOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "k"}}}
-	StreamOpenAICompletions(context.Background(), model, ai.NormalizeContext(ai.Context{Messages: []ai.Message{ai.NewUserText("hi", 1)}}), opts).Result()
-	if v := got.Get("HTTP-Referer"); v != "" {
-		t.Fatalf("HTTP-Referer must be absent when telemetry disabled, got %q", v)
-	}
-	if v := got.Get("X-OpenRouter-Title"); v != "" {
-		t.Fatalf("X-OpenRouter-Title must be absent when telemetry disabled, got %q", v)
+// Without an identity (pi-ai's default) nothing is attributed, and the
+// OpenCode session header, which is not attribution, still flows.
+func TestAttributionOffWithoutIdentity(t *testing.T) {
+	for _, provider := range []ai.ProviderId{"openrouter", "nvidia", "opencode"} {
+		var got http.Header
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got = r.Header.Clone()
+			w.Header().Set("content-type", "text/event-stream")
+			io.WriteString(w, attrDoneSSE)
+		}))
+		model := &ai.Model{ID: "m", Api: ai.APIOpenAICompletions, Provider: provider, BaseURL: server.URL, MaxTokens: 4096}
+		opts := &OpenAIOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "k"}, SessionID: "sess"}}
+		StreamOpenAICompletions(context.Background(), model, ai.NormalizeContext(ai.Context{Messages: []ai.Message{ai.NewUserText("hi", 1)}}), opts).Result()
+		server.Close()
+		for _, k := range []string{"HTTP-Referer", "X-OpenRouter-Title", "X-OpenRouter-Categories", "X-BILLING-INVOKE-ORIGIN", "x-opencode-client"} {
+			if v := got.Get(k); v != "" {
+				t.Fatalf("%s: %s = %q without an identity", provider, k, v)
+			}
+		}
+		if v := got.Get("x-opencode-session"); (provider == "opencode") != (v == "sess") {
+			t.Fatalf("%s: x-opencode-session = %q", provider, v)
+		}
+		if v := got.Get("User-Agent"); v != ai.FormatUserAgent(nil) {
+			t.Fatalf("%s: User-Agent = %q, want the default identity's", provider, v)
+		}
 	}
 }
 
@@ -167,7 +182,6 @@ func TestAttributionOptsHeadersOverrideDefaults(t *testing.T) {
 // fix: a model whose Headers set HTTP-Referer to a custom value on an openrouter
 // model must win over the https://pi.dev default.
 func TestAttributionModelHeadersOverrideDefaults(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "1")
 	var got http.Header
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r.Header.Clone()
@@ -179,7 +193,7 @@ func TestAttributionModelHeadersOverrideDefaults(t *testing.T) {
 		ID: "or", Api: ai.APIOpenAICompletions, Provider: "openrouter", BaseURL: server.URL, MaxTokens: 4096,
 		Headers: ai.ProviderHeaders{"HTTP-Referer": strPtr("https://custom.example")},
 	}
-	opts := &OpenAIOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "k"}}}
+	opts := &OpenAIOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: attributedOptions(nil)}}
 	StreamOpenAICompletions(context.Background(), model, ai.NormalizeContext(ai.Context{Messages: []ai.Message{ai.NewUserText("hi", 1)}}), opts).Result()
 	if v := got.Get("HTTP-Referer"); v != "https://custom.example" {
 		t.Fatalf("model.Headers must override attribution default: HTTP-Referer = %q, want https://custom.example", v)
@@ -193,13 +207,12 @@ func TestAttributionModelHeadersOverrideDefaults(t *testing.T) {
 // Same precedence rule for the Anthropic API path: model.Headers override an
 // attribution default (HTTP-Referer on an openrouter-routed Anthropic model).
 func TestAttributionAnthropicModelHeadersOverrideDefaults(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "1")
 	model := &ai.Model{
 		ID: "claude", Api: ai.APIAnthropicMessages, Provider: "openrouter", MaxTokens: 4096,
 		Headers: ai.ProviderHeaders{"HTTP-Referer": strPtr("https://custom.example")},
 	}
 	req := ai.Context{Messages: []ai.Message{ai.NewUserText("hi", 1)}}
-	h, _ := anthropicCapture(t, model, req, &AnthropicOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "k"}}}, anthropicSSE)
+	h, _ := anthropicCapture(t, model, req, &AnthropicOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: attributedOptions(nil)}}, anthropicSSE)
 	if v := h.Get("HTTP-Referer"); v != "https://custom.example" {
 		t.Fatalf("model.Headers must override attribution default: HTTP-Referer = %q, want https://custom.example", v)
 	}
@@ -226,7 +239,6 @@ func TestAttributionOptsHeadersOverrideSessionHeaders(t *testing.T) {
 // 83cbfc65: vercel-ai-gateway no longer receives attribution on any API —
 // confirm the responses path also emits no attribution headers.
 func TestAttributionResponsesVercelNone(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "1")
 	var got http.Header
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r.Header.Clone()
@@ -236,7 +248,7 @@ func TestAttributionResponsesVercelNone(t *testing.T) {
 	defer server.Close()
 	model := &ai.Model{ID: "m", Api: ai.APIOpenAIResponses, Provider: "vercel-ai-gateway", BaseURL: server.URL, MaxTokens: 4096}
 	StreamOpenAIResponses(context.Background(), model, ai.NormalizeContext(ai.Context{Messages: []ai.Message{ai.NewUserText("hi", 1)}}),
-		&OpenAIResponsesOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "k"}}}).
+		&OpenAIResponsesOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: attributedOptions(nil)}}).
 		Result()
 	if got.Get("http-referer") != "" || got.Get("x-title") != "" {
 		t.Fatalf("responses vercel attribution should be absent: http-referer=%q x-title=%q", got.Get("http-referer"), got.Get("x-title"))
@@ -244,10 +256,9 @@ func TestAttributionResponsesVercelNone(t *testing.T) {
 }
 
 func TestAttributionAnthropicOpenRouter(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "1")
 	model := &ai.Model{ID: "claude", Api: ai.APIAnthropicMessages, Provider: "openrouter", MaxTokens: 4096}
 	req := ai.Context{Messages: []ai.Message{ai.NewUserText("hi", 1)}}
-	h, _ := anthropicCapture(t, model, req, &AnthropicOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "k"}}}, anthropicSSE)
+	h, _ := anthropicCapture(t, model, req, &AnthropicOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: attributedOptions(nil)}}, anthropicSSE)
 	if h.Get("HTTP-Referer") != "https://pi.dev" || h.Get("X-OpenRouter-Title") != "pi" {
 		t.Fatalf("anthropic openrouter attribution wrong: HTTP-Referer=%q X-OpenRouter-Title=%q",
 			h.Get("HTTP-Referer"), h.Get("X-OpenRouter-Title"))
@@ -256,7 +267,6 @@ func TestAttributionAnthropicOpenRouter(t *testing.T) {
 
 // 83cbfc65: the google path likewise emits no attribution for vercel-ai-gateway.
 func TestAttributionGoogleVercelNone(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "1")
 	var got http.Header
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r.Header.Clone()
@@ -266,88 +276,9 @@ func TestAttributionGoogleVercelNone(t *testing.T) {
 	defer server.Close()
 	model := &ai.Model{ID: "gemini", Api: ai.APIGoogleGenerativeAI, Provider: "vercel-ai-gateway", BaseURL: server.URL, MaxTokens: 4096}
 	StreamGoogle(context.Background(), model, ai.NormalizeContext(ai.Context{Messages: []ai.Message{ai.NewUserText("hi", 1)}}),
-		&GoogleOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "k"}}}).
+		&GoogleOptions{StreamOptions: ai.StreamOptions{ProviderRequestOptions: attributedOptions(nil)}}).
 		Result()
 	if got.Get("http-referer") != "" || got.Get("x-title") != "" {
 		t.Fatalf("google vercel attribution should be absent: http-referer=%q x-title=%q", got.Get("http-referer"), got.Get("x-title"))
-	}
-}
-
-// Host-based detection (pi matchesHost / isOpenRouterModel substring) is
-// unit-tested directly so the BaseURL is free to be a real provider host rather
-// than the test server.
-func TestAttributionHostDetection(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "1")
-	cases := []struct {
-		name    string
-		model   *ai.Model
-		wantKey string
-		wantVal string
-	}{
-		{"openrouter host", &ai.Model{Provider: "custom", BaseURL: "https://openrouter.ai/api/v1"}, "HTTP-Referer", "https://pi.dev"},
-		{"openrouter legacy substring", &ai.Model{Provider: "custom", BaseURL: "not-a-url-openrouter.ai"}, "X-OpenRouter-Title", "pi"},
-		{"nvidia host", &ai.Model{Provider: "custom", BaseURL: "https://integrate.api.nvidia.com/v1"}, "X-BILLING-INVOKE-ORIGIN", "Pi"},
-		{"cloudflare api host", &ai.Model{Provider: "custom", BaseURL: "https://api.cloudflare.com/x"}, "User-Agent", "pi-coding-agent"},
-		{"cloudflare gateway host", &ai.Model{Provider: "custom", BaseURL: "https://gateway.ai.cloudflare.com/x"}, "User-Agent", "pi-coding-agent"},
-		// 83cbfc65: vercel gateway host no longer produces attribution headers.
-		{"vercel gateway host (none)", &ai.Model{Provider: "custom", BaseURL: "https://ai-gateway.vercel.sh/v1"}, "http-referer", ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			h := getDefaultAttributionHeaders(tc.model)
-			if h[tc.wantKey] != tc.wantVal {
-				t.Fatalf("%s = %q, want %q", tc.wantKey, h[tc.wantKey], tc.wantVal)
-			}
-		})
-	}
-}
-
-// pi: NVIDIA models routed through OpenRouter/Vercel get the gateway's headers,
-// not NVIDIA's (provider/host takes precedence over the model id).
-func TestAttributionNvidiaModelThroughGateways(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "1")
-	or := getDefaultAttributionHeaders(&ai.Model{ID: "nvidia/nemotron", Provider: "openrouter", BaseURL: "https://openrouter.ai/api/v1"})
-	if or["HTTP-Referer"] != "https://pi.dev" {
-		t.Fatalf("openrouter HTTP-Referer = %q", or["HTTP-Referer"])
-	}
-	if _, ok := or["X-BILLING-INVOKE-ORIGIN"]; ok {
-		t.Fatalf("NVIDIA header must not leak through OpenRouter")
-	}
-	v := getDefaultAttributionHeaders(&ai.Model{ID: "nvidia/nemotron", Provider: "vercel-ai-gateway", BaseURL: "https://ai-gateway.vercel.sh/v1"})
-	if _, ok := v["X-BILLING-INVOKE-ORIGIN"]; ok {
-		t.Fatalf("NVIDIA header must not leak through Vercel AI Gateway")
-	}
-}
-
-// pi getSessionHeaders only fires for OpenCode targets, regardless of session id.
-func TestAttributionSessionHeadersGatedToOpenCode(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "1") // attribution is opt-in in bismarck-engine
-	if getSessionAttributionHeaders(&ai.Model{Provider: "openai"}, "sess") != nil {
-		t.Fatalf("session headers must be absent for non-opencode providers")
-	}
-	if getSessionAttributionHeaders(&ai.Model{Provider: "opencode-go"}, "sess")["x-opencode-client"] != "pi" {
-		t.Fatalf("opencode-go must receive session headers")
-	}
-	if getSessionAttributionHeaders(&ai.Model{Provider: "custom", BaseURL: "https://opencode.ai/zen/v1"}, "sess")["x-opencode-session"] != "sess" {
-		t.Fatalf("opencode.ai host must receive session headers")
-	}
-}
-
-// bismarck-engine: attribution is opt-in. With PI_TELEMETRY unset no provider
-// receives the default or the OpenCode session headers.
-func TestAttributionOffByDefault(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "")
-	os.Unsetenv("PI_TELEMETRY")
-	for _, m := range []*ai.Model{
-		{Provider: "openrouter", BaseURL: "https://openrouter.ai/api/v1"},
-		{Provider: "nvidia"},
-		{Provider: "cloudflare-workers-ai"},
-	} {
-		if h := getDefaultAttributionHeaders(m); h != nil {
-			t.Fatalf("%s: default attribution must be off, got %v", m.Provider, h)
-		}
-	}
-	if h := getSessionAttributionHeaders(&ai.Model{Provider: "opencode"}, "sess"); h != nil {
-		t.Fatalf("opencode session headers must be off, got %v", h)
 	}
 }

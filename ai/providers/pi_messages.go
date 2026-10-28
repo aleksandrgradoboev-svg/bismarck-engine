@@ -1038,22 +1038,21 @@ func StreamPiMessages(ctx context.Context, model *ai.Model, req ai.TranscriptCon
 			fail(err)
 			return
 		}
-		// pi merges only providerHeadersToRecord(options.headers) — no attribution
-		// bundle, no model.headers — after the three fixed headers:
-		// `{authorization, accept, "content-type", ...record}`. The record folds
-		// names case-insensitively, so a marker deletes an earlier spelling of
-		// its name inside the record, but it cannot unset a fixed header, which
-		// is not part of the record. A record entry spelled exactly like a fixed
-		// header replaces it; one spelled differently is a second key that fetch
-		// comma-joins onto it (see applyAsRecord). headerObject carries the merge
-		// order so a consumer map holding two spellings of one name cannot let
-		// Go's map iteration pick the winner.
+		// pi (upstream adc5fa9f) builds ONE record:
+		// providerHeadersToRecord(getIdentityHeaders(model, identity),
+		// {authorization, accept, "content-type"}, options.headers) — no
+		// model.headers. The record folds names case-insensitively, so a
+		// consumer header of any spelling replaces a fixed or identity header
+		// and a marker deletes it. headerObject carries the merge order so a
+		// consumer map holding two spellings of one name cannot let Go's map
+		// iteration pick the winner.
 		o := &headerObject{}
+		mergeIdentityHeaders(o, model, opts.Identity)
+		o.set("authorization", "Bearer "+apiKey)
+		o.set("accept", "text/event-stream")
+		o.set("content-type", "application/json")
 		o.merge(opts.Headers)
-		if err := o.applyAsFetchInit(httpReq.Header,
-			recordEntry{"authorization", "Bearer " + apiKey},
-			recordEntry{"accept", "text/event-stream"},
-			recordEntry{"content-type", "application/json"}); err != nil {
+		if err := o.applyAsFetchInit(httpReq.Header); err != nil {
 			fail(err)
 			return
 		}

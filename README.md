@@ -136,8 +136,11 @@ them: `import _ "github.com/aleksandrgradoboev-svg/bismarck-engine/ai/providers"
 
 ## Differences from pi
 
-- Provider attribution headers (`HTTP-Referer: https://pi.dev`, `X-OpenRouter-Title`,
-  `x-opencode-*`) are sent only when `PI_TELEMETRY` is truthy; pi sends them by default.
+- Requests are attributed to pi (`HTTP-Referer: https://pi.dev`, `X-OpenRouter-Title`,
+  `x-opencode-client`) only when a host asks: the agent loop's and the durable Harness's default
+  identities carry no attribution, and the coding session attributes only while `PI_TELEMETRY` is
+  truthy. pi's agent-core, durable and coding agent attribute by default. A host names itself with
+  `AgentOptions.Identity`, `harness.Options.Identity` or `coding.SessionOptions.Identity`.
 - The grep tool reports model-facing paths with forward slashes on every OS.
 - Project-local resources under `<cwd>/.pi` load only with `SessionOptions.TrustProject`, pi's
   answer for a host with no UI to ask the user.

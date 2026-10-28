@@ -157,16 +157,14 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 		// pi createClient (openai-completions.ts, upstream 87af49dec)
 		// builds ONE header object and hands it to the SDK as
 		// `defaultHeaders`; headerObject is that object, slots and all.
-		// It opens with pi's runtime user agent —
-		// `{"User-Agent": getPiUserAgent(), ...model.headers}` — so it is a
-		// default every later source outranks, xai included.
+		// It opens with the request identity's headers —
+		// `{...getIdentityHeaders(model, identity), ...model.headers}`
+		// (upstream adc5fa9f) — so the User-Agent and attribution are
+		// defaults every later source outranks, xai included. OpenCode's
+		// session header sits with them (attribution.go).
 		o := &headerObject{}
-		o.merge(piUserAgentHeaders())
-		// pi mergeProviderAttributionHeaders (sdk.ts) puts the attribution
-		// bundle at the bottom of the precedence stack: emit session +
-		// default attribution first so model.headers and options.headers
-		// override them.
-		applyAttributionDefaults(o.set, model, opts.SessionID)
+		mergeIdentityHeaders(o, model, opts.Identity)
+		mergeOpenCodeSession(o, model, opts.SessionID)
 		// Header-owned provider auth (pi resolves it in the auth layer and
 		// delivers it as options.headers, above attribution and below
 		// model/consumer headers).

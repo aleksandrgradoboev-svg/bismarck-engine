@@ -343,9 +343,12 @@ type AgentLoopConfig struct {
 	CacheRetention            ai.CacheRetention
 	Headers                   ai.ProviderHeaders
 	Metadata                  map[string]any
-	APIKey                    string
-	OnPayload                 func(payload any, model *ai.Model) (any, error)
-	OnResponse                func(resp ai.ProviderResponse, model *ai.Model) error
+	// Identity is the loop's request identity, merged over
+	// DefaultAgentIdentity (pi AgentLoopConfig.identity).
+	Identity   *ai.ClientIdentity
+	APIKey     string
+	OnPayload  func(payload any, model *ai.Model) (any, error)
+	OnResponse func(resp ai.ProviderResponse, model *ai.Model) error
 	// OnProviderStreamEvent is forwarded to the stream options as
 	// ai.StreamOptions.OnProviderStreamEvent.
 	OnProviderStreamEvent func(data any, model *ai.Model) error

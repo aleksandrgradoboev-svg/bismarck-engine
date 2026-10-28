@@ -103,7 +103,7 @@ func anthropicUAOptions(opts ai.ProviderRequestOptions) *AnthropicOptions {
 func TestPiUserAgentIsTheDefaultOnEveryAdapter(t *testing.T) {
 	t.Run("anthropic api key", func(t *testing.T) {
 		h := captureAnthropicHeaders(t, anthropicUAModel(), anthropicUAOptions(ai.ProviderRequestOptions{APIKey: "k"}))
-		wantUserAgent(t, h, piUserAgent())
+		wantUserAgent(t, h, ai.FormatUserAgent(nil))
 	})
 	// The ANTHROPIC_AUTH_TOKEN bearer branch (upstream 24e5cc04) sits ahead of
 	// the other three and merges the same client headers.
@@ -114,7 +114,7 @@ func TestPiUserAgentIsTheDefaultOnEveryAdapter(t *testing.T) {
 		if got := h.Get("authorization"); got != "Bearer my-auth-token" {
 			t.Fatalf("authorization = %q, want the bearer branch", got)
 		}
-		wantUserAgent(t, h, piUserAgent())
+		wantUserAgent(t, h, ai.FormatUserAgent(nil))
 	})
 	// The copilot branch, on a model that carries no catalog user agent of its
 	// own (the shipped ones do — see TestModelHeadersOverridePiUserAgent).
@@ -125,13 +125,13 @@ func TestPiUserAgentIsTheDefaultOnEveryAdapter(t *testing.T) {
 		if got := h.Get("authorization"); got != "Bearer gh-token" {
 			t.Fatalf("authorization = %q, want the copilot branch", got)
 		}
-		wantUserAgent(t, h, piUserAgent())
+		wantUserAgent(t, h, ai.FormatUserAgent(nil))
 	})
 	t.Run("openai-completions", func(t *testing.T) {
 		h := captureOpenAIHeaders(t, openAITestModel(), ai.StreamOptions{
 			ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "k"},
 		})
-		wantUserAgent(t, h, piUserAgent())
+		wantUserAgent(t, h, ai.FormatUserAgent(nil))
 	})
 	t.Run("openai-responses", func(t *testing.T) {
 		model := &ai.Model{ID: "gpt-5", Api: ai.APIOpenAIResponses, Provider: "openai",
@@ -139,7 +139,7 @@ func TestPiUserAgentIsTheDefaultOnEveryAdapter(t *testing.T) {
 		h := captureOpenAIResponsesHeaders(t, model, ai.StreamOptions{
 			ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "k"},
 		})
-		wantUserAgent(t, h, piUserAgent())
+		wantUserAgent(t, h, ai.FormatUserAgent(nil))
 	})
 	t.Run("google", func(t *testing.T) {
 		model := &ai.Model{ID: "gemini-2.5-flash", Api: ai.APIGoogleGenerativeAI, Provider: "google",
@@ -147,7 +147,7 @@ func TestPiUserAgentIsTheDefaultOnEveryAdapter(t *testing.T) {
 		h := captureGoogleHeaders(t, model, ai.StreamOptions{
 			ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "g-key"},
 		})
-		wantUserAgent(t, h, piUserAgent())
+		wantUserAgent(t, h, ai.FormatUserAgent(nil))
 	})
 	// xai is the interesting one on the openai adapters: it used to force pi's
 	// agent last; now it merely gets the same default as everyone else.
@@ -157,7 +157,7 @@ func TestPiUserAgentIsTheDefaultOnEveryAdapter(t *testing.T) {
 		h := captureOpenAIHeaders(t, model, ai.StreamOptions{
 			ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "xai-test-token"},
 		})
-		wantUserAgent(t, h, piUserAgent())
+		wantUserAgent(t, h, ai.FormatUserAgent(nil))
 	})
 	t.Run("xai responses", func(t *testing.T) {
 		model := &ai.Model{ID: "grok-4.5", Api: ai.APIOpenAIResponses, Provider: "xai",
@@ -165,7 +165,7 @@ func TestPiUserAgentIsTheDefaultOnEveryAdapter(t *testing.T) {
 		h := captureOpenAIResponsesHeaders(t, model, ai.StreamOptions{
 			ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "xai-test-token"},
 		})
-		wantUserAgent(t, h, piUserAgent())
+		wantUserAgent(t, h, ai.FormatUserAgent(nil))
 	})
 }
 
@@ -258,12 +258,15 @@ func TestOptionsHeadersOverridePiUserAgentAndModelHeaders(t *testing.T) {
 	// real client with the object mergeClientHeaders builds at 87af49dec:
 	// {"User-Agent": custom-agent} → wire `user-agent: claude-cli/<v>`,
 	// {"user-agent": custom-agent} → wire `user-agent: custom-agent`.
-	t.Run("anthropic oauth identity keeps the User-Agent slot", func(t *testing.T) {
+	// Since 04a93bad the OAuth branch has no client identity, so no
+	// "User-Agent" slot: that spelling is a new key after claude-cli's and
+	// wins too.
+	t.Run("anthropic oauth identity loses to the User-Agent spelling", func(t *testing.T) {
 		h := captureAnthropicHeaders(t, anthropicUAModel(), anthropicUAOptions(ai.ProviderRequestOptions{
 			APIKey:  "sk-ant-oat-token",
 			Headers: ai.ProviderHeaders{"User-Agent": strPtr("custom-client")},
 		}))
-		wantUserAgent(t, h, "claude-cli/"+claudeCodeVersion)
+		wantUserAgent(t, h, "custom-client")
 	})
 	t.Run("anthropic oauth identity loses to another spelling", func(t *testing.T) {
 		h := captureAnthropicHeaders(t, anthropicUAModel(), anthropicUAOptions(ai.ProviderRequestOptions{
@@ -341,7 +344,7 @@ func TestUserAgentMarkerBeatsPiDefault(t *testing.T) {
 		}))
 		// net/http supplies a transport agent once ours is gone, exactly as
 		// fetch does for pi; what must not survive is pi's default.
-		if got := h.Get("User-Agent"); got == piUserAgent() {
+		if got := h.Get("User-Agent"); got == ai.FormatUserAgent(nil) {
 			t.Fatalf("a marker must suppress pi's default user agent, got %q", got)
 		}
 	})
@@ -349,12 +352,18 @@ func TestUserAgentMarkerBeatsPiDefault(t *testing.T) {
 	// the seeded "User-Agent" and the claude-cli identity sits at a later slot,
 	// so cancelling the default leaves the identity standing — probe against
 	// @anthropic-ai/sdk 0.91.1: {"User-Agent": null} → `claude-cli/<v>`.
-	t.Run("anthropic oauth marker on the seed slot only", func(t *testing.T) {
+	// Since 04a93bad there is no seeded slot on the OAuth branch: the marker
+	// is the last slot of its name and deletes claude-cli's too, as the SDK's
+	// buildHeaders does (the headerObject model; not probed against the SDK
+	// for this case), so the transport's own User-Agent goes out.
+	t.Run("anthropic oauth marker deletes the identity", func(t *testing.T) {
 		h := captureAnthropicHeaders(t, anthropicUAModel(), anthropicUAOptions(ai.ProviderRequestOptions{
 			APIKey:  "sk-ant-oat-token",
 			Headers: ai.ProviderHeaders{"User-Agent": nil},
 		}))
-		wantUserAgent(t, h, "claude-cli/"+claudeCodeVersion)
+		if got := h.Get("User-Agent"); got == "claude-cli/"+claudeCodeVersion || got == ai.FormatUserAgent(nil) {
+			t.Fatalf("User-Agent = %q, want the marker to delete the identity", got)
+		}
 	})
 	t.Run("openai-completions", func(t *testing.T) {
 		model := &ai.Model{ID: "grok-custom", Api: ai.APIOpenAICompletions, Provider: "xai",
@@ -365,7 +374,7 @@ func TestUserAgentMarkerBeatsPiDefault(t *testing.T) {
 				Headers: ai.ProviderHeaders{"User-Agent": nil},
 			},
 		})
-		if got := h.Get("User-Agent"); got == piUserAgent() {
+		if got := h.Get("User-Agent"); got == ai.FormatUserAgent(nil) {
 			t.Fatalf("a marker must suppress pi's default user agent, got %q", got)
 		}
 	})
@@ -378,7 +387,7 @@ func TestUserAgentMarkerBeatsPiDefault(t *testing.T) {
 				Headers: ai.ProviderHeaders{"User-Agent": nil},
 			},
 		})
-		if got := h.Get("User-Agent"); got == piUserAgent() {
+		if got := h.Get("User-Agent"); got == ai.FormatUserAgent(nil) {
 			t.Fatalf("a marker must suppress pi's default user agent, got %q", got)
 		}
 	})
@@ -393,7 +402,7 @@ func TestUserAgentMarkerBeatsPiDefault(t *testing.T) {
 				Headers: ai.ProviderHeaders{"User-Agent": nil},
 			},
 		})
-		if got := h.Get("User-Agent"); got == piUserAgent() {
+		if got := h.Get("User-Agent"); got == ai.FormatUserAgent(nil) {
 			t.Fatalf("a marker on the same name must drop pi's default, got %q", got)
 		}
 	})
@@ -414,7 +423,7 @@ func TestUserAgentMarkerBeatsPiDefault(t *testing.T) {
 				Headers: ai.ProviderHeaders{"user-agent": nil},
 			},
 		})
-		if got := h.Get("User-Agent"); got == piUserAgent() {
+		if got := h.Get("User-Agent"); got == ai.FormatUserAgent(nil) {
 			t.Fatalf("a case-variant marker must drop pi's default, got %q", got)
 		}
 	})
@@ -439,20 +448,7 @@ func TestGoogleCaseVariantMarkerDeletesEarlierSource(t *testing.T) {
 	if values, present := h["X-Trace"]; present {
 		t.Fatalf("X-Trace = %q, want it absent: the later marker deletes the model's spelling", values)
 	}
-	wantUserAgent(t, h, piUserAgent())
-}
-
-// Cloudflare attribution is a separate surface and still outranks the default:
-// pi's host folds it into options.headers, which are spread after the seeded
-// agent, so `pi-coding-agent` reaches the wire rather than pi's runtime agent.
-func TestCloudflareAttributionUserAgentBeatsPiDefault(t *testing.T) {
-	t.Setenv("PI_TELEMETRY", "1")
-	model := &ai.Model{ID: "gemini-2.5-flash", Api: ai.APIGoogleGenerativeAI,
-		Provider: "cloudflare-workers-ai", Input: []string{"text"}, MaxTokens: 4096}
-	h := captureGoogleHeaders(t, model, ai.StreamOptions{
-		ProviderRequestOptions: ai.ProviderRequestOptions{APIKey: "g-key"},
-	})
-	wantUserAgent(t, h, "pi-coding-agent")
+	wantUserAgent(t, h, ai.FormatUserAgent(nil))
 }
 
 // The record path must not depend on Go map iteration order either. Two
@@ -461,7 +457,7 @@ func TestCloudflareAttributionUserAgentBeatsPiDefault(t *testing.T) {
 // "User-Agent", so it takes the last slot and the fold keeps it alone.
 func TestHeaderObjectRecordCaseCollisionIsDeterministic(t *testing.T) {
 	source := ai.ProviderHeaders{
-		"User-Agent": strPtr(piUserAgent()),
+		"User-Agent": strPtr(ai.FormatUserAgent(nil)),
 		"user-agent": strPtr("from-model"),
 		"X-Keep":     strPtr("keep"),
 		// A marker with no other spelling leaves nothing to write.
