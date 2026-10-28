@@ -1,5 +1,5 @@
 {
-	"sha": "16235fd93",
+	"sha": "e3bc05e8",
 	"cases": [
 		{
 			"name": "upstream/omitted uses the lowest supported level",
@@ -485,12 +485,39 @@
 			}
 		},
 		{
-			"name": "id/gemini 4 uses budgets",
+			"name": "id/gemini 4 uses levels",
 			"id": "gemini-4-pro",
 			"reasoning": "low",
 			"thinkingConfig": {
 				"includeThoughts": true,
-				"thinkingBudget": -1
+				"thinkingLevel": "LOW"
+			}
+		},
+		{
+			"name": "id/gemini 4 argon uses levels",
+			"id": "gemini-4-argon",
+			"reasoning": "medium",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "MEDIUM"
+			}
+		},
+		{
+			"name": "id/gemini two-digit major uses levels",
+			"id": "gemini-10-flash",
+			"reasoning": "low",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "LOW"
+			}
+		},
+		{
+			"name": "id/gemini 4 after a path prefix uses levels",
+			"id": "models/gemini-4-pro",
+			"reasoning": "low",
+			"thinkingConfig": {
+				"includeThoughts": true,
+				"thinkingLevel": "LOW"
 			}
 		},
 		{

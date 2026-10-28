@@ -3,7 +3,7 @@
 // the oracle behind TestGoogleThinkingConfigMatchesPi in this package.
 //
 //   node --experimental-strip-types capture-thinking-config.mts <extraction> <out.json> <sha>
-//   e.g. ... capture-thinking-config.mts <dir> thinking-config-16235fd93.json 16235fd93
+//   e.g. ... capture-thinking-config.mts <dir> thinking-config-e3bc05e8.json e3bc05e8
 //
 // <extraction> holds packages/ai at <sha> (`git archive <sha> packages/ai` from
 // the upstream clone) and a node_modules resolving pi-ai's dependencies (the npm
@@ -156,7 +156,11 @@ const cases: Case[] = [
 	{ name: "id/gemini 3 after a path prefix uses levels", id: "models/gemini-3-pro-preview", reasoning: "low" },
 	{ name: "id/gemini 3 two-digit minor uses levels", id: "gemini-3.10-flash-lite", reasoning: "low" },
 	{ name: "id/gemini 3 non-digit minor uses budgets", id: "gemini-3.x-pro", reasoning: "low" },
-	{ name: "id/gemini 4 uses budgets", id: "gemini-4-pro", reasoning: "low" },
+	// Gemini 4 and later use levels since 1692bba6 (budgets before it).
+	{ name: "id/gemini 4 uses levels", id: "gemini-4-pro", reasoning: "low" },
+	{ name: "id/gemini 4 argon uses levels", id: "gemini-4-argon", reasoning: "medium" },
+	{ name: "id/gemini two-digit major uses levels", id: "gemini-10-flash", reasoning: "low" },
+	{ name: "id/gemini 4 after a path prefix uses levels", id: "models/gemini-4-pro", reasoning: "low" },
 	{ name: "id/gemma 4 inside a longer name uses levels", id: "codegemma4", reasoning: "low" },
 ];
 
