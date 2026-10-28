@@ -3,7 +3,7 @@
 // behind parseStreamingJSON in this package (json.go, partial_json.go).
 //
 //   node --experimental-strip-types capture.mts <extraction> <out.json> <sha>
-//   e.g. ... capture.mts <dir> streaming-json-002fc8385.json 002fc8385
+//   e.g. ... capture.mts <dir> streaming-json-e3bc05e8.json e3bc05e8
 //
 // <extraction> holds packages/ai at <sha> (`git archive <sha> packages/ai`,
 // prefix kept) and a node_modules resolving its dependencies. partial-json there

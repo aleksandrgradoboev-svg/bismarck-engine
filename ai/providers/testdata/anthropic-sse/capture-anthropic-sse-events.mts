@@ -16,6 +16,13 @@
 // is in no published build yet. The model is the npm build's MODELS entry the
 // upstream suite uses (anthropic/claude-haiku-4-5).
 //
+// Re-captured at e3bc05e8 against the 1.4.0 build on 2026-10-28, with
+// e3bc05e8's lock (@anthropic-ai/sdk 0.129.0, partial-json 0.1.7). Calibrated
+// first: 49681e1b7 under the same node_modules and build reproduced the old
+// capture byte for byte but for the build's version. At e3bc05e8 every usage
+// cost carries totalFromProvider (7c22a93d), and the deletedIndex row's tool
+// call, whose arguments text is "undefined", carries argumentsError (87f9a364).
+//
 // Every row streams through the upstream suite's fake client
 // (anthropic-sse-parsing.test.ts createFakeAnthropicClient), so neither side
 // needs a key or the network — except an oauth row, which needs pi to create
@@ -314,7 +321,8 @@ const cases: Case[] = [
 	},
 	// content_block_stop deletes the block's index, so a later event with no
 	// index (undefined === undefined) finds that block: its partialJson, also
-	// deleted, is appended to as "undefined", which parses to no arguments.
+	// deleted, is appended to as "undefined", which parses to no arguments and,
+	// since 87f9a364, an argumentsError.
 	{
 		name: "deletedIndexMatchesAnEventWithoutOne",
 		sse: frames(

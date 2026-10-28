@@ -13,12 +13,14 @@ import (
 
 // combineUsage is pi's combineUsage: the sum of two usages, keeping the
 // optional token splits when either side reports them (in Go they are zero
-// when unreported, so summing keeps them).
+// when unreported, so summing keeps them). A sum is provider-reported only
+// when both totals are (pi 7c22a93d), and pi always writes that flag.
 func combineUsage(first, second ai.Usage) ai.Usage {
 	sum := first
 	addUsage(&sum, second)
 	sum.CacheWrite1h += second.CacheWrite1h
 	sum.Reasoning += second.Reasoning
+	sum.Cost.TotalFromProvider = ai.OptionalBoolOf(first.Cost.TotalFromProvider.IsTrue() && second.Cost.TotalFromProvider.IsTrue())
 	return sum
 }
 

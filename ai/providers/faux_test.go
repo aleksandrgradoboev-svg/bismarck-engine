@@ -177,13 +177,17 @@ func TestFauxProviderCachedCharactersUpToFirstDifference(t *testing.T) {
 	usage := func(u ai.Usage) [3]int { return [3]int{u.Input, u.CacheRead, u.CacheWrite} }
 
 	// Prompt texts: "user:hello world" (16 characters), then 16 + 2 + "user:next" (9) = 27.
-	complete("hello world")
-	if got := usage(complete("hello world", "next")); got != [3]int{3, 4, 3} {
-		t.Fatalf("extended: input, cacheRead, cacheWrite = %v, want [3 4 3]", got)
+	// Every prompt token is read from or written to the cache, so input is 0
+	// (pi f3fa8bd9).
+	if got := usage(complete("hello world")); got != [3]int{0, 0, 4} {
+		t.Fatalf("first: input, cacheRead, cacheWrite = %v, want [0 0 4]", got)
+	}
+	if got := usage(complete("hello world", "next")); got != [3]int{0, 4, 3} {
+		t.Fatalf("extended: input, cacheRead, cacheWrite = %v, want [0 4 3]", got)
 	}
 	// The first message now differs after "user:hello w" (12 characters): "user:hello wide" + 2 + 9 = 26.
-	if got := usage(complete("hello wide", "next")); got != [3]int{4, 3, 4} {
-		t.Fatalf("edited: input, cacheRead, cacheWrite = %v, want [4 3 4]", got)
+	if got := usage(complete("hello wide", "next")); got != [3]int{0, 3, 4} {
+		t.Fatalf("edited: input, cacheRead, cacheWrite = %v, want [0 3 4]", got)
 	}
 }
 

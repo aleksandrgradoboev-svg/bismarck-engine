@@ -49,6 +49,13 @@ type PiMessagesOptions struct {
 // of PiMessagesEvent.
 type piMessagesEvent struct {
 	Type string
+	// primitive is a truthy frame that is a number, string or boolean, as
+	// String() writes it; pi's `"contentIndex" in event` throws a TypeError on
+	// it (since 89c921d8). Empty for an object or an array.
+	primitive string
+	// typeRaw is the raw `type` member, nil when absent, which the contentIndex
+	// check reads with `event.type.endsWith`.
+	typeRaw json.RawMessage
 	// contentIndex is the raw value the converter looks blocks up by (see
 	// piMessagesConverter.ref); nil when absent.
 	contentIndex json.RawMessage
@@ -76,7 +83,11 @@ type piMessagesEvent struct {
 	// only copies it when the field is present: an absent one leaves the
 	// message's own level standing rather than blanking it.
 	ProviderThinkingLevel *string
-	ErrorMessage          string
+	// ResponseModel is the concrete model the upstream provider reported,
+	// which the terminal events carry since pi 14c81184; a pointer for the
+	// same reason as ProviderThinkingLevel.
+	ResponseModel *string
+	ErrorMessage  string
 	// Rewrite is the details of the pi_messages_rewrite diagnostic, nil when
 	// the event carries no rewrite (see piMessagesRewriteDetails).
 	Rewrite ai.OrderedObject
@@ -89,7 +100,7 @@ type piMessagesEvent struct {
 // string, bool or int reads as absent unless it is that type (a count accepts
 // any finite number: the 10.0 a non-JavaScript backend writes is 10).
 func piMessagesEventOf(o rawObject) piMessagesEvent {
-	ev := piMessagesEvent{contentIndex: o["contentIndex"], delta: o["delta"], toolCall: o["toolCall"]}
+	ev := piMessagesEvent{typeRaw: o["type"], contentIndex: o["contentIndex"], delta: o["delta"], toolCall: o["toolCall"]}
 	ev.Type, _ = rawString(o["type"])
 	ev.Delta, _ = rawString(o["delta"])
 	ev.Content, _ = rawString(o["content"])
@@ -104,6 +115,9 @@ func piMessagesEventOf(o rawObject) piMessagesEvent {
 	ev.ResponseID, _ = rawString(o["responseId"])
 	if level, ok := rawString(o["providerThinkingLevel"]); ok {
 		ev.ProviderThinkingLevel = &level
+	}
+	if responseModel, ok := rawString(o["responseModel"]); ok {
+		ev.ResponseModel = &responseModel
 	}
 	ev.ErrorMessage, _ = rawString(o["errorMessage"])
 	ev.Rewrite = piMessagesRewriteDetails(o["rewrite"])
@@ -512,6 +526,39 @@ func assignPiMessagesToolCall(block ai.Content, raw json.RawMessage) ai.Content 
 // types cannot hold; the port leaves the block as it is.
 func (c *piMessagesConverter) convert(ev piMessagesEvent) (ai.AssistantMessageEvent, error) {
 	c.events++
+	if ev.primitive != "" {
+		return ai.AssistantMessageEvent{}, fmt.Errorf("Cannot use 'in' operator to search for 'contentIndex' in %s", ev.primitive)
+	}
+	if ev.contentIndex != nil {
+		// The index comes from the wire and keys the content array: a huge one
+		// would make a sparse array of billions of holes, and __proto__ would
+		// reach Array.prototype in pi. A start adds the next block; any other
+		// event needs an existing one (pi 89c921d8).
+		// `event.type.endsWith("_start")` throws on a type that is not a
+		// string, with V8's TypeError for what it is.
+		switch jsonValueKind(ev.typeRaw) {
+		case '"':
+		case 0:
+			return ai.AssistantMessageEvent{}, errors.New("Cannot read properties of undefined (reading 'endsWith')")
+		case 'n':
+			return ai.AssistantMessageEvent{}, errors.New("Cannot read properties of null (reading 'endsWith')")
+		default:
+			return ai.AssistantMessageEvent{}, errors.New("event.type.endsWith is not a function")
+		}
+		limit := len(c.partial.Content) - 1
+		if strings.HasSuffix(ev.Type, "_start") {
+			limit = len(c.partial.Content)
+		}
+		value, _ := ai.DecodeOrderedValue(ev.contentIndex)
+		index, isNumber := value.(float64)
+		if !isNumber || index != math.Trunc(index) || index < 0 || index > float64(limit) {
+			shown, err := jstext.Stringify(value)
+			if err != nil {
+				shown = string(ev.contentIndex)
+			}
+			return ai.AssistantMessageEvent{}, fmt.Errorf("Invalid contentIndex %s in pi-messages %s event", shown, ev.Type)
+		}
+	}
 	switch ev.Type {
 	case "done":
 		c.partial.StopReason = ev.Reason
@@ -519,6 +566,9 @@ func (c *piMessagesConverter) convert(ev piMessagesEvent) (ai.AssistantMessageEv
 			c.partial.Usage = *ev.Usage
 		}
 		c.partial.ResponseID = ev.ResponseID
+		if ev.ResponseModel != nil {
+			c.partial.ResponseModel = *ev.ResponseModel
+		}
 		if ev.ProviderThinkingLevel != nil {
 			c.partial.ProviderThinkingLevel = *ev.ProviderThinkingLevel
 		}
@@ -531,6 +581,9 @@ func (c *piMessagesConverter) convert(ev piMessagesEvent) (ai.AssistantMessageEv
 		}
 		c.partial.ErrorMessage = ev.ErrorMessage
 		c.partial.ResponseID = ev.ResponseID
+		if ev.ResponseModel != nil {
+			c.partial.ResponseModel = *ev.ResponseModel
+		}
 		if ev.ProviderThinkingLevel != nil {
 			c.partial.ProviderThinkingLevel = *ev.ProviderThinkingLevel
 		}
@@ -706,7 +759,38 @@ func decodePiMessagesEvent(data string) (ev piMessagesEvent, yielded bool, err e
 		var v any
 		return piMessagesEvent{}, false, json.Unmarshal([]byte(data), &v)
 	}
-	return piMessagesEvent{}, rawTruthy(json.RawMessage(data)), nil
+	if !rawTruthy(json.RawMessage(data)) {
+		return piMessagesEvent{}, false, nil
+	}
+	return piMessagesEvent{primitive: piMessagesPrimitiveString(data)}, true, nil
+}
+
+// piMessagesPrimitiveString is String() of a truthy JSON primitive — a
+// number, string or true — and "" for an array.
+func piMessagesPrimitiveString(data string) string {
+	value, err := ai.DecodeOrderedValue([]byte(data))
+	if err != nil {
+		return ""
+	}
+	switch v := value.(type) {
+	case string:
+		return v
+	case bool:
+		return "true"
+	case float64:
+		switch {
+		case math.IsInf(v, 1):
+			return "Infinity"
+		case math.IsInf(v, -1):
+			return "-Infinity"
+		}
+		text, err := jstext.Stringify(v)
+		if err != nil {
+			return ""
+		}
+		return text
+	}
+	return ""
 }
 
 // readPiMessagesEvents consumes the SSE body: frames are separated by "\n\n",

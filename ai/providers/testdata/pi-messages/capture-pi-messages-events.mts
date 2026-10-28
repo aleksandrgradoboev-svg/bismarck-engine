@@ -314,6 +314,25 @@ const cases: Case[] = [
 			frame('{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"t1","name":"read","arguments":{}}}') +
 			framed(done),
 	},
+	// The contentIndex check (89c921d8) reads event.type.endsWith before the
+	// index: a type that is not a string throws V8's TypeError, whatever the
+	// index. A fractional index inside the bounds fails Number.isInteger.
+	{
+		name: "numberTypeWithAnIndexFails",
+		sse: framed(start) + frame('{"type":5,"contentIndex":0}') + framed(done),
+	},
+	{ name: "objectTypeWithAnIndexFails", sse: framed(start) + frame('{"type":{},"contentIndex":0}') + framed(done) },
+	{ name: "arrayTypeWithAnIndexFails", sse: framed(start) + frame('{"type":["text_start"],"contentIndex":0}') + framed(done) },
+	{ name: "trueTypeWithAnIndexFails", sse: framed(start) + frame('{"type":true,"contentIndex":0}') + framed(done) },
+	{
+		name: "fractionalIndexInsideTheBoundsFails",
+		sse:
+			framed(start) +
+			frame('{"type":"text_start","contentIndex":0}') +
+			frame('{"type":"text_start","contentIndex":1}') +
+			frame('{"type":"text_delta","contentIndex":0.5,"delta":"x"}') +
+			framed(done),
+	},
 	// The rewrite diagnostic's details are `{ ...rewrite }`: the spread lists
 	// array-index keys first, ascending, then the rest in wire order, at every
 	// depth, and JSON.stringify writes its numbers as JavaScript numbers — 10.0

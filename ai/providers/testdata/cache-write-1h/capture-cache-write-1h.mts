@@ -13,6 +13,12 @@
 // ~/.cache/pi-npm/0.87.1's. The adapter runs from SOURCE because no published
 // build carries 667fc3dd3 yet; re-capture against the first build that does.
 //
+// Re-captured at e3bc05e8 against the 1.4.0 build on 2026-10-28, with
+// e3bc05e8's lock (@anthropic-ai/sdk 0.129.0, partial-json 0.1.7). Calibrated
+// first: 8676a0dcd under the same node_modules and build reproduced the old
+// capture byte for byte but for the build's version. The only change at
+// e3bc05e8 is totalFromProvider: false on every cost (7c22a93d).
+//
 // The models are the npm build's MODELS entries — the catalog the port embeds
 // (ai/models_catalog.json) — and each row records the rates pi priced it at;
 // the Go test replays the row at those rates, so a later catalog regen cannot

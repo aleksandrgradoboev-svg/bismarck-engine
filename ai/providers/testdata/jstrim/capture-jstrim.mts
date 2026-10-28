@@ -4,7 +4,7 @@
 // jstrim_test.go in this package.
 //
 //   node --experimental-strip-types capture-jstrim.mts <extraction> <out.json> <sha>
-//   e.g. ... capture-jstrim.mts <dir> jstrim-2b0a123de.json 2b0a123de
+//   e.g. ... capture-jstrim.mts <dir> jstrim-e3bc05e8.json e3bc05e8
 //
 // <extraction> holds `git archive <sha> packages/ai package-lock.json` from the
 // upstream clone and a node_modules resolving pi-ai's dependencies (the npm
@@ -58,7 +58,8 @@ for (const name of ["@anthropic-ai/sdk", "openai", "@google/genai"]) {
 	// (packages/ai/node_modules/<name>, as openai is since ab30693d6) or the
 	// root one (node_modules/<name>). Where the lockfile nests a copy for
 	// pi-ai, pi-ai must resolve that one.
-	const resolvedKey = path.relative(extraction, dir);
+	// Lockfile keys use "/", which path.relative does not on Windows.
+	const resolvedKey = path.relative(extraction, dir).split(path.sep).join("/");
 	const key = resolvedKey.startsWith("..") || path.isAbsolute(resolvedKey) ? `node_modules/${name}` : resolvedKey;
 	const nestedKey = `packages/ai/node_modules/${name}`;
 	const locked = lock.packages[key];
@@ -207,7 +208,9 @@ const completionsModel = {
 	provider: "openai",
 };
 // The second assistant turn is another model's: transformMessages drops its
-// blank thinking and turns the rest into text before the converter runs.
+// thinking before the converter runs (since 91130942; before, it dropped the
+// blank thinking and turned the rest into text). The transform case below
+// covers the trim on the model's own turn.
 const completionsContext = {
 	systemPrompt: "base prompt",
 	messages: [
@@ -403,16 +406,17 @@ for (const [name, lark, regex] of grammarCases) {
 	}
 }
 
-// transformMessages on another model's turn: blank thinking is dropped, the
-// rest becomes text. Every converter then drops blank text too, so a request
-// body cannot tell a dropped block from a converted blank one.
+// transformMessages on the target model's own turn: blank unsigned thinking is
+// dropped, the rest kept. (Another model's thinking is dropped whole since
+// 91130942, so only the model's own turn still shows which blocks the trim
+// lets through.)
 const transform = transformMessages(
 	[
 		{ role: "user", content: "hi", timestamp: 1 },
 		assistant(
-			"anthropic-messages",
-			"anthropic",
-			"claude-sonnet-4-5",
+			completionsModel.api,
+			completionsModel.provider,
+			completionsModel.id,
 			[
 				{ type: "thinking", thinking: BOM },
 				{ type: "thinking", thinking: NEL },

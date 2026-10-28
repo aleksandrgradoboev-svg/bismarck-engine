@@ -596,3 +596,14 @@ func TestSchemaRoundTripPreservesOrder(t *testing.T) {
 		t.Fatalf("round-trip changed schema:\n %s\n %s", raw, raw2)
 	}
 }
+
+// pi's validation.test.ts case for #10897: malformed arguments text is
+// reported, instead of the empty arguments it left being validated.
+func TestValidateToolArgumentsReportsMalformedArguments(t *testing.T) {
+	tool := Tool{Name: "echo", Description: "Echo tool", Parameters: Object(Prop("value", String()))}
+	toolCall := ToolCall{ID: "tool-1", Name: "echo", Arguments: map[string]any{}, ArgumentsError: "Unexpected token"}
+	_, err := ValidateToolArguments(tool, toolCall)
+	if err == nil || err.Error() != `Invalid arguments for tool "echo": Unexpected token` {
+		t.Fatalf("err = %v", err)
+	}
+}

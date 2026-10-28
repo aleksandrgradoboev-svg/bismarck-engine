@@ -668,7 +668,8 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 						stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: indexOf(b), Delta: delta, Partial: output.Clone()})
 					}
 				} else {
-					b.args, b.argsOrder = parseStreamingJSON(b.partialJSON.String())
+					// The finished call is parsed strictly (pi 87f9a364).
+					b.args, b.argsOrder, b.argsError = parseToolCallArguments(b.partialJSON.String())
 				}
 				materialize()
 				tc := b.toContent().(ai.ToolCall)
@@ -1625,6 +1626,10 @@ func parseChunkUsage(raw any, model *ai.Model) (ai.Usage, error) {
 		TotalTokens: jsTokenCount(total),
 	}
 	ai.CalculateCost(model, &usage)
+	// OpenRouter adds billing fields to the streamed usage (pi cae8d69e).
+	if isOpenRouterModel(model) {
+		applyOpenRouterReportedCost(&usage, raw)
+	}
 	return usage, nil
 }
 

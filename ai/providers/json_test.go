@@ -99,7 +99,7 @@ func TestParseStreamingJSONDropsADanglingMemberLikePi(t *testing.T) {
 // from pi's parseStreamingJson at 002fc8385 with the partial-json its lockfile
 // pins: the arguments pi reads out of every prefix of tool-argument texts, and
 // out of single inputs.
-const streamingJSONCaptureFile = "testdata/streaming-json/streaming-json-002fc8385.json"
+const streamingJSONCaptureFile = "testdata/streaming-json/streaming-json-e3bc05e8.json"
 
 // parseStreamingJSON reads every prefix of a tool call's argument text as pi's
 // parseStreamingJson does — JSON.parse, its repair, partial-json 0.1.7's

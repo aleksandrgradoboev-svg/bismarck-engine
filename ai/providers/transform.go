@@ -180,24 +180,24 @@ func transformMessages(messages []ai.Message, model *ai.Model, normalizeToolCall
 		for _, block := range am.Content {
 			switch b := block.(type) {
 			case ai.ThinkingContent:
-				if b.Redacted {
-					if isSameModel {
-						content = append(content, b)
-					}
+				// Thinking from another model is dropped. Signatures and
+				// encrypted reasoning are only valid for the model that produced
+				// them, and readable thinking sent as plain text makes the new
+				// model treat it as part of the visible reply (pi 91130942,
+				// #10995).
+				if !isSameModel {
 					continue
 				}
-				if isSameModel && b.ThinkingSignature != "" {
+				// Keep redacted and signed blocks even if the thinking text is
+				// empty (OpenAI encrypted reasoning); they are needed for replay.
+				if b.Redacted || b.ThinkingSignature != "" {
 					content = append(content, b)
 					continue
 				}
 				if jstext.Trim(b.Thinking) == "" {
 					continue
 				}
-				if isSameModel {
-					content = append(content, b)
-				} else {
-					content = append(content, ai.TextContent{Text: b.Thinking})
-				}
+				content = append(content, b)
 			case ai.TextContent:
 				if isSameModel {
 					content = append(content, b)
