@@ -26,8 +26,7 @@ package providers
 // from a Cloudflare Workers runtime, which Go does not target, so nothing in
 // the port supplies one today. It is ported because it is public SDK surface
 // under pi-ai's "./api/*" subpath export — the same reason StreamOptions.Env
-// and ProviderRequestOptions.TelemetryContext are ported latent. See the
-// 2026-08-11 ruling in docs/UPSTREAM.md.
+// is ported latent. See the 2026-08-11 ruling in docs/UPSTREAM.md.
 //
 // pi's fetch-input polymorphism has no counterpart here. Its
 // createGatewayBindingFetch must reconcile two overlapping sources of truth

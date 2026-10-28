@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/aleksandrgradoboev-svg/bismarck-engine/internal/jstext"
+	"github.com/aleksandrgradoboev-svg/bismarck-engine/telemetry"
 )
 
 // Models runtime ported from pi packages/ai/src/models.ts (732bb161; facade
@@ -1525,6 +1526,16 @@ func (m *modelsImpl) applyAuth(
 
 func (m *modelsImpl) Stream(ctx context.Context, model *Model, req Context, opts *ModelsStreamOptions) *AssistantMessageEventStream {
 	transcript := NormalizeContext(req)
+	var parent telemetry.Span
+	if opts != nil {
+		parent = opts.Telemetry
+	}
+	return observeRequest(model, parent, "", false, func() *AssistantMessageEventStream {
+		return m.stream(ctx, model, transcript, opts)
+	})
+}
+
+func (m *modelsImpl) stream(ctx context.Context, model *Model, transcript TranscriptContext, opts *ModelsStreamOptions) *AssistantMessageEventStream {
 	if err := AssertChatModel(model); err != nil {
 		return ErrorStream(model, err)
 	}
@@ -1556,6 +1567,18 @@ func (m *modelsImpl) Complete(ctx context.Context, model *Model, req Context, op
 
 func (m *modelsImpl) StreamSimple(ctx context.Context, model *Model, req Context, opts *ModelsSimpleStreamOptions) *AssistantMessageEventStream {
 	transcript := NormalizeContext(req)
+	var parent telemetry.Span
+	var reasoning ThinkingLevel
+	if opts != nil {
+		parent = opts.Telemetry
+		reasoning = opts.Reasoning
+	}
+	return observeRequest(model, parent, reasoning, false, func() *AssistantMessageEventStream {
+		return m.streamSimple(ctx, model, transcript, opts)
+	})
+}
+
+func (m *modelsImpl) streamSimple(ctx context.Context, model *Model, transcript TranscriptContext, opts *ModelsSimpleStreamOptions) *AssistantMessageEventStream {
 	if err := AssertChatModel(model); err != nil {
 		return ErrorStream(model, err)
 	}
@@ -1586,6 +1609,16 @@ func (m *modelsImpl) CompleteSimple(ctx context.Context, model *Model, req Conte
 }
 
 func (m *modelsImpl) StreamDeferred(ctx context.Context, model *Model, handle DeferredHandle, opts *ModelsDeferredFetchOptions) *AssistantMessageEventStream {
+	var parent telemetry.Span
+	if opts != nil {
+		parent = opts.Telemetry
+	}
+	return observeRequest(model, parent, "", true, func() *AssistantMessageEventStream {
+		return m.streamDeferred(ctx, model, handle, opts)
+	})
+}
+
+func (m *modelsImpl) streamDeferred(ctx context.Context, model *Model, handle DeferredHandle, opts *ModelsDeferredFetchOptions) *AssistantMessageEventStream {
 	if err := AssertChatModel(model); err != nil {
 		return ErrorStream(model, err)
 	}

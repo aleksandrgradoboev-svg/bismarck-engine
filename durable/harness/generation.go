@@ -322,7 +322,7 @@ func requestGeneration(ctx context.Context, task *generationTask, rt *TaskRuntim
 	}
 	options := streamOptions(checkpoint.StreamOptions, sessionID, checkpoint.ThinkingLevel)
 	// The provider request is traced under the phase span.
-	options.SimpleStreamOptions.StreamOptions.TelemetryContext = telemetry.SpanFrom(ctx)
+	options.SimpleStreamOptions.StreamOptions.Telemetry = telemetry.SpanFrom(ctx)
 	message, err := streamResponse(ctx, rt, model, messages, options, checkpoint.Attempt)
 	if err != nil {
 		return err
@@ -379,7 +379,7 @@ func pollGeneration(ctx context.Context, task *generationTask, rt *TaskRuntime) 
 		return failNoModel(ctx, rt, checkpoint.Model)
 	}
 	options := &ai.ModelsDeferredFetchOptions{}
-	options.TelemetryContext = telemetry.SpanFrom(ctx)
+	options.Telemetry = telemetry.SpanFrom(ctx)
 	message := rt.Models().FetchDeferred(ctx, model, *checkpoint.Handle, options)
 	if message == nil {
 		return errors.New("Deferred fetch ended without a message")
@@ -766,7 +766,7 @@ func abortGeneration(ctx context.Context, task *generationTask, rt *TaskRuntime)
 	if checkpoint.Phase == phasePoll && checkpoint.Model != nil && checkpoint.Handle != nil {
 		if model := resolveModel(rt, *checkpoint.Model); model != nil {
 			options := &ai.ModelsDeferredCancelOptions{}
-			options.TelemetryContext = telemetry.SpanFrom(ctx)
+			options.Telemetry = telemetry.SpanFrom(ctx)
 			if err := rt.Models().CancelDeferred(ctx, model, *checkpoint.Handle, options); err != nil {
 				if reportErr := rt.Report(err, ReportFrom{Callback: durable.CallbackModels}); reportErr != nil {
 					return reportErr
