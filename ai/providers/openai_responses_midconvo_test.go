@@ -49,32 +49,54 @@ func nestedTools(t *testing.T, item map[string]any) []map[string]any {
 	return payloadItems(t, item, "tools")
 }
 
-func TestAnchorsOpenAIAdditionsAtTheirDeveloperMessage(t *testing.T) {
+// firstToolNames lists the first tool's name of each additional_tools item.
+func additionalToolsFirstNames(t *testing.T, input []map[string]any) []string {
+	t.Helper()
+	names := []string{}
+	for _, item := range input {
+		if item["type"] == "additional_tools" {
+			names = append(names, toolNames(nestedTools(t, item))[0])
+		}
+	}
+	return names
+}
+
+// "declares every OpenAI tool in additional_tools at its developer message"
+// (pi caa6967b).
+func TestDeclaresEveryOpenAIToolInAdditionalToolsAtItsDeveloperMessage(t *testing.T) {
 	model := gpt54(`{"supportsMidConvoSystemMessages":true,"supportsAdditionalTools":true}`)
 	body := captureStreamSimplePayload(t, model, transcriptAdditionContext())
 
-	if got := toolNames(payloadItems(t, body, "tools")); !slices.Equal(got, []string{"base_tool"}) {
-		t.Fatalf("tools = %v, want [base_tool]", got)
+	// A later additional_tools item cannot replace a top-level tool, so no tool
+	// is declared there.
+	if tools, present := body["tools"]; present {
+		t.Fatalf("tools = %v, want undefined", tools)
 	}
 	input := payloadItems(t, body, "input")
-	var additional []string
+	if got := additionalToolsFirstNames(t, input); !slices.Equal(got, []string{"base_tool", "late_tool"}) {
+		t.Fatalf("additional_tools = %v, want [base_tool late_tool]", got)
+	}
+	// The incremental notice keeps models from reading a later item as the
+	// complete tool set.
+	var shape []string
 	for _, item := range input {
-		if item["type"] == "additional_tools" {
-			additional = toolNames(nestedTools(t, item))
-			break
+		switch {
+		case item["type"] != nil:
+			shape = append(shape, item["type"].(string))
+		default:
+			if s, ok := item["content"].(string); ok {
+				if strings.Contains(s, "incremental tools update") {
+					s = "<incremental notice>"
+				}
+				shape = append(shape, s)
+			} else {
+				shape = append(shape, "<array>")
+			}
 		}
 	}
-	if !slices.Equal(additional, []string{"late_tool"}) {
-		t.Fatalf("additional_tools tools = %v, want [late_tool]", additional)
-	}
-	var developer []any
-	for _, item := range input {
-		if _, typed := item["type"]; item["role"] == "developer" && !typed {
-			developer = append(developer, item["content"])
-		}
-	}
-	if !slices.Equal(developer, []any{"base prompt", "updated guidance"}) {
-		t.Fatalf("developer contents = %v, want [base prompt, updated guidance]", developer)
+	want := []string{"additional_tools", "base prompt", "<array>", "<incremental notice>", "additional_tools", "updated guidance"}
+	if !slices.Equal(shape, want) {
+		t.Fatalf("input = %v, want %v", shape, want)
 	}
 }
 
@@ -104,29 +126,27 @@ func TestMapsSystemMessageAdditionsIntoSyntheticToolSearch(t *testing.T) {
 	}
 }
 
-func TestFallsBackToTheCompleteCurrentToolStateWhenRemovalsAreUnsupported(t *testing.T) {
+// "announces OpenAI removals as text" (pi caa6967b).
+func TestAnnouncesOpenAIRemovalsAsText(t *testing.T) {
 	model := gpt54(`{"supportsMidConvoSystemMessages":true,"supportsAdditionalTools":true}`)
 	body := captureStreamSimplePayload(t, model, transcriptChangesContext())
 
-	if got := toolNames(payloadItems(t, body, "tools")); !slices.Equal(got, []string{"late_tool"}) {
-		t.Fatalf("tools = %v, want [late_tool]", got)
+	if tools, present := body["tools"]; present {
+		t.Fatalf("tools = %v, want undefined", tools)
 	}
 	input := payloadItems(t, body, "input")
-	developer := 0
-	for _, item := range input {
-		if item["type"] == "additional_tools" {
-			t.Fatalf("input carries an additional_tools item: %v", item)
-		}
-		if item["role"] == "developer" {
-			developer++
-		}
+	if got := additionalToolsFirstNames(t, input); !slices.Equal(got, []string{"base_tool", "late_tool"}) {
+		t.Fatalf("additional_tools = %v, want [base_tool late_tool]", got)
 	}
-	if developer != 2 {
-		t.Fatalf("developer items = %d, want 2 (input %v)", developer, input)
+	update, _ := input[len(input)-1]["content"].(string)
+	for _, want := range []string{"updated guidance", "The following tools are no longer available. Do not call them:\n- base_tool"} {
+		if !strings.Contains(update, want) {
+			t.Fatalf("last item %q does not contain %q", update, want)
+		}
 	}
 }
 
-const responsesMidConvoCaptureFile = "testdata/transcript/responses-midconvo-9e05370b2.json"
+const responsesMidConvoCaptureFile = "testdata/transcript/responses-midconvo-e3bc05e8.json"
 
 // responsesMidConvoCapture is what capture-responses-midconvo.mts records.
 type responsesMidConvoCapture struct {
@@ -195,7 +215,8 @@ func decodeTranscriptFixture(t *testing.T, raw json.RawMessage) ai.Context {
 }
 
 // The complete request bodies pi builds for native models, captured under node
-// at upstream 9e05370b2 by testdata/transcript/capture-responses-midconvo.mts:
+// at upstream e3bc05e8 (since caa6967b every additional_tools model declares
+// its tools in place) by testdata/transcript/capture-responses-midconvo.mts:
 // the suite's three cases, then the tool_search call_id seed
 // (pi_tool_load_<shortHash("system:<msgIndex>:<names>")>, where the leading
 // system message does not advance msgIndex and a system message held behind a

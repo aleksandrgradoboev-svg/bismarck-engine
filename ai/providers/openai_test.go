@@ -360,11 +360,12 @@ func eventTypes(events []ai.AssistantMessageEvent) []ai.EventType {
 	return out
 }
 
-// ---- A3: delta processing order (pi openai-completions.ts:299-385) ----
+// ---- A3: delta processing order (pi openai-completions.ts, 63035734) ----
 
-func TestOpenAIDeltaOrderContentBeforeReasoning(t *testing.T) {
-	// One chunk carrying BOTH content and reasoning: pi processes content first,
-	// so the text block starts (and sits) before the thinking block.
+func TestOpenAIDeltaOrderReasoningBeforeContent(t *testing.T) {
+	// One chunk carrying BOTH content and reasoning: pi processes reasoning
+	// first, so the thinking block starts (and sits) before the text block
+	// (pi 63035734, #10926).
 	sse := `data: {"choices":[{"delta":{"content":"hi","reasoning_content":"think"}}]}
 
 data: {"choices":[{"delta":{},"finish_reason":"stop"}]}
@@ -379,11 +380,11 @@ data: [DONE]
 	if len(final.Content) != 2 {
 		t.Fatalf("expected 2 blocks, got %d", len(final.Content))
 	}
-	if _, ok := final.Content[0].(ai.TextContent); !ok {
-		t.Fatalf("content[0] should be text, got %T", final.Content[0])
+	if want := (ai.ThinkingContent{Thinking: "think", ThinkingSignature: "reasoning_content"}); final.Content[0] != want {
+		t.Fatalf("content[0] = %#v, want %#v", final.Content[0], want)
 	}
-	if _, ok := final.Content[1].(ai.ThinkingContent); !ok {
-		t.Fatalf("content[1] should be thinking, got %T", final.Content[1])
+	if want := (ai.TextContent{Text: "hi"}); final.Content[1] != want {
+		t.Fatalf("content[1] = %#v, want %#v", final.Content[1], want)
 	}
 	textStart, thinkingStart := -1, -1
 	for i, e := range events {
@@ -394,8 +395,8 @@ data: [DONE]
 			thinkingStart = i
 		}
 	}
-	if textStart == -1 || thinkingStart == -1 || textStart > thinkingStart {
-		t.Fatalf("text_start must precede thinking_start: %v", eventTypes(events))
+	if textStart == -1 || thinkingStart == -1 || thinkingStart > textStart {
+		t.Fatalf("thinking_start must precede text_start: %v", eventTypes(events))
 	}
 }
 

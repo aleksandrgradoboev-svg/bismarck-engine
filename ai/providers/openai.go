@@ -486,33 +486,12 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 			if !jsTruthy(d) {
 				return nil
 			}
-			// pi processes delta fields in order: content first, then reasoning,
-			// then tool_calls, then reasoning_details (openai-completions.ts:299-385).
-			// pi: `content !== null && content !== undefined && content.length > 0`,
-			// then `block.text += content`: an array's string is its elements
-			// joined, and an object is read by its own "length".
-			if content := jsGet(d, "content"); content != nil && content != jsUndefined {
-				positive, err := jsLengthPositive(content)
-				if err != nil {
-					return err
-				}
-				if positive {
-					if textBuilder == nil {
-						textBuilder = &blockBuilder{kind: "text"}
-						order = append(order, textBuilder)
-						materialize()
-						stream.Push(ai.AssistantMessageEvent{Type: ai.EventTextStart, ContentIndex: indexOf(textBuilder), Partial: output.Clone()})
-					}
-					text, err := jsToString(content)
-					if err != nil {
-						return err
-					}
-					textBuilder.text.WriteString(text)
-					materialize()
-					stream.Push(ai.AssistantMessageEvent{Type: ai.EventTextDelta, ContentIndex: indexOf(textBuilder), Delta: text, Partial: output.Clone()})
-				}
-			}
-
+			// pi processes delta fields in order: reasoning, then
+			// reasoning_details, then content, then tool_calls. Reasoning goes
+			// first because some proxies (e.g. LiteLLM) put reasoning and answer
+			// in one delta, and the thinking block must precede the text block
+			// (pi 63035734, #10926).
+			//
 			// Reasoning may arrive in reasoning_content (llama.cpp), reasoning, or
 			// reasoning_text. Use the first non-empty string field to avoid
 			// duplication (e.g. chutes.ai returns both with the same content),
@@ -537,6 +516,63 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 				thinkBuilder.thinking.WriteString(reasoningDelta)
 				materialize()
 				stream.Push(ai.AssistantMessageEvent{Type: ai.EventThinkingDelta, ContentIndex: indexOf(thinkBuilder), Delta: reasoningDelta, Partial: output.Clone()})
+			}
+
+			// reasoning_details: OpenRouter's structured reasoning replay channel
+			// (pi :620-632, upstream b7bb00b93). Every valid detail is appended to
+			// thinkingDetails, which becomes the THINKING block's signature —
+			// OpenRouter requires the complete sequence back unmodified and in
+			// order, so the slot holds the sequence rather than one detail per tool
+			// call. OpenRouter streams them as DELTAS, so appending is a merge —
+			// see appendOpenAIReasoningDetail. Nothing is written into the
+			// signature here: applyStreamedReasoningDetails does that once, at the
+			// end of the block (upstream 7aab6c26e). pi guards the field with
+			// `Array.isArray`, so anything else in it is ignored.
+			details, _ := jsGet(d, "reasoning_details").([]any)
+			for _, detail := range details {
+				if !isOpenAIReasoningDetailValue(detail) {
+					continue
+				}
+				// pi ensureThinkingBlock(""): the details alone are enough to open
+				// a thinking block, whose visible thinking stays empty.
+				if thinkBuilder == nil {
+					thinkBuilder = &blockBuilder{kind: "thinking"}
+					order = append(order, thinkBuilder)
+					materialize()
+					stream.Push(ai.AssistantMessageEvent{Type: ai.EventThinkingStart, ContentIndex: indexOf(thinkBuilder), Partial: output.Clone()})
+				}
+				text, err := jstext.Stringify(detail)
+				if err != nil {
+					return fmt.Errorf("writing a reasoning detail as JSON.stringify does: %w; this is a port bug, report it with the event", err)
+				}
+				// Deltas, not finished entries: consecutive text/summary details
+				// fold into the entry they extend (upstream c5ad7c1b0).
+				thinkingDetails = appendOpenAIReasoningDetail(thinkingDetails, json.RawMessage(text))
+			}
+
+			// pi: `content !== null && content !== undefined && content.length > 0`,
+			// then `block.text += content`: an array's string is its elements
+			// joined, and an object is read by its own "length".
+			if content := jsGet(d, "content"); content != nil && content != jsUndefined {
+				positive, err := jsLengthPositive(content)
+				if err != nil {
+					return err
+				}
+				if positive {
+					if textBuilder == nil {
+						textBuilder = &blockBuilder{kind: "text"}
+						order = append(order, textBuilder)
+						materialize()
+						stream.Push(ai.AssistantMessageEvent{Type: ai.EventTextStart, ContentIndex: indexOf(textBuilder), Partial: output.Clone()})
+					}
+					text, err := jsToString(content)
+					if err != nil {
+						return err
+					}
+					textBuilder.text.WriteString(text)
+					materialize()
+					stream.Push(ai.AssistantMessageEvent{Type: ai.EventTextDelta, ContentIndex: indexOf(textBuilder), Delta: text, Partial: output.Clone()})
+				}
 			}
 
 			// pi: `for (const toolCall of choice.delta.tool_calls)` when it is
@@ -593,38 +629,6 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 					materialize()
 					stream.Push(ai.AssistantMessageEvent{Type: ai.EventToolCallDelta, ContentIndex: indexOf(b), Delta: delta, Partial: output.Clone()})
 				}
-			}
-
-			// reasoning_details: OpenRouter's structured reasoning replay channel
-			// (pi :620-632, upstream b7bb00b93). Every valid detail is appended to
-			// thinkingDetails, which becomes the THINKING block's signature —
-			// OpenRouter requires the complete sequence back unmodified and in
-			// order, so the slot holds the sequence rather than one detail per tool
-			// call. OpenRouter streams them as DELTAS, so appending is a merge —
-			// see appendOpenAIReasoningDetail. Nothing is written into the
-			// signature here: applyStreamedReasoningDetails does that once, at the
-			// end of the block (upstream 7aab6c26e). pi guards the field with
-			// `Array.isArray`, so anything else in it is ignored.
-			details, _ := jsGet(d, "reasoning_details").([]any)
-			for _, detail := range details {
-				if !isOpenAIReasoningDetailValue(detail) {
-					continue
-				}
-				// pi ensureThinkingBlock(""): the details alone are enough to open
-				// a thinking block, whose visible thinking stays empty.
-				if thinkBuilder == nil {
-					thinkBuilder = &blockBuilder{kind: "thinking"}
-					order = append(order, thinkBuilder)
-					materialize()
-					stream.Push(ai.AssistantMessageEvent{Type: ai.EventThinkingStart, ContentIndex: indexOf(thinkBuilder), Partial: output.Clone()})
-				}
-				text, err := jstext.Stringify(detail)
-				if err != nil {
-					return fmt.Errorf("writing a reasoning detail as JSON.stringify does: %w; this is a port bug, report it with the event", err)
-				}
-				// Deltas, not finished entries: consecutive text/summary details
-				// fold into the entry they extend (upstream c5ad7c1b0).
-				thinkingDetails = appendOpenAIReasoningDetail(thinkingDetails, json.RawMessage(text))
 			}
 			return nil
 		})
@@ -730,8 +734,11 @@ func buildOpenAIParams(model *ai.Model, req ai.TranscriptContext, opts *OpenAIOp
 	// Tool additions anchor in the transcript only where the model takes both
 	// later system messages and the tools they add; otherwise the request
 	// declares the complete current tool set.
-	supportsToolAdditions := compat.SupportsMidConvoSystemMessages && compat.SupportsMidConvoToolAdditions
-	transcriptTools := ai.ResolveTranscriptTools(req.Messages, supportsToolAdditions)
+	toolSupport := ai.ToolSupportNone
+	if compat.SupportsMidConvoSystemMessages && compat.SupportsMidConvoToolAdditions {
+		toolSupport = ai.ToolSupportAdditions
+	}
+	transcriptTools := ai.ResolveTranscriptTools(req.Messages, toolSupport)
 
 	// pi's convertMessages resolves the transcript, and its tools, again itself
 	// (a no-op on a transcript the stream already resolved), so a builder handed
@@ -742,7 +749,8 @@ func buildOpenAIParams(model *ai.Model, req ai.TranscriptContext, opts *OpenAIOp
 	transformed := transformMessages(resolved.Messages, model, func(id string) string {
 		return normalizeOpenAIToolCallID(model, id)
 	})
-	anchorsAdditions := ai.ResolveTranscriptTools(resolved.Messages, supportsToolAdditions).AnchorsAdditions
+	foldedSystemMessages := ai.ResolveTranscriptTools(resolved.Messages, toolSupport).FoldedSystemMessages
+	systemIndex := 0
 	instructionRole := "system"
 	if model.Reasoning && compat.SupportsDeveloperRole {
 		instructionRole = "developer"
@@ -769,8 +777,13 @@ func buildOpenAIParams(model *ai.Model, req ai.TranscriptContext, opts *OpenAIOp
 
 		if sm, ok := asSystemMsg(m); ok {
 			// i counts the transformed transcript, as pi's loop does: the message
-			// at index 0 is the prompt, any later one an update.
-			if i > 0 && anchorsAdditions && len(sm.ToolsAdded) > 0 {
+			// at index 0 is the prompt, any later one an update. transformMessages
+			// keeps system messages in order, so their position matches the
+			// transcript, and those past the folded ones anchor their additions
+			// (pi caa6967b).
+			anchors := systemIndex >= foldedSystemMessages
+			systemIndex++
+			if anchors && len(sm.ToolsAdded) > 0 {
 				tools, err := convertOpenAITools(sm.ToolsAdded, compat)
 				if err != nil {
 					return nil, err
@@ -971,7 +984,10 @@ func buildOpenAIParams(model *ai.Model, req ai.TranscriptContext, opts *OpenAIOp
 				}
 				textResult := strings.Join(text, "\n")
 				content := textResult
-				if content == "" {
+				// Whitespace-only output (a bare \r\n from bash) counts as empty:
+				// some providers reject it with a 400 that then repeats on every
+				// request of the session (pi 4dd2b149, #8720).
+				if jstext.Trim(textResult) == "" {
 					// Only claim an attached image when one is actually present;
 					// empty results with no image get a distinct placeholder so the
 					// model doesn't hallucinate an attachment (pi #6290).

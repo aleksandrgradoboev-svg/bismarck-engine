@@ -102,6 +102,26 @@ type responsesCompat struct {
 	// `max_output_tokens` parameter. Some Codex-protocol gateways reject it.
 	// Default: true.
 	SupportsMaxOutputTokens bool
+	// SupportsMidConvoEffort reports whether thinking level changes are sent as
+	// configuration_update input items instead of changing reasoning.effort, so
+	// a change keeps the prompt cache. Ignored with Sign in with ChatGPT on the
+	// openai provider. Default: false (pi 60ac3bcc).
+	SupportsMidConvoEffort bool
+}
+
+// configurationUpdateRequestEffort is the fixed reasoning.effort while
+// configuration_update items carry the thinking level (pi 60ac3bcc).
+const configurationUpdateRequestEffort = "medium"
+
+// responsesConfigurationUpdateEffort is pi's getConfigurationUpdateEffort: the
+// effort to send in configuration_update items, or "" to send it as
+// reasoning.effort.
+func responsesConfigurationUpdateEffort(model *ai.Model, opts *OpenAIResponsesOptions, compat responsesCompat) string {
+	// Sign in with ChatGPT rejects configuration_update items.
+	if !compat.SupportsMidConvoEffort || opts == nil || opts.ReasoningEffort == "" || isChatGPTSignIn(model, opts.APIKey) {
+		return ""
+	}
+	return effortValue(model, opts.ReasoningEffort)
 }
 
 // detectResponsesSessionAffinityFormat is pi's detectSessionAffinityFormat:
@@ -131,6 +151,7 @@ func getResponsesCompat(model *ai.Model) responsesCompat {
 	applyCompat(o, "supportsToolSearch", &c.SupportsToolSearch)
 	applyCompat(o, "supportsExplicitPromptCacheMode", &c.SupportsExplicitPromptCacheMode)
 	applyCompat(o, "supportsMaxOutputTokens", &c.SupportsMaxOutputTokens)
+	applyCompat(o, "supportsMidConvoEffort", &c.SupportsMidConvoEffort)
 	return c
 }
 
@@ -302,6 +323,9 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 		output := &ai.AssistantMessage{
 			Content: ai.ContentList{}, Api: model.Api, Provider: model.Provider, Model: model.ID,
 			StopReason: ai.StopPending, Timestamp: nowMillis(),
+			// The reply records the level it ran at, so later requests rebuild its
+			// configuration_update item unchanged (pi 60ac3bcc).
+			ProviderThinkingLevel: responsesConfigurationUpdateEffort(model, opts, getResponsesCompat(model)),
 		}
 		fail := func(err error) {
 			if ctx != nil && ctx.Err() != nil {
@@ -1032,11 +1056,13 @@ func StreamOpenAIResponses(ctx context.Context, model *ai.Model, req ai.Transcri
 
 func buildResponsesParams(model *ai.Model, req ai.TranscriptContext, opts *OpenAIResponsesOptions) (map[string]any, error) {
 	compat := getResponsesCompat(model)
-	// body.tools holds the initial tools when additions can be anchored at their
-	// system messages (responsesInput emits the later ones there), and the
-	// complete current tool set otherwise.
-	transcriptTools := ai.ResolveTranscriptTools(req.Messages, compat.SupportsAdditionalTools || compat.SupportsToolSearch)
-	input, err := responsesInput(model, req)
+	// body.tools holds what ResolveTranscriptTools folds: nothing when every
+	// tool is declared in place, the tools up to the last removal when only
+	// additions anchor (responsesInput emits the later ones at their system
+	// messages), and the complete current tool set otherwise (pi caa6967b).
+	transcriptTools := ai.ResolveTranscriptTools(req.Messages, getResponsesToolSupport(compat))
+	configurationUpdateEffort := responsesConfigurationUpdateEffort(model, opts, compat)
+	input, err := responsesInput(model, req, configurationUpdateEffort)
 	if err != nil {
 		return nil, err
 	}
@@ -1105,6 +1131,11 @@ func buildResponsesParams(model *ai.Model, req ai.TranscriptContext, opts *OpenA
 			effort := "medium"
 			if opts.ReasoningEffort != "" {
 				effort = effortValue(model, opts.ReasoningEffort)
+			}
+			// The level rides in configuration_update items, so the request's
+			// own effort stays fixed and the cached prefix survives a change.
+			if configurationUpdateEffort != "" {
+				effort = configurationUpdateRequestEffort
 			}
 			summary := opts.ReasoningSummary
 			if summary == "" {
@@ -1257,8 +1288,19 @@ func convertResponsesTools(tools []ai.Tool, compat responsesCompat, toolSearchRe
 // (port of convertResponsesMessages). It errors when an assistant thinking
 // block carries an unparseable thinkingSignature (pi's JSON.parse throws and
 // fails the stream).
-func responsesInput(model *ai.Model, req ai.TranscriptContext) ([]any, error) {
+//
+// configurationUpdateEffort is the effort of the reply being generated, or ""
+// to send none. When set, the thinking level travels as configuration_update
+// items instead of a changing reasoning.effort, which would invalidate the
+// prompt cache: one goes before every earlier reply of this model with the level
+// recorded on it (providerThinkingLevel), and one with this effort goes at the
+// end, so earlier input never changes. OpenAI documents the item before user
+// messages only; pi verified it after tool results on gpt-6-luna (pi 60ac3bcc).
+func responsesInput(model *ai.Model, req ai.TranscriptContext, configurationUpdateEffort string) ([]any, error) {
 	var items []any
+	configurationUpdate := func(effort string) map[string]any {
+		return map[string]any{"type": "configuration_update", "reasoning": map[string]any{"effort": effort}}
+	}
 
 	compat := getResponsesCompat(model)
 	grammarProps, err := grammarToolInputProperties(ai.GetDeclaredTools(req.Messages), compat.SupportsOpenAIGrammarTools)
@@ -1277,29 +1319,57 @@ func responsesInput(model *ai.Model, req ai.TranscriptContext) ([]any, error) {
 	// pi.
 	normalized := ai.ResolveTranscript(req, compat.SupportsMidConvoSystemMessages)
 	transformed := transformMessages(normalized.Messages, model, buildResponsesToolCallIDNormalizer(model, normalized.Messages))
-	transcriptTools := ai.ResolveTranscriptTools(normalized.Messages, compat.SupportsAdditionalTools || compat.SupportsToolSearch)
+	toolSupport := getResponsesToolSupport(compat)
+	transcriptTools := ai.ResolveTranscriptTools(normalized.Messages, toolSupport)
+	toolChanges := &responsesToolChanges{support: toolSupport, compat: compat, instructionRole: instructionRole}
 	imageInput := modelSupportsImages(model)
 
 	msgIndex := 0
+	systemIndex := 0
 	for sourceIndex, m := range transformed {
 		sm, isSystem := asSystemMsg(m)
 		// The leading system message is the prompt; it does not count toward
 		// the msg_pi_<index> fallback ids or the tool_search call_id seeds.
 		isLeadingSystemMessage := sourceIndex == 0 && isSystem
 		if isSystem {
-			var text string
+			// transformMessages keeps system messages in order, so their
+			// position matches the transcript (pi caa6967b).
+			anchorsToolChanges := systemIndex >= transcriptTools.FoldedSystemMessages
+			systemIndex++
+			if anchorsToolChanges {
+				items, err = toolChanges.appendSystemToolAdditions(items, sm.ToolsAdded, fmt.Sprintf("system:%d", msgIndex))
+				if err != nil {
+					return nil, err
+				}
+			}
+			var parts []string
 			if isLeadingSystemMessage {
-				text = ai.GetSystemMessageText(sm)
+				parts = append(parts, ai.GetSystemMessageText(sm))
 			} else {
-				if transcriptTools.AnchorsAdditions {
-					items, err = appendSystemToolAdditions(items, sm.ToolsAdded, fmt.Sprintf("system:%d", msgIndex), compat)
-					if err != nil {
-						return nil, err
+				parts = append(parts, ai.RenderSystemMessageUpdate(sm))
+			}
+			if anchorsToolChanges {
+				// A redefinition is a removal plus an addition of the same name;
+				// only true removals are announced.
+				added := map[string]bool{}
+				for _, tool := range sm.ToolsAdded {
+					added[tool.Name] = true
+				}
+				var removed []string
+				for _, tool := range sm.ToolsRemoved {
+					if !added[tool.Name] {
+						removed = append(removed, tool.Name)
 					}
 				}
-				text = ai.RenderSystemMessageUpdate(sm)
+				if len(removed) > 0 {
+					parts = append(parts, renderToolRemovalNotice(removed))
+				}
+				for _, name := range removed {
+					toolChanges.markUnavailable(name)
+				}
 			}
-			if text != "" {
+			parts = slices.DeleteFunc(parts, func(part string) bool { return part == "" })
+			if text := strings.Join(parts, "\n\n"); text != "" {
 				items = append(items, map[string]any{"role": instructionRole, "content": sanitizeSurrogates(text)})
 			}
 		} else if um, ok := asUserMsg(m); ok {
@@ -1414,6 +1484,9 @@ func responsesInput(model *ai.Model, req ai.TranscriptContext) ([]any, error) {
 			if len(output) == 0 {
 				continue
 			}
+			if configurationUpdateEffort != "" && isSameModel && am.ProviderThinkingLevel != "" {
+				items = append(items, configurationUpdate(am.ProviderThinkingLevel))
+			}
 			items = append(items, output...)
 		} else if tr, ok := asToolResultMsg(m); ok {
 			// pi takes the raw first split segment (shared :229); any
@@ -1430,7 +1503,8 @@ func responsesInput(model *ai.Model, req ai.TranscriptContext) ([]any, error) {
 				}
 			}
 			textResult := strings.Join(texts, "\n")
-			hasText := len(textResult) > 0
+			// Whitespace-only output counts as empty (pi 4dd2b149, #8720).
+			hasText := jstext.Trim(textResult) != ""
 
 			var outputVal any
 			if hasImages && imageInput {
@@ -1466,28 +1540,106 @@ func responsesInput(model *ai.Model, req ai.TranscriptContext) ([]any, error) {
 			msgIndex++
 		}
 	}
+	if configurationUpdateEffort != "" {
+		items = append(items, configurationUpdate(configurationUpdateEffort))
+	}
 	return items, nil
 }
 
-// appendSystemToolAdditions appends the tools a later system message adds to
-// items, at that message; callers invoke it only when the request anchors
-// additions (port of the convertResponsesMessages closure of the same name). A
-// model that accepts additional_tools gets them inline in one developer item;
-// otherwise a model with client tool search gets a completed tool_search_call
-// and its tool_search_output, whose call_id hashes seed ("system:<msgIndex>")
-// with the tool names.
-func appendSystemToolAdditions(items []any, tools []ai.Tool, seed string, compat responsesCompat) ([]any, error) {
+// getResponsesToolSupport is how a Responses transport expresses tool changes
+// (pi caa6967b, #10940).
+//
+// additional_tools items accumulate: a later item adds tools and replaces
+// same-name definitions from earlier items, but it cannot replace a top-level
+// tool and cannot remove any tool (verified with strict schemas on the OpenAI,
+// Codex and Copilot backends, October 2026). Like Codex, every tool is
+// therefore declared in additional_tools items, starting with one at the head of
+// the input, and removals are announced as text. Synthetic tool search can only
+// add tools. Without mid-conversation system messages there is nothing to
+// anchor.
+func getResponsesToolSupport(compat responsesCompat) ai.TranscriptToolSupport {
+	if compat.SupportsMidConvoSystemMessages && compat.SupportsAdditionalTools {
+		return ai.ToolSupportChanges
+	}
+	if compat.SupportsToolSearch {
+		return ai.ToolSupportAdditions
+	}
+	return ai.ToolSupportNone
+}
+
+// renderIncrementalToolsNotice precedes every additional_tools item after the
+// first. Without it, models read the latest item as the complete tool set once
+// a removal was announced; Codex precedes its incremental tool batches with the
+// same guidance. Restating the tools that are still unavailable keeps smaller
+// models (gpt-5.6-luna, gpt-6-luna) from calling them again after later loads
+// (pi caa6967b, verified October 2026).
+func renderIncrementalToolsNotice(unavailable []string) string {
+	notice := "This is an incremental tools update. Previously declared tools remain available unless explicitly marked unavailable. A tool declared again here is available again, and its latest definition replaces the earlier one."
+	if len(unavailable) == 0 {
+		return notice
+	}
+	return notice + "\nStill unavailable: " + strings.Join(unavailable, ", ") + "."
+}
+
+func renderToolRemovalNotice(names []string) string {
+	lines := make([]string, len(names))
+	for i, name := range names {
+		lines[i] = "- " + name
+	}
+	return "The following tools are no longer available. Do not call them:\n" + strings.Join(lines, "\n")
+}
+
+// responsesToolChanges is the state convertResponsesMessages keeps across the
+// system messages that anchor tool changes.
+type responsesToolChanges struct {
+	support         ai.TranscriptToolSupport
+	compat          responsesCompat
+	instructionRole string
+	// declaredAdditionalTools is whether an additional_tools item went out.
+	declaredAdditionalTools bool
+	// unavailable are the tools announced as removed and not declared again
+	// since, in the order a JS Set keeps them.
+	unavailable []string
+}
+
+func (c *responsesToolChanges) markAvailable(name string) {
+	c.unavailable = slices.DeleteFunc(c.unavailable, func(n string) bool { return n == name })
+}
+
+// markUnavailable records an announced removal. It runs after the message's
+// additions, whose notice precedes the removal notice (pi 530015d9).
+func (c *responsesToolChanges) markUnavailable(name string) {
+	c.markAvailable(name)
+	c.unavailable = append(c.unavailable, name)
+}
+
+// appendSystemToolAdditions appends the tools a system message adds to items,
+// at that message (port of the convertResponsesMessages closure of the same
+// name); callers invoke it only for messages that anchor tool changes. With
+// ToolSupportChanges they go inline in one developer additional_tools item,
+// after an incremental tools notice for every item but the first; with
+// ToolSupportAdditions a completed tool_search_call and its tool_search_output,
+// whose call_id hashes seed ("system:<msgIndex>") with the tool names.
+func (c *responsesToolChanges) appendSystemToolAdditions(items []any, tools []ai.Tool, seed string) ([]any, error) {
+	for _, tool := range tools {
+		c.markAvailable(tool.Name)
+	}
 	if len(tools) == 0 {
 		return items, nil
 	}
-	if compat.SupportsAdditionalTools {
+	compat := c.compat
+	if c.support == ai.ToolSupportChanges {
+		if c.declaredAdditionalTools {
+			items = append(items, map[string]any{"role": c.instructionRole, "content": renderIncrementalToolsNotice(c.unavailable)})
+		}
+		c.declaredAdditionalTools = true
 		additional, err := convertResponsesTools(tools, compat, false)
 		if err != nil {
 			return nil, err
 		}
 		return append(items, map[string]any{"type": "additional_tools", "role": "developer", "tools": additional}), nil
 	}
-	if !compat.SupportsToolSearch {
+	if c.support != ai.ToolSupportAdditions {
 		return items, nil
 	}
 	names := make([]string, len(tools))

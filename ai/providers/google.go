@@ -1026,7 +1026,8 @@ func googleContents(model *ai.Model, req ai.TranscriptContext) []any {
 				}
 			}
 			textResult := strings.Join(texts, "\n")
-			hasText := len(textResult) > 0
+			// Whitespace-only output counts as empty (pi 4dd2b149, #8720).
+			hasText := jstext.Trim(textResult) != ""
 			hasImages := len(imageParts) > 0
 
 			// responseValue: text if present, else placeholder for image-only, else "".

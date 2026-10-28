@@ -3,13 +3,14 @@
 // openai_responses_midconvo_test.go.
 //
 //   node --experimental-strip-types capture-responses-midconvo.mts <extraction> <out.json> <sha>
-//   e.g. ... capture-responses-midconvo.mts <dir> responses-midconvo-9e05370b2.json 9e05370b2
+//   e.g. ... capture-responses-midconvo.mts <dir> responses-midconvo-e3bc05e8.json e3bc05e8
 //
 // <extraction> holds packages/ai at <sha> (`git archive <sha> packages/ai` from
-// the upstream clone) and a node_modules resolving pi-ai's dependencies (the npm
-// build's). The npm build 0.85.1 predates upstream 9e05370b2, so these are src
-// captures: re-verify them against the first build that ships it (the BUILD
-// wins).
+// the upstream clone) and a node_modules resolving pi-ai's dependencies at the
+// versions the sha pins (for e3bc05e8, openai 7.19.0 nested for pi-ai under
+// packages/ai/node_modules). These are src captures: re-verify them against the
+// first build that ships the sha (the BUILD wins). The same node_modules
+// reproduces the previous capture at 9e05370b2 byte for byte.
 //
 // Each "bodies" case records its model, its context and the body pi hands
 // onPayload, so the Go test decodes the very inputs pi saw. compat.ts
