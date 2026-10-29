@@ -16,8 +16,7 @@ import (
 // where the model accepts disabled thinking, "off" sends it without effort
 // markers or block_binding; where it does not, adaptive thinking stays. The
 // cases transliterate packages/ai/test/anthropic-mid-conversation-effort.test.ts
-// at dc939913; its catalog case (which shipped models support "off") waits for
-// the catalog regeneration.
+// at dc939913, its catalog case as of the 1.4.0 catalog.
 
 // effortManagedModel is the suite's managedModel.
 func effortManagedModel() *ai.Model {
@@ -117,5 +116,31 @@ func TestAnthropicOffKeepsAdaptiveThinkingWhenUnsupported(t *testing.T) {
 	}
 	if message.ProviderThinkingLevel != "high" {
 		t.Fatalf("providerThinkingLevel = %q, want high", message.ProviderThinkingLevel)
+	}
+}
+
+// 'supports off only on managed models that accept disabled thinking'.
+func TestAnthropicCatalogSupportsOffOnlyWhereDisabledThinkingIsAccepted(t *testing.T) {
+	for _, id := range []string{"claude-opus-5", "claude-haiku-5-5"} {
+		model := ai.GetModel("anthropic", id)
+		if model == nil {
+			t.Fatalf("catalog has no anthropic/%s", id)
+		}
+		var compat struct{ SupportsMidConvoEffort bool }
+		if err := json.Unmarshal(model.Compat, &compat); err != nil || !compat.SupportsMidConvoEffort {
+			t.Errorf("%s compat.supportsMidConvoEffort = %t (%v), want true", id, compat.SupportsMidConvoEffort, err)
+		}
+		if off, present := model.ThinkingLevelMap["off"]; present && off == nil {
+			t.Errorf("%s thinkingLevelMap.off is null, want it not null", id)
+		}
+	}
+	for _, id := range []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1"} {
+		model := ai.GetModel("anthropic", id)
+		if model == nil {
+			t.Fatalf("catalog has no anthropic/%s", id)
+		}
+		if off, present := model.ThinkingLevelMap["off"]; !present || off != nil {
+			t.Errorf("%s thinkingLevelMap.off = %v (present %t), want null", id, off, present)
+		}
 	}
 }

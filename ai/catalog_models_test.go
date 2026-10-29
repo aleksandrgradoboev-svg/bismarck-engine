@@ -199,7 +199,8 @@ func TestCatalogGrok47(t *testing.T) {
 func TestCatalogClaudeSonnet55(t *testing.T) {
 	catalogCase{
 		provider: "anthropic", id: "claude-sonnet-5-5",
-		cost:          &ModelCost{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5},
+		// ce950d78 (models.dev metadata for Claude 5.5) halves the cache read.
+		cost:          &ModelCost{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5},
 		contextWindow: 1_000_000, maxTokens: 128_000,
 		compat: map[string]any{
 			"forceAdaptiveThinking":          true,
@@ -228,12 +229,15 @@ func TestCatalogGPT61Sol(t *testing.T) {
 			compat: compat, levels: noOff,
 		},
 		{
+			// 5712b134: Codex serves GPT-6.1 Sol with a 500K default context
+			// window (#10840).
 			provider: "openai-codex", id: "gpt-6.1-sol",
-			cost: official, contextWindow: 272000, maxTokens: 128000,
+			cost: official, contextWindow: 500000, maxTokens: 128000,
 			compat: compat,
 			levels: []ModelThinkingLevel{"minimal", "low", "medium", "high", "xhigh", "max"},
 		},
-		{provider: "azure-openai-responses", id: "gpt-6.1-sol", levels: noOff},
+		// a37306d4 renames the provider azure-openai-responses to azure.
+		{provider: "azure", id: "gpt-6.1-sol", levels: noOff},
 	} {
 		t.Run(c.provider+"/"+c.id, func(t *testing.T) {
 			c.check(t)

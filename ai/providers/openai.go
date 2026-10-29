@@ -29,6 +29,11 @@ type OpenAIOptions struct {
 	// set, or by a {"$var": "thinking.budget"} chat-template value
 	// (pi b23741269).
 	ThinkingBudgets *ai.ThinkingBudgets
+	// Azure is where an azure model's request goes (pi AzureEndpointOptions,
+	// upstream a37306d4); other providers ignore it. pi's streamSimple reads
+	// the same fields off its options, which SimpleStreamOptions cannot carry:
+	// StreamSimpleOpenAICompletions leaves them to the environment.
+	Azure AzureEndpointOptions
 }
 
 // StreamSimpleOpenAICompletions maps unified reasoning to OpenAI options.
@@ -122,6 +127,20 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 			stream.End()
 		}
 
+		// pi's azure provider resolves the endpoint onto the model before the
+		// completions stream starts, so everything below reads the resolved
+		// baseUrl, and an unconfigured endpoint fails the stream first.
+		if model.Provider == "azure" {
+			resolved, azErr := resolveAzureBaseURL(model, opts.Azure, opts.Env)
+			if azErr != nil {
+				fail(azErr)
+				return
+			}
+			served := *model
+			served.BaseURL = resolved
+			model = &served
+		}
+
 		apiKey, keyErr := clientAPIKey(model.Provider, opts.APIKey, opts.Headers)
 		if keyErr != nil {
 			fail(keyErr)
@@ -212,6 +231,14 @@ func StreamOpenAICompletions(ctx context.Context, model *ai.Model, req ai.Transc
 		if err != nil {
 			fail(err)
 			return
+		}
+		// pi's azure provider sends the deployment name as the request's model
+		// through an onPayload of its own that runs before the caller's; the
+		// message keeps the catalog id.
+		if model.Provider == "azure" {
+			if deployment := resolveAzureDeploymentName(model, opts.Azure, opts.Env); deployment != model.ID {
+				params["model"] = deployment
+			}
 		}
 		var body any = params
 		if opts.OnPayload != nil {
