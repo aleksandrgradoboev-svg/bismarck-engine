@@ -13,10 +13,10 @@ import (
 // declare every tool in place and announce removals as text, while tool search
 // and Kimi tool messages move the top-level list once per removal (pi caa6967b,
 // 530015d9, #10940). The cases transliterate the OpenAI and Kimi cases of
-// packages/ai/test/transcript-tool-changes.test.ts at e3bc05e8. Its Kimi Coding
-// cases read the catalog (kimi-coding on Chat Completions) and wait for the
-// catalog regeneration; the prefix case runs here on a Moonshot model with the
-// same compat flags.
+// packages/ai/test/transcript-tool-changes.test.ts at e3bc05e8. The prefix case
+// runs on a Moonshot model with the compat flags of the catalog's kimi-coding
+// models; the Kimi Coding cases (#10720) read that catalog, kimi-coding on Chat
+// Completions since the 1.4.0 catalog (a3f265b1).
 
 func additionalToolsModel() *ai.Model {
 	return gpt54(`{"supportsMidConvoSystemMessages":true,"supportsAdditionalTools":true}`)
@@ -255,6 +255,61 @@ func TestKeepsTheKimiPrefixAcrossLoadsAfterARemoval(t *testing.T) {
 	}
 	if want := []string{"late_tool", "later_tool"}; !slices.Equal(anchored, want) {
 		t.Fatalf("tool messages = %v, want %v", anchored, want)
+	}
+}
+
+// kimiCodingToolNames reads a capture's top-level tools and the tools of its
+// first tool-bearing message.
+func kimiCodingToolNames(t *testing.T, modelID string) (top, anchored []string, anyAnchored bool) {
+	t.Helper()
+	model := ai.GetModel("kimi-coding", modelID)
+	if model == nil {
+		t.Fatalf("catalog has no kimi-coding/%s", modelID)
+	}
+	if model.Api != ai.APIOpenAICompletions {
+		t.Fatalf("kimi-coding/%s api = %q, want %q", modelID, model.Api, ai.APIOpenAICompletions)
+	}
+	payload := payloadJSON(t, captureStreamSimplePayload(t, model, transcriptAdditionContext()))
+	names := func(list any) []string {
+		out := []string{}
+		for _, tool := range jsonItems(list) {
+			fn, _ := tool["function"].(map[string]any)
+			name, _ := fn["name"].(string)
+			out = append(out, name)
+		}
+		return out
+	}
+	top = names(payload["tools"])
+	for _, message := range jsonItems(jsonList(payload, "messages")) {
+		if tools, ok := message["tools"]; ok {
+			if !anyAnchored {
+				anchored = names(tools)
+			}
+			anyAnchored = true
+		}
+	}
+	return top, anchored, anyAnchored
+}
+
+// #10720: Kimi Coding uses Chat Completions so K3-style models keep added
+// tools out of the top-level list ('anchors additions for Kimi Coding %s').
+func TestAnchorsAdditionsForKimiCoding(t *testing.T) {
+	for _, id := range []string{"k3", "k3-256k", "kimi-for-coding"} {
+		t.Run(id, func(t *testing.T) {
+			top, anchored, _ := kimiCodingToolNames(t, id)
+			if !slices.Equal(top, []string{"base_tool"}) || !slices.Equal(anchored, []string{"late_tool"}) {
+				t.Errorf("top-level tools %v, anchored %v; want [base_tool], [late_tool]", top, anchored)
+			}
+		})
+	}
+}
+
+// #10720: Kimi Code Highspeed rejects tool-bearing system messages ('keeps Kimi
+// Coding Highspeed additions in top-level tools').
+func TestKeepsKimiCodingHighspeedAdditionsInTopLevelTools(t *testing.T) {
+	top, _, anyAnchored := kimiCodingToolNames(t, "kimi-for-coding-highspeed")
+	if !slices.Equal(top, []string{"base_tool", "late_tool"}) || anyAnchored {
+		t.Errorf("top-level tools %v, a tool-bearing message %t; want [base_tool late_tool], none", top, anyAnchored)
 	}
 }
 

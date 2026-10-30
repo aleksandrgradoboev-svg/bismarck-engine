@@ -285,17 +285,12 @@ func TestResolveModelCustomIDFallbackInvalidSuffix(t *testing.T) {
 // re-pin, and point file at the capture for the new pin.
 //
 // catalogPending are pi's entries the port cannot take until the catalog is
-// regenerated, each with the port's entry until then: nvidia's new default is
-// not in the embedded catalog (95364a54), and pi's azure provider is the
-// catalog's azure-openai-responses renamed (a37306d4). The test requires both
-// halves to still differ, so the regeneration has to clear the list.
+// regenerated, each with the port's entry until then. The test requires both
+// halves to still differ, so a regeneration has to clear the list. The 1.4.0
+// catalog cleared nvidia's (95364a54) and the azure rename's (a37306d4).
 func TestDefaultModelPerProviderMatchesPi(t *testing.T) {
 	const file = "testdata/defaultmodels/default-models-f049787d.json"
-	catalogPending := map[string]struct{ pi, port string }{
-		"nvidia":                 {pi: "nvidia/nemotron-3.5-super-vl-120b-a12b", port: "nvidia/nemotron-3-super-120b-a12b"},
-		"azure":                  {pi: "gpt-5.4"},
-		"azure-openai-responses": {port: "gpt-5.4"},
-	}
+	catalogPending := map[string]struct{ pi, port string }{}
 	data, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatalf("read %s: %v (regenerate it with testdata/defaultmodels/capture.mjs)", file, err)

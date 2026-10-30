@@ -43,9 +43,11 @@
 // dropped claude-opus-5's "off": null). At e3bc05e8 the usage cost carries
 // totalFromProvider (7c22a93d), another model's thinking is dropped rather than
 // replayed as text (91130942), and providerThinkingLevel follows the usage.
-// The extraction's providers/data is the 1.4.0 build's, with claude-opus-5's
-// thinkingLevelMap given back its "off": null: the catalog is not regenerated
-// in this sync, and the Go test pins `model` to the catalog the port embeds.
+// The extraction's providers/data is the 1.4.0 build's. That capture gave
+// claude-opus-5's thinkingLevelMap back its "off": null while the port embedded
+// the 0.99.2 catalog; the catalog regenerated from the 1.4.0 build drops it, and
+// so does the capture (the catalog half of dc939913). The Go test pins `model`
+// to the catalog the port embeds.
 import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";

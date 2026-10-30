@@ -5,8 +5,9 @@ Range: pi `06a46693..59ca40cf` (v1.2.0, 2026-10-13 → main, 2026-10-27; v1.4.0 
 `telemetry`) is already ported to `73f8de80` (`sync-v1.2.0.md`, section 4), so for it the range
 starts there. Section 7 extends it to `c3d8ce44` (2026-10-28).
 
-**Released as v0.4.0 (2026-10-28):** the core of sections 2 and 7, through pi `c3d8ce44`. Still
-open: the catalog regeneration (section 4) and the durable catch-up (section 5).
+**Released as v0.4.0 (2026-10-28):** the core of sections 2 and 7, through pi `c3d8ce44`. The
+catalog is regenerated from the 1.4.0 build after it (section 4, 2026-10-29). Still open: the
+durable catch-up (section 5).
 
 Commits were triaged by the paths they touch and their subjects; each one is decided again from
 its diff when it is ported. A commit that touches several groups is listed under the first group
@@ -103,10 +104,30 @@ tool-call arguments) last. "Not here" marks hunks of the commit that stay out.
 
 `6374c2ba`, `5712b134`, `d2e7d8b7`, `fdce48eb`, `363ad78b`, `81d6759f`, `1de2d7ad`, and the provider
 definitions `195120a9`, `177e2ad7` (OpenCode endpoints), `b06c1f2c` → `6a1f799b` → `a3f265b1`
-(Kimi Coding on Chat Completions, net) change model data only. The catalog is not regenerated in
-this sync, as in v1.2.0; the catalog halves of `dc939913` and `e5fe9777` and the test follow-ups
-`381a2d8e`, `568c2a82`, `dfb03c32`, `99fe1489`, `e86b0547`, `18e56a06`, `482c1381`, `fbc456d8` wait for
-it.
+(Kimi Coding on Chat Completions, net) change model data only.
+
+**Regenerated 2026-10-29 from the published 1.4.0 build** (`@earendil-works/pi-ai@1.4.0`, its
+`sha512` checked against the registry). pi's catalog data is not in its git (`providers/data/` is
+gitignored, and since `2e0f175b` it is fetched from models.dev and other sources at build time),
+so the catalog is pinned to a release, as the 0.99.2 one was: `ai/models_catalog.json` is
+`JSON.stringify(MODELS)` of the build's `dist/models.generated.js`. Calibrated first: the same dump
+of the 0.99.2 build reproduced the file it replaces byte for byte. 0.99.2 → 1.4.0: 42 providers
+either side (`azure-openai-responses` renamed `azure`), 1529 → 1599 models (+219, −149), 447 changed
+(cost 267, `baseUrl` 101, compat 64, `maxTokens` 47, `thinkingLevelMap` 38, `contextWindow` 37), no
+new or dropped api. A round trip through `ai.Model` loses only Radius's `lab`, `enabled`,
+`providers`, as 0.99.2 did, and the new `free` (one model, `radius/recursive/flint`): Radius is out
+of scope.
+
+| pi commit | In 1.4.0 | Engine |
+|---|---|---|
+| `6374c2ba`, `5712b134`, `d2e7d8b7`, `fdce48eb`, `195120a9`, `b06c1f2c` → `6a1f799b` → `a3f265b1` | yes | the catalog; `5712b134`'s 500K Codex window in `TestCatalogGPT61Sol`; Kimi Coding's `transcript-tool-changes` cases (#10720) ported, red on the 0.99.2 catalog (kimi-coding still on Anthropic Messages) |
+| `ce950d78` | yes | **missed by the triage** (generator and one test line): Claude Sonnet 5.5's cache read 0.2 → 0.1, in `TestCatalogClaudeSonnet55` |
+| `dc939913` (catalog half) | yes | the response-model capture drops claude-opus-5's restored `"off": null`; pi's 'supports off only on managed models that accept disabled thinking' ported |
+| `e5fe9777` (catalog half) | yes | the catalog; its test edits are pi's live-provider suites, which the engine has no port of |
+| `95364a54`, `a37306d4` (defaults) | yes | `coding/resolve.go`: nvidia → `nemotron-3.5-super-vl-120b-a12b`, `azure-openai-responses` → `azure`; `catalogPending` is empty |
+| `a37306d4` (code) | yes | ported: `ai/providers/azure.go` (`azure-openai-config.ts`), resolved in the completions adapter for `model.Provider == "azure"`; `AZURE_OPENAI_API_KEY` under `azure`. 14 of `azure-openai-completions.test.ts`'s 15 cases (the Responses route waits on Scope queue row 4) and the 10 endpoint cases of `azure-openai-base-url.test.ts` on the shared config; with the branch disabled the 5 endpoint and deployment cases fail. Without it `azure/deepseek-v4-pro`, whose `baseUrl` is empty, would go to the adapter's `https://api.openai.com/v1` default with the Azure key |
+| `381a2d8e`, `568c2a82`, `dfb03c32`, `99fe1489`, `e86b0547`, `18e56a06`, `482c1381`, `fbc456d8` | yes | n/a: each edits a pi test the engine has no port of (live-provider suites, `model-registry`, `image-model-data`, `zai-coding-plan-models`, `xai-responses`) |
+| `363ad78b`, `81d6759f`, `1de2d7ad`, `177e2ad7`, and section 7's `2e0f175b`, `44f6851b`, `068e972c` | no | with the next release's catalog |
 
 ## 5. Durable family after `73f8de80`
 
@@ -131,7 +152,9 @@ its own.
   the v1.2.0 list wants the same check per core file (`git log <range> -- <file>` against the
   table). A second one surfaced with the resolver batch: `a37306d4` (Azure Foundry Chat
   Completions) renames the `azure-openai-responses` default to `azure` in `model-resolver.ts`, and
-  neither sync lists it; its default waits for the catalog with the provider rename.
+  neither sync lists it; its default waits for the catalog with the provider rename. A third, in
+  this range: `ce950d78` (Claude 5.5 metadata from models.dev) touches only the generator and one
+  test line, and surfaced when the regenerated catalog failed that test (section 4).
 
 ## 7. After `59ca40cf`
 

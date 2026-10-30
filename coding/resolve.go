@@ -22,19 +22,16 @@ const DefaultModelSpec = "anthropic/claude-sonnet-4-5"
 
 // defaultModelPerProvider ports pi's defaultModelPerProvider
 // (model-resolver.ts): the per-provider default model id used by
-// buildFallbackModel when synthesizing a custom-id model. Two of pi's entries
-// wait for the catalog regeneration, since the catalog the port embeds lacks
-// their targets: nvidia's nemotron-3.5-super-vl (95364a54) and the azure
-// provider pi renamed from azure-openai-responses (a37306d4).
+// buildFallbackModel when synthesizing a custom-id model.
 var defaultModelPerProvider = map[string]string{
 	"amazon-bedrock":             "us.anthropic.claude-opus-4-6-v1",
 	"ant-ling":                   "Ring-2.6-1T",
 	"anthropic":                  "claude-opus-4-8",
 	"openai":                     "gpt-6.1-sol",
-	"azure-openai-responses":     "gpt-5.4",
+	"azure":                      "gpt-5.4",
 	"openai-codex":               "gpt-6.1-sol",
 	"radius":                     "balanced",
-	"nvidia":                     "nvidia/nemotron-3-super-120b-a12b",
+	"nvidia":                     "nvidia/nemotron-3.5-super-vl-120b-a12b",
 	"deepseek":                   "deepseek-v4-pro",
 	"google":                     "gemini-3.1-pro-preview",
 	"google-vertex":              "gemini-3.1-pro-preview",
