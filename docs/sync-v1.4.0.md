@@ -148,9 +148,8 @@ its own.
   `anthropic-messages.ts`, `b271b0a5` and `d4d53612`, and its triage lists neither; nothing in the
   engine or `UPSTREAM.md` had them. They surfaced when the Anthropic capture was reshot at
   `e3bc05e8` and nine of its bodies differed, and are ported with the Anthropic batch (section 2).
-  The rest of that range is not re-checked yet: a triage by path prefix can drop a core commit, so
-  the v1.2.0 list wants the same check per core file (`git log <range> -- <file>` against the
-  table). A second one surfaced with the resolver batch: `a37306d4` (Azure Foundry Chat
+  The rest of that range is re-checked per core file in `sync-v1.2.0.md` §6 (2026-10-30): two
+  more, `bde882c7` and half of `d677d0ee`, ported there. A second one surfaced with the resolver batch: `a37306d4` (Azure Foundry Chat
   Completions) renames the `azure-openai-responses` default to `azure` in `model-resolver.ts`, and
   neither sync lists it; its default waits for the catalog with the provider rename. A third, in
   this range: `ce950d78` (Claude 5.5 metadata from models.dev) touches only the generator and one

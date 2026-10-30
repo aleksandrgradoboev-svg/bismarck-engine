@@ -1358,75 +1358,105 @@ func TestModelsAuthCallbacksSeeCallerContext(t *testing.T) {
 	}
 }
 
-// TestModelsGetAuthCancelledOAuthRefreshPreservesCredential mirrors pi "passes
-// cancellation to OAuth refresh and preserves the previous credential": the
-// refresh sees the caller's context, and a refresh that ignores cancellation
-// and returns late must not have its result written to the store.
-//
-// Upstream d3da2e968 tightened what "sees the caller's context" means: the
-// refresh gets a distinct composite signal, not the caller's own object, and
-// that composite both aborts with the caller and reports the caller's abort
-// reason. Go's equivalent of the reason is the cancellation cause, which
-// propagates to every derived context — so the refresh context must report the
-// caller's cause, not a bare context.Canceled.
-func TestModelsGetAuthCancelledOAuthRefreshPreservesCredential(t *testing.T) {
+// rotatingOAuthStore seeds an expired p1 credential, and rotatingOAuth is an
+// OAuth method whose refresh rotates the refresh token after running
+// whileRefreshing, as a provider that rotates tokens (Sign in with ChatGPT)
+// has done by the time a cancelled caller gives up.
+func rotatingOAuthStore(t *testing.T) *InMemoryCredentialStore {
+	t.Helper()
 	creds := NewInMemoryCredentialStore()
-	previous := &Credential{Type: CredentialOAuth, Refresh: "old-refresh", Access: "old", Expires: 0}
 	if _, err := creds.Modify(context.Background(), "p1", func(*Credential) (*Credential, error) {
-		return previous, nil
+		return &Credential{Type: CredentialOAuth, Refresh: "old-refresh", Access: "old", Expires: 0}, nil
 	}); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
+	return creds
+}
 
-	refreshStarted := make(chan struct{})
-	release := make(chan struct{})
+func rotatingOAuth(whileRefreshing func(ctx context.Context)) *OAuthAuth {
+	return &OAuthAuth{
+		Name: "p1",
+		Refresh: func(ctx context.Context, c OAuthCredentials) (OAuthCredentials, error) {
+			whileRefreshing(ctx)
+			return OAuthCredentials{Refresh: "new-refresh", Access: "new", Expires: nowMillis() + 60_000}, nil
+		},
+		ToAuth: func(c OAuthCredentials) (ModelAuth, error) { return ModelAuth{APIKey: c.Access}, nil },
+	}
+}
+
+// waitForStoredRefresh waits for the store to hold want as p1's refresh token:
+// the refresh finishes after the cancelled caller has been released.
+func waitForStoredRefresh(t *testing.T, creds *InMemoryCredentialStore, want string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		stored, _ := creds.Read(context.Background(), "p1")
+		if stored != nil && stored.Refresh == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("stored credential %+v, want refresh %q", stored, want)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// TestModelsGetAuthPersistsOAuthRefreshStartedBeforeCancel mirrors pi "persists
+// an OAuth refresh that started before the request was cancelled" (bde882c7,
+// which replaced "passes cancellation to OAuth refresh and preserves the
+// previous credential"): the caller's cancellation releases the caller, but a
+// refresh that has started completes and its rotated credential is stored.
+// The refresh context keeps the caller's values and none of its cancellation.
+func TestModelsGetAuthPersistsOAuthRefreshStartedBeforeCancel(t *testing.T) {
+	creds := rotatingOAuthStore(t)
+	ctx, cancel := context.WithCancelCause(context.WithValue(context.Background(), ctxMarkerKey{}, "caller"))
 	var marker string
-	var refreshCtx context.Context
+	var refreshErr error
 	m := modelsWithEnv(nil, &CreateModelsOptions{Credentials: creds})
 	m.SetProvider(CreateProvider(CreateProviderOptions{
 		ID: "p1",
-		Auth: ProviderAuth{OAuth: &OAuthAuth{
-			Name: "p1",
-			Refresh: func(ctx context.Context, c OAuthCredentials) (OAuthCredentials, error) {
-				marker, _ = ctx.Value(ctxMarkerKey{}).(string)
-				refreshCtx = ctx
-				close(refreshStarted)
-				<-release
-				// Deliberately ignores cancellation and succeeds late.
-				return OAuthCredentials{Refresh: "rotated", Access: "new", Expires: nowMillis() + 60_000}, nil
-			},
-			ToAuth: func(c OAuthCredentials) (ModelAuth, error) { return ModelAuth{APIKey: c.Access}, nil },
-		}},
+		Auth: ProviderAuth{OAuth: rotatingOAuth(func(refreshCtx context.Context) {
+			marker, _ = refreshCtx.Value(ctxMarkerKey{}).(string)
+			// The provider has rotated old-refresh by the time the request is cancelled.
+			cancel(errors.New("caller went away"))
+			refreshErr = refreshCtx.Err()
+		})},
 		API: stubAPI(),
 	}))
 
-	ctx, cancel := context.WithCancelCause(context.WithValue(context.Background(), ctxMarkerKey{}, "caller"))
-	reason := errors.New("caller went away")
-	errs := make(chan error, 1)
-	go func() {
-		_, err := m.GetProviderAuth(ctx, "p1", nil)
-		errs <- err
-	}()
-	<-refreshStarted
-	cancel(reason)
-	close(release)
-
-	if err := <-errs; !errors.Is(err, context.Canceled) {
+	if _, err := m.GetProviderAuth(ctx, "p1", nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled resolution must surface the cancellation, got %v", err)
 	}
+	waitForStoredRefresh(t, creds, "new-refresh")
 	if marker != "caller" {
-		t.Fatalf("OAuth refresh must receive the caller's context, marker=%q", marker)
+		t.Fatalf("OAuth refresh must keep the caller's context values, marker=%q", marker)
 	}
-	if refreshCtx == ctx {
-		t.Fatal("refresh must receive a composite derived from the caller's context, not the caller's own")
+	if refreshErr != nil {
+		t.Fatalf("the caller's cancellation reached the started refresh: %v", refreshErr)
 	}
-	if !errors.Is(context.Cause(refreshCtx), reason) {
-		t.Fatalf("caller's cancellation cause must reach the refresh context, got %v", context.Cause(refreshCtx))
+}
+
+// TestModelsRefreshPersistsOAuthRefreshStartedBeforeCancel mirrors pi "persists
+// an OAuth refresh that started before the model refresh was cancelled"
+// (bde882c7): model-list refresh shares the path.
+func TestModelsRefreshPersistsOAuthRefreshStartedBeforeCancel(t *testing.T) {
+	creds := rotatingOAuthStore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m := modelsWithEnv(nil, &CreateModelsOptions{Credentials: creds})
+	m.SetProvider(CreateProvider(CreateProviderOptions{
+		ID:   "p1",
+		Auth: ProviderAuth{OAuth: rotatingOAuth(func(context.Context) { cancel() })},
+		FetchModels: func(context.Context, RefreshModelsContext) ([]*Model, error) {
+			return nil, nil
+		},
+		API: stubAPI(),
+	}))
+
+	if result := m.Refresh(ctx, nil); !result.Aborted {
+		t.Fatalf("refresh result %+v, want aborted", result)
 	}
-	stored, _ := creds.Read(context.Background(), "p1")
-	if stored == nil || stored.Access != "old" || stored.Refresh != "old-refresh" {
-		t.Fatalf("a cancelled refresh must leave the stored credential untouched: %+v", stored)
-	}
+	waitForStoredRefresh(t, creds, "new-refresh")
 }
 
 // deferredStreams builds ProviderStreams that redeem a handle with a fixed

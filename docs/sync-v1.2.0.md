@@ -971,3 +971,25 @@ manager, tools, resources) → tool-search and the codemode extension → OAuth.
   the `server`, `client` and `protocol` packages and `coding/remotesession.go`, `coding/transcript.go`
   with their tests (about 13k lines of code and 15k of tests). Nothing else in the engine used them;
   `go mod tidy` drops no dependency. A host that needs a transport builds its own.
+
+## 6. Re-check by core file (2026-10-30)
+
+The triage above went by path prefix and subject, which can drop a core commit (`docs/sync-v1.4.0.md`
+§6 found three). Re-checked per file: of the 240 commits, 97 touch `packages/ai/src`,
+`packages/agent/src` or `packages/coding-agent/src`; 24 of them are named in this file,
+`sync-v1.4.0.md` or `UPSTREAM.md`, and each of the other 73 was decided from its files, and from
+its diff where it touches the SDK half.
+
+| pi commit | Change | Decision |
+|---|---|---|
+| `bde882c7` | a started OAuth refresh survives cancellation and is persisted: the caller's signal cancels only the wait for the credential lock | **missed; ported**: `refreshStoredOAuthCredential` in `ai/auth_resolve.go`, shared by request auth and model-list refresh. The lock wait gets a context of its own, since the store re-checks its context before it commits; the refresh keeps the caller's values but not its cancellation. `GetProviderAuth` now races the caller's cancellation as pi's `resolveProviderAuth` has since `fed6009c` (the port raced only `CheckAuth`, `GetAvailable` and `Login`), and `raceContext` lets a cancellation that is already in place win over a result, as pi rejects the moment the signal aborts. pi's two cases ported; `TestResolveStoredOAuthRefreshContextIsComposite` (`42a06f947`, `d3da2e968`) reversed; red against the old contexts |
+| `d677d0ee` | output files created with mode 0600 and `wx` (`utils/output-files.ts`) | **half missed; ported**: `WriteOutputFile` had it, the bash output accumulator still used `os.Create` (0666 less umask, follows a link at the path); both go through `createOutputFile` now, red under Linux with the old call |
+| `c662ec7e`, `6f1072cc`, `24382bed` | MCP tools restored on resume; the bash output schema's descriptions; `reachesTools` | already in the engine (`PendingToolNames`, `coding/tools.go`, `ToolDefinition.ReachesTools`) |
+| `49b9df48` | nvidia default | superseded by `95364a54` |
+| `6b07b4e5`, `7fb59f99` | Mistral request timeout, finish_reason retry | with the Mistral adapter (not ported) |
+| `ee409a85` | OpenRouter models a key may use | with the remote catalog (Scope queue row 19) |
+| `441f5767` | print mode exits non-zero on a truncated response | n/a: `cmd/pi` is the engine's own minimal CLI, not a port of `print-mode.ts` |
+| `3ba22ce1`, `7f9e1198` | TypeScript-only (stream start kept outside the class; configuration schemas) | n/a |
+| the other 61 | TUI, clipboard, terminals; MCP, codemode and tool-search inside the v1.2.0 snapshot (section 3); `experimental/durable`; OAuth flows, Bedrock, Codex, classifiers, Radius, the package manager; host-only `agent-session` hunks (`503c6055`'s `agent_settled.aborted`, `18336987`'s `outputPad`) | n/a, as triaged |
+
+Commits that changed only pi's tests were not re-checked.
