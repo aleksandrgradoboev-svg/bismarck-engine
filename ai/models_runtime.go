@@ -1153,23 +1153,11 @@ func (m *modelsImpl) resolveRefreshCredential(
 		if ctx.Err() != nil {
 			return nil, nil
 		}
-		post, err := m.credentials.Modify(ctx, p.ID(), func(current *Credential) (*Credential, error) {
-			if current == nil || current.Type != CredentialOAuth || nowMillis() < current.Expires {
-				return nil, nil
-			}
-			refreshed, rerr := oauth.Refresh(ctx, current.OAuthCredentials())
-			if rerr != nil {
-				return nil, rerr
-			}
-			return oauthCredential(refreshed), nil
-		})
-		if err != nil {
-			return nil, err
-		}
-		if post == nil || post.Type != CredentialOAuth {
-			return nil, nil
-		}
-		return post, nil
+		// A refresh that has started survives cancellation or a superseding
+		// model refresh, so a rotated refresh token is always persisted; a
+		// newer refresh then sees the fresh credential (pi bde882c7).
+		return refreshStoredOAuthCredential(ctx, m.credentials, p.ID(), oauth,
+			func(current *Credential) bool { return nowMillis() >= current.Expires })
 	}
 
 	apiKey := p.Auth().APIKey
@@ -1243,14 +1231,23 @@ func raceContext[T any](ctx context.Context, op func() (T, error)) (T, error) {
 	type outcome struct {
 		value T
 		err   error
+		// cancelled: ctx was already done when op finished.
+		cancelled bool
 	}
 	done := make(chan outcome, 1)
 	go func() {
 		value, err := op()
-		done <- outcome{value: value, err: err}
+		done <- outcome{value: value, err: err, cancelled: ctx.Err() != nil}
 	}()
 	select {
 	case o := <-done:
+		// pi rejects the moment the signal aborts, so a cancellation that
+		// came before op finished wins even when select sees both ready; one
+		// that came after does not take the result back.
+		if o.cancelled {
+			var zero T
+			return zero, ctx.Err()
+		}
 		return o.value, o.err
 	case <-ctx.Done():
 		var zero T
@@ -1393,7 +1390,12 @@ func (m *modelsImpl) GetProviderAuth(ctx context.Context, providerID string, ove
 	if p == nil {
 		return nil, nil
 	}
-	return resolveProviderAuth(ctx, p.ID(), p.Auth(), m.credentials, m.authContext, overrides)
+	// pi races resolveProviderAuth itself (fed6009c); the port races its
+	// public entry points. A cancelled caller is released at once while a
+	// started OAuth refresh finishes and is stored (bde882c7).
+	return raceContext(ctx, func() (*AuthResult, error) {
+		return resolveProviderAuth(ctx, p.ID(), p.Auth(), m.credentials, m.authContext, overrides)
+	})
 }
 
 // GetAuth resolves provider auth for a model and merges the model's static

@@ -16,12 +16,7 @@ import (
 // them, and the file is created exclusively, never following a link someone
 // else placed at the path.
 func WriteOutputFile(prefix, extension string, data []byte) (string, error) {
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return "", err
-	}
-	path := filepath.Join(os.TempDir(), prefix+"-"+hex.EncodeToString(b[:])+extension)
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	path, f, err := createOutputFile(prefix, extension)
 	if err != nil {
 		return "", err
 	}
@@ -30,4 +25,17 @@ func WriteOutputFile(prefix, extension string, data []byte) (string, error) {
 		return "", err
 	}
 	return path, f.Close()
+}
+
+// createOutputFile opens a new output file for streamed output (pi
+// createOutputFileStream), on the same terms as WriteOutputFile. The path is
+// returned even when the file could not be created.
+func createOutputFile(prefix, extension string) (string, *os.File, error) {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", nil, err
+	}
+	path := filepath.Join(os.TempDir(), prefix+"-"+hex.EncodeToString(b[:])+extension)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	return path, f, err
 }
